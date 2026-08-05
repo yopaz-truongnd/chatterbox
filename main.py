@@ -1,0 +1,73 @@
+"""
+Chatterbox TTS Studio - Điểm khởi chạy ứng dụng (Main Entry Point)
+"""
+
+import os
+import json
+import gc
+import time
+import threading
+from pathlib import Path
+
+# Load settings and configure model cache directory
+SETTINGS_FILE = Path("config/settings.json")
+def get_model_cache_dir():
+    default_dir = Path("models").absolute()
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                custom_dir = data.get("model_cache_dir")
+                if custom_dir:
+                    return Path(custom_dir).absolute()
+        except Exception:
+            pass
+    else:
+        # Create default settings file
+        try:
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump({"model_cache_dir": str(default_dir)}, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+    return default_dir
+
+cache_dir = get_model_cache_dir()
+cache_dir.mkdir(parents=True, exist_ok=True)
+os.environ["HF_HOME"] = str(cache_dir)
+os.environ["HF_HUB_CACHE"] = str(cache_dir)
+
+import tkinter as tk
+from utils.logger import logger
+from core.chatterbox_engine import ChatterboxEngine
+from ui.main_window import MainWindow
+
+def main():
+    logger.info("Khởi chạy ứng dụng Chatterbox TTS Studio...")
+    logger.info("Thư mục lưu trữ model hiện tại: %s", cache_dir)
+    
+    root = tk.Tk()
+    root.title("Chatterbox TTS Studio")
+    
+    # Thiết lập màu nền mặc định cho cửa sổ chính để tránh chớp giật trắng
+    root.configure(bg="#0c121c")
+
+    # Khởi tạo engine xử lý AI Core
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    engine = ChatterboxEngine(device=device)
+
+    # Khởi tạo Giao diện MainWindow
+    app = MainWindow(root, engine)
+
+    # Đăng ký phím tắt global liên kết với MainWindow
+    root.bind("<Control-Return>", lambda event: app.shortcut_ctrl_enter())
+    root.bind("<Control-s>", lambda event: app.shortcut_ctrl_s())
+
+
+
+    # Khởi chạy main loop
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()

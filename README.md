@@ -63,6 +63,33 @@ pip install -e .
 ```
 We developed and tested Chatterbox on Python 3.11 on Debian 11 OS; the versions of the dependencies are pinned in `pyproject.toml` to ensure consistency. You can modify the code or dependencies in this installation mode.
 
+## Chatterbox TTS Studio (Desktop GUI)
+
+We provide a professional, dark-themed Desktop GUI built on a clean modular architecture (separated into `ui/`, `core/`, `config/`, and `utils/`) for an intuitive zero-shot voice cloning experience.
+
+### Key Features:
+- **🗣️ TTS Studio:** Real-time character counts, direct paralinguistic tag insertion chips, interactive preset combos, and full audio generation controls.
+- **🌐 Multilingual TTS:** Support for V3/V2 multilingual voice cloning with 23+ languages.
+- **🔁 Voice Conversion:** Audio-to-audio speech conversion with dual interactive waveform graphs.
+- **📦 Batch & History:** Session history search, custom batch export folders, and progressive batch generation.
+- **⚙️ Configurable Cache:** Specify your model download folder inside `config/settings.json`.
+- **⌨️ Global Shortcuts:** `Ctrl+Enter` to generate/play, `Ctrl+S` to export WAV files.
+
+### How to Run:
+
+#### Windows:
+- Run with console log output: Double-click **`Run_Chatterbox_GUI.bat`**.
+- Run silently in the background: Double-click **`Run_Chatterbox_GUI_Silent.vbs`**.
+
+#### Linux / Ubuntu:
+- Install system Tkinter: `sudo apt install python3-tk`
+- Install dependencies: `pip install torch torchaudio pygame numpy`
+- Launch the application:
+  ```shell
+  chmod +x run_chatterbox_gui.sh
+  ./run_chatterbox_gui.sh
+  ```
+
 ## Usage
 
 ##### Chatterbox-Turbo

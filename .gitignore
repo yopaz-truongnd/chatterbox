@@ -46,3 +46,10 @@ checkpoints/
 
 # Ignore generated sample .wav files
 **/*.wav
+
+# Ignore Chatterbox Studio Desktop GUI local configs, logs and downloads
+models/
+chatterbox_studio.log
+config/settings.json
+tts_chatterbox_gui_backup.py
+voice_presets.json
