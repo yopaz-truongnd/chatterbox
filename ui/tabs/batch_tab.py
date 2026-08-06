@@ -3,6 +3,7 @@ Tab 2: Batch Studio — Xử lý sinh âm thanh hàng loạt nhiều nhân vật
 """
 
 import os
+import re
 import csv
 import time
 import wave
@@ -22,10 +23,15 @@ from utils.context_menu import bind_right_click_menu
 from utils.logger import logger
 from utils.audio_tools import mix_bgm, generate_srt, generate_vtt, get_audio_duration
 
-def parse_batch_file(file_path):
+def parse_batch_file(file_path, split_mode="auto", custom_delimiter=""):
     """
-    Đọc và trích xuất nội dung văn bản từ file .txt hoặc .csv
-    Hỗ trợ tự động nhận diện encoding, phân tách dấu (phẩy, chấm phẩy, tab) và trích xuất đúng cột chứa văn bản.
+    Đọc và trích xuất nội dung văn bản từ file .txt, .csv, .md, .srt, .vtt...
+    Hỗ trợ quy tắc tách dòng linh hoạt (split_mode):
+    - "auto": Tự động theo CSV hoặc theo từng dòng xuống dòng (\n)
+    - "delimiter": Tách theo chuỗi phân cách custom_delimiter (ví dụ: '--------------------------' hoặc '===')
+    - "sentence": Tách theo dấu câu (. ! ? \n)
+    - "paragraph": Tách theo đoạn văn (\n\n)
+    - "regex": Tách theo biểu thức chính quy Regex
     """
     text_content = ""
     for enc in ["utf-8-sig", "utf-8", "utf-16", "latin-1", "cp1252"]:
@@ -40,6 +46,30 @@ def parse_batch_file(file_path):
     if not text_content:
         return []
 
+    # 1. Nếu chọn tách theo Chuỗi phân cách tùy chỉnh
+    if split_mode == "delimiter" and custom_delimiter:
+        raw_chunks = text_content.split(custom_delimiter)
+        return [c.strip() for c in raw_chunks if c.strip()]
+
+    # 2. Nếu chọn tách theo Dấu câu (. ! ? \n)
+    elif split_mode == "sentence":
+        sentences = re.split(r"(?<=[.!?\n])\s+", text_content.strip())
+        return [s.strip() for s in sentences if s.strip()]
+
+    # 3. Nếu chọn tách theo Đoạn văn (\n\n)
+    elif split_mode == "paragraph":
+        paragraphs = re.split(r"\n\s*\n", text_content.strip())
+        return [p.strip() for p in paragraphs if p.strip()]
+
+    # 4. Nếu chọn tách theo Biểu thức Regex
+    elif split_mode == "regex" and custom_delimiter:
+        try:
+            raw_chunks = re.split(custom_delimiter, text_content)
+            return [c.strip() for c in raw_chunks if c.strip()]
+        except Exception as e:
+            logger.warning("Invalid regex delimiter: %s", e)
+
+    # 5. Mặc định (Auto): CSV hoặc splitlines
     if file_path.lower().endswith(".csv"):
         try:
             lines = [l for l in text_content.splitlines() if l.strip()]
@@ -185,6 +215,32 @@ class BatchTab(tk.Frame):
         self.btn_clear_all = tk.Button(tb_btns, text="🗑 Xóa hết", font=("Segoe UI", 9), bg=PANEL2_BG, fg="#f87171",
                                        bd=0, activebackground=PANEL2_BG, activeforeground="#ffffff", cursor="hand2", command=self.clear_all_rows)
         self.btn_clear_all.pack(side="left")
+
+        # Split Rule Bar
+        rule_bar = tk.Frame(list_card, bg=PANEL2_BG)
+        rule_bar.pack(fill="x", padx=14, pady=(0, 6))
+
+        tk.Label(rule_bar, text="✂️ Quy tắc tách dòng:", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(0, 6))
+
+        self.split_rule_var = tk.StringVar(value="Tự động (Dòng \\n hoặc CSV)")
+        rule_cb = ttk.Combobox(rule_bar, textvariable=self.split_rule_var, state="readonly", width=28,
+                               values=[
+                                   "Tự động (Dòng \\n hoặc CSV)",
+                                   "Theo Chuỗi phân cách tùy chỉnh",
+                                   "Theo Dấu câu (. ! ? \\n)",
+                                   "Theo Đoạn văn (Trống 1 dòng \\n\\n)",
+                                   "Theo Biểu thức Regex"
+                               ])
+        rule_cb.pack(side="left", padx=(0, 8))
+        rule_cb.bind("<<ComboboxSelected>>", lambda e: self._on_split_rule_change())
+
+        self.delim_label = tk.Label(rule_bar, text="Ký tự tách:", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.custom_delim_var = tk.StringVar(value="--------------------------")
+        self.delim_entry = tk.Entry(rule_bar, textvariable=self.custom_delim_var, font=("Segoe UI", 9), bg="#0e1621", fg=TEXT_COLOR,
+                                    bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=22)
+        bind_right_click_menu(self.delim_entry)
+
+        self._on_split_rule_change()
 
         # Scrollable Canvas container for Rows
         self.canvas_frame = tk.Frame(list_card, bg="#0e1621", bd=1, relief="solid", highlightbackground=BORDER_COLOR)
@@ -745,6 +801,32 @@ class BatchTab(tk.Frame):
             messagebox.showerror("Lỗi mở dự án", str(e))
 
     # ---------------- File Import & Helpers & Drag Drop ----------------
+    def _on_split_rule_change(self):
+        """Xử lý ẩn/hiển thị ô nhập ký tự phân cách tùy thuộc vào quy tắc được chọn"""
+        val = self.split_rule_var.get()
+        if "Chuỗi phân cách" in val or "Regex" in val:
+            self.delim_label.pack(side="left", padx=(4, 4))
+            self.delim_entry.pack(side="left", padx=(0, 6))
+        else:
+            self.delim_label.pack_forget()
+            self.delim_entry.pack_forget()
+
+    def get_active_split_mode_and_delim(self):
+        """Trích xuất split_mode và custom_delimiter hiện tại"""
+        val = self.split_rule_var.get()
+        delim = self.custom_delim_var.get()
+
+        if "Chuỗi phân cách" in val:
+            return "delimiter", delim
+        elif "Dấu câu" in val:
+            return "sentence", ""
+        elif "Đoạn văn" in val:
+            return "paragraph", ""
+        elif "Regex" in val:
+            return "regex", delim
+        else:
+            return "auto", ""
+
     def _setup_dnd_drop_target(self, widget, callback):
         try:
             widget.drop_target_register("DND_Files")
@@ -761,7 +843,8 @@ class BatchTab(tk.Frame):
         file_path = paths[0]
         try:
             validate_and_read_text_file(file_path)
-            extracted_lines = parse_batch_file(file_path)
+            mode, delim = self.get_active_split_mode_and_delim()
+            extracted_lines = parse_batch_file(file_path, split_mode=mode, custom_delimiter=delim)
             if not extracted_lines:
                 messagebox.showwarning("File Rỗng", "Không tìm thấy nội dung văn bản hợp lệ trong file đã chọn.")
                 return
@@ -792,7 +875,8 @@ class BatchTab(tk.Frame):
             from utils.file_importer import validate_and_read_text_file
             try:
                 validate_and_read_text_file(path)
-                extracted_lines = parse_batch_file(path)
+                mode, delim = self.get_active_split_mode_and_delim()
+                extracted_lines = parse_batch_file(path, split_mode=mode, custom_delimiter=delim)
                 if not extracted_lines:
                     messagebox.showwarning("File Rỗng", "Không tìm thấy nội dung văn bản hợp lệ trong file đã chọn.")
                     return
