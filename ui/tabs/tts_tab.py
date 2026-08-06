@@ -9,6 +9,8 @@ import tempfile
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, simpledialog
 from config.constants import *
+import shutil
+from ui.components.audio_player import AudioPlayerWidget
 from ui.components.waveform_canvas import WaveformCanvas
 from utils.threading_helper import run_in_background
 from utils.context_menu import bind_right_click_menu
@@ -21,6 +23,7 @@ class TtsTab(tk.Frame):
         self.presets = main_window.presets
         
         self.ref_audio_path = None
+        self.last_temp_wav = None
 
         self._build_ui()
 
@@ -58,12 +61,12 @@ class TtsTab(tk.Frame):
         # LEFT PANE
         # Text input card
         text_card = tk.Frame(left_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
-        text_card.pack(fill="both", expand=True, pady=(0, 12))
+        text_card.pack(fill="both", expand=True, pady=(0, 10))
 
         title_lbl = tk.Label(text_card, text="Văn bản cần phát âm", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG)
         title_lbl.pack(anchor="w", padx=14, pady=(10, 4))
 
-        self.tts_text_box = tk.Text(text_card, height=8, font=("Segoe UI", 11), bg="#0e1621", fg=TEXT_COLOR,
+        self.tts_text_box = tk.Text(text_card, height=7, font=("Segoe UI", 11), bg="#0e1621", fg=TEXT_COLOR,
                                     bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
                                     insertbackground="white")
         self.tts_text_box.pack(fill="both", expand=True, padx=14, pady=4)
@@ -72,14 +75,14 @@ class TtsTab(tk.Frame):
         bind_right_click_menu(self.tts_text_box)
 
         self.tts_char_lbl = tk.Label(text_card, text="128 / 1000 ký tự", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
-        self.tts_char_lbl.pack(anchor="e", padx=14, pady=(0, 8))
+        self.tts_char_lbl.pack(anchor="e", padx=14, pady=(0, 6))
 
         # Tags Section
         tag_lbl = tk.Label(text_card, text="Chèn nhanh biểu cảm (Paralinguistic Tags)", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
-        tag_lbl.pack(anchor="w", padx=14, pady=(4, 2))
+        tag_lbl.pack(anchor="w", padx=14, pady=(2, 2))
 
         self.tags_frame = tk.Frame(text_card, bg=PANEL2_BG)
-        self.tags_frame.pack(fill="x", padx=14, pady=(2, 10))
+        self.tags_frame.pack(fill="x", padx=14, pady=(2, 8))
 
         # Phân chia 11 tag thành các hàng
         tags_list = list(PARALINGUISTIC_TAGS.items())
@@ -95,29 +98,33 @@ class TtsTab(tk.Frame):
                 lbl.pack(side="left", padx=3)
                 lbl.bind("<Button-1>", lambda e, t=tag: self._insert_tag(self.tts_text_box, t))
 
-        # Toolbar
-        tb = tk.Frame(left_pane, bg=PANEL_BG)
-        tb.pack(fill="x")
+        # Khối Audio Player kiểu HTML5 (Ẩn mặc định khi chưa render voice)
+        self.audio_player = AudioPlayerWidget(left_pane, self.engine, on_delete=self._on_audio_deleted)
+        self.audio_player.pack_forget()
 
-        tk.Button(tb, text="▶ Đọc thử  Ctrl+↵", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        # Toolbar
+        self.tb = tk.Frame(left_pane, bg=PANEL_BG)
+        self.tb.pack(fill="x")
+
+        tk.Button(self.tb, text="▶ Chạy  Ctrl+↵", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                   activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, padx=16, pady=7, cursor="hand2",
                   command=self.play_action).pack(side="left", padx=(0, 8))
 
-        tk.Button(tb, text="■ Dừng", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
-                  activebackground="#2563eb", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
+        tk.Button(self.tb, text="■ Dừng", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+                  activebackground="#e11d48", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                   padx=14, pady=6, cursor="hand2",
                   command=self.stop_action).pack(side="left", padx=(0, 8))
 
-        tk.Button(tb, text="💾 Lưu File WAV  Ctrl+S", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(self.tb, text="💾 Lưu File WAV  Ctrl+S", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   activebackground="#2563eb", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                   padx=14, pady=6, cursor="hand2",
                   command=self.save_action).pack(side="left")
 
         # Progress Block
-        self.prog_wrap = tk.Frame(left_pane, bg=PANEL_BG, pady=8)
+        self.prog_wrap = tk.Frame(left_pane, bg=PANEL_BG, pady=6)
         self.prog_wrap.pack(fill="x")
         self.tts_prog_lbl = tk.Label(self.prog_wrap, text="Sẵn sàng.", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL_BG)
-        self.tts_prog_lbl.pack(anchor="w", pady=(4, 2))
+        self.tts_prog_lbl.pack(anchor="w", pady=(2, 2))
         self.tts_prog_bar = ttk.Progressbar(self.prog_wrap, orient="horizontal", mode="determinate")
         self.tts_prog_bar.pack(fill="x")
 
@@ -316,25 +323,32 @@ class TtsTab(tk.Frame):
         messagebox.showinfo("Thành công", f"Đã lưu preset '{name}' thành công!")
 
     # ---------------- Async Actions ----------------
-    def _update_prog_bar(self, current_chunk, total_chunks, pct):
-        elapsed = time.time() - self.gen_start_time
-        if pct == 100:
-            msg = "Đã hoàn thành sinh âm thanh!"
-        elif current_chunk > 1:
-            avg_time = elapsed / (current_chunk - 1)
-            remaining_chunks = total_chunks - (current_chunk - 1)
-            eta = int(remaining_chunks * avg_time)
-            msg = f"Đang sinh đoạn {current_chunk}/{total_chunks} — Còn khoảng {eta} giây"
+    def _on_audio_deleted(self):
+        self.last_temp_wav = None
+        try:
+            self.audio_player.pack_forget()
+        except Exception:
+            pass
+        self.main_window.set_status("🗑 Đã xóa file âm thanh tạm thời và reset trình phát.", progress=None)
+
+    def _update_prog_bar(self, current_chunk, total_chunks, overall_pct, step_pct=0, eta=0):
+        if overall_pct >= 100:
+            msg = "✓ Đã hoàn thành sinh âm thanh!"
+            self.tts_prog_lbl.config(text=msg)
+            self.tts_prog_bar['value'] = 100
+            self.main_window.set_status(msg, progress=100)
         else:
-            msg = f"Đang sinh đoạn {current_chunk}/{total_chunks} — Đang tính toán..."
-        
-        self.tts_prog_lbl.config(text=f"{msg} ({pct}%)")
-        self.tts_prog_bar['value'] = pct
+            eta_str = f"Còn khoảng {eta} giây" if eta > 0 else "Đang tính toán..."
+            step_str = f" ({step_pct}%)" if step_pct > 0 else ""
+            msg = f"Đang sinh đoạn {current_chunk}/{total_chunks}{step_str} — {eta_str}"
+            self.tts_prog_lbl.config(text=f"{msg} [{overall_pct}% tổng thể]")
+            self.tts_prog_bar['value'] = overall_pct
+            self.main_window.set_status(f"⚡ {msg}", progress=overall_pct)
 
     def play_action(self):
         text = self.tts_text_box.get("1.0", "end").strip()
         if not text:
-            messagebox.showwarning("Thiếu văn bản", "Vui lòng nhập văn bản trước khi đọc thử.")
+            messagebox.showwarning("Thiếu văn bản", "Vui lòng nhập văn bản trước khi chạy.")
             return
 
         m_name = self.tts_model_var.get()
@@ -343,10 +357,16 @@ class TtsTab(tk.Frame):
 
         def callback(success, result):
             if success:
-                self.engine.play_audio(tmp_path)
-                self.main_window.set_status("Đang phát...")
+                self.last_temp_wav = tmp_path
+                try:
+                    self.audio_player.pack(fill="x", pady=(0, 10), before=self.tb)
+                except Exception:
+                    pass
+                self.audio_player.load_audio(tmp_path)
+                self.audio_player.play()
+                self.main_window.set_status("▶ Đang phát âm thanh...", progress=None)
             else:
-                self.main_window.set_status("Lỗi sinh giọng đọc.")
+                self.main_window.set_status("❌ Lỗi sinh giọng đọc.", progress=None)
                 messagebox.showerror("Lỗi", str(result))
 
         self.gen_start_time = time.time()
@@ -365,48 +385,31 @@ class TtsTab(tk.Frame):
             seed=self.seed_var.get(),
             is_random_seed=self.random_seed_var.get(),
             out_path=tmp_path,
-            progress_callback=lambda curr, tot, val: self.after(0, lambda: self._update_prog_bar(curr, tot, val))
+            progress_callback=lambda c, t, p, s, e: self.after(0, lambda: self._update_prog_bar(c, t, p, s, e))
         )
 
     def stop_action(self):
-        self.engine.stop_audio()
-        self.main_window.set_status("Đã dừng âm thanh.")
+        self.audio_player.stop()
+        self.main_window.set_status("■ Đã dừng âm thanh.", progress=None)
 
     def save_action(self):
-        text = self.tts_text_box.get("1.0", "end").strip()
-        if not text:
-            messagebox.showwarning("Thiếu văn bản", "Vui lòng nhập văn bản trước khi lưu.")
+        if not self.last_temp_wav or not os.path.exists(self.last_temp_wav):
+            messagebox.showwarning(
+                "Chưa tạo file âm thanh",
+                "Chưa có file âm thanh nào được tạo.\nVui lòng bấm nút '▶ Chạy' trước để sinh file âm thanh!"
+            )
             return
 
-        save_path = filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV audio", "*.wav")])
+        text = self.tts_text_box.get("1.0", "end").strip()
+        save_path = filedialog.asksaveasfilename(initialdir=DEFAULT_EXPORT_DIR, defaultextension=".wav", filetypes=[("WAV audio", "*.wav")])
         if not save_path:
             return
 
-        m_name = self.tts_model_var.get()
-
-        def callback(success, result):
-            if success:
-                self.main_window.set_status(f"Đã lưu thành công: {save_path}")
-                self.main_window.add_to_history(save_path, text[:40])
-                messagebox.showinfo("Thành công", f"Đã lưu file âm thanh tại:\n{save_path}")
-            else:
-                self.main_window.set_status("Lỗi khi lưu file.")
-                messagebox.showerror("Lỗi", str(result))
-
-        self.gen_start_time = time.time()
-
-        run_in_background(
-            self.engine.generate_tts,
-            callback,
-            self,
-            text=text,
-            ref_path=self.ref_audio_path,
-            model_name=m_name,
-            exag=self.exag_var.get(),
-            cfg=self.cfg_var.get(),
-            temp=self.temp_var.get(),
-            seed=self.seed_var.get(),
-            is_random_seed=self.random_seed_var.get(),
-            out_path=save_path,
-            progress_callback=lambda curr, tot, val: self.after(0, lambda: self._update_prog_bar(curr, tot, val))
-        )
+        try:
+            shutil.copyfile(self.last_temp_wav, save_path)
+            self.main_window.add_to_history(save_path, text[:40])
+            self.main_window.set_status(f"✓ Đã lưu file: {save_path}", progress=None)
+            messagebox.showinfo("Thành công", f"Đã lưu thành công file âm thanh tại:\n{save_path}")
+        except Exception as e:
+            self.main_window.set_status("❌ Lỗi khi lưu file.", progress=None)
+            messagebox.showerror("Lỗi", str(e))

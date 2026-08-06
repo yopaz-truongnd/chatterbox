@@ -19,7 +19,10 @@ def get_model_cache_dir():
                 data = json.load(f)
                 custom_dir = data.get("model_cache_dir")
                 if custom_dir:
-                    return Path(custom_dir).absolute()
+                    default_dir = Path(custom_dir).absolute()
+                hf_token = data.get("hf_token")
+                if hf_token:
+                    os.environ["HF_TOKEN"] = hf_token
         except Exception:
             pass
     else:
@@ -27,7 +30,7 @@ def get_model_cache_dir():
         try:
             SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump({"model_cache_dir": str(default_dir)}, f, ensure_ascii=False, indent=2)
+                json.dump({"model_cache_dir": str(default_dir), "hf_token": ""}, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
     return default_dir

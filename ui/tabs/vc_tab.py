@@ -140,14 +140,15 @@ class VcTab(tk.Frame):
             if success:
                 self.vc_last_result_path = tmp_path
                 self.main_window.add_to_history(tmp_path, f"VC: {os.path.basename(self.vc_src_path)}")
-                self.main_window.set_status("Chuyển đổi giọng hoàn tất!")
+                self.main_window.set_status("✓ Chuyển đổi giọng hoàn tất!", progress=100)
                 self.vc_play_btn.config(state="normal")
                 self.vc_save_btn.config(state="normal")
                 messagebox.showinfo("Thành công", "Đã chuyển đổi giọng nói hoàn tất! Bạn có thể nghe thử hoặc lưu file.")
             else:
-                self.main_window.set_status("Lỗi Voice Conversion.")
+                self.main_window.set_status("❌ Lỗi Voice Conversion.", progress=None)
                 messagebox.showerror("Lỗi", str(result))
 
+        self.main_window.set_status("⏳ Đang thực hiện chuyển đổi giọng nói (Voice Conversion)...", progress="indeterminate")
         run_in_background(
             self.engine.convert_voice,
             callback,
@@ -165,7 +166,7 @@ class VcTab(tk.Frame):
         if not self.vc_last_result_path or not os.path.exists(self.vc_last_result_path):
             return
 
-        save_path = filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV audio", "*.wav")])
+        save_path = filedialog.asksaveasfilename(initialdir=DEFAULT_EXPORT_DIR, defaultextension=".wav", filetypes=[("WAV audio", "*.wav")])
         if save_path:
             import shutil
             try:

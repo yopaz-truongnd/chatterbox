@@ -10,7 +10,8 @@ import numpy as np
 import pygame
 import re
 import threading
-from utils.logger import logger
+import time
+from utils.logger import logger, set_active_progress_callback
 from config.constants import MAX_CHUNK_CHARS
 
 def set_seed(seed: int):
@@ -102,31 +103,44 @@ class ChatterboxEngine:
         chunks = split_text(text)
         logger.info("Đã chia văn bản thành %d đoạn", len(chunks))
         wavs = []
+        gen_start_time = time.time()
 
         for i, chunk in enumerate(chunks, 1):
-            if progress_callback:
-                pct = int(((i - 1) / len(chunks)) * 100)
-                progress_callback(i, len(chunks), pct)
+            def on_sampling_step(step_pct):
+                if progress_callback:
+                    overall_pct = min(99, int(((i - 1) + (step_pct / 100.0)) / len(chunks) * 100))
+                    elapsed = time.time() - gen_start_time
+                    if overall_pct > 0:
+                        total_est = elapsed / (overall_pct / 100.0)
+                        eta = max(0, int(total_est - elapsed))
+                    else:
+                        eta = 0
+                    progress_callback(i, len(chunks), overall_pct, step_pct, eta)
+
+            set_active_progress_callback(on_sampling_step)
 
             logger.info("Đang xử lý đoạn %d/%d: '%s...'", i, len(chunks), chunk[:40])
             kwargs = {}
 
-            if "Turbo" in model_name or "Nano" in model_name:
-                kwargs["temperature"] = temp
-                if ref_path:
-                    kwargs["audio_prompt_path"] = ref_path
-                wav = model.generate(chunk, **kwargs)
-            else:
-                kwargs["exaggeration"] = exag
-                kwargs["cfg_weight"] = cfg
-                if ref_path:
-                    kwargs["audio_prompt_path"] = ref_path
-                wav = model.generate(chunk, **kwargs)
+            try:
+                if "Turbo" in model_name or "Nano" in model_name:
+                    kwargs["temperature"] = temp
+                    if ref_path:
+                        kwargs["audio_prompt_path"] = ref_path
+                    wav = model.generate(chunk, **kwargs)
+                else:
+                    kwargs["exaggeration"] = exag
+                    kwargs["cfg_weight"] = cfg
+                    if ref_path:
+                        kwargs["audio_prompt_path"] = ref_path
+                    wav = model.generate(chunk, **kwargs)
+            finally:
+                set_active_progress_callback(None)
 
             wavs.append(wav)
 
         if progress_callback:
-            progress_callback(len(chunks), len(chunks), 100)
+            progress_callback(len(chunks), len(chunks), 100, 100, 0)
 
         full_wav = torch.cat(wavs, dim=-1) if len(wavs) > 1 else wavs[0]
         sr = getattr(model, "sr", 24000)
@@ -135,33 +149,74 @@ class ChatterboxEngine:
         logger.info("Sinh thành công! File lưu tại: %s", out_path)
         return out_path, seed
 
-    def generate_multilingual(self, text, lang_code, ref_path, exag, cfg, model_ver, out_path):
+    def generate_multilingual(self, text, lang_code, ref_path, exag, cfg, model_ver, out_path, progress_callback=None):
         """Sinh giọng nói đa ngôn ngữ (V3 / V2)."""
         m_name = f"Multilingual ({model_ver})"
         model = self.load_model(m_name, extra_args={"ver": model_ver})
         
         logger.info("Bắt đầu sinh đa ngôn ngữ [Lang: %s, Ver: %s]", lang_code, model_ver)
-        
-        kwargs = {
-            "language_id": lang_code,
-            "exaggeration": exag,
-            "cfg_weight": cfg
-        }
-        if ref_path:
-            kwargs["audio_prompt_path"] = ref_path
+        gen_start_time = time.time()
 
-        wav = model.generate(text, **kwargs)
+        def on_sampling_step(step_pct):
+            if progress_callback:
+                elapsed = time.time() - gen_start_time
+                if step_pct > 0:
+                    total_est = elapsed / (step_pct / 100.0)
+                    eta = max(0, int(total_est - elapsed))
+                else:
+                    eta = 0
+                progress_callback(1, 1, step_pct, step_pct, eta)
+
+        set_active_progress_callback(on_sampling_step)
+
+        try:
+            kwargs = {
+                "language_id": lang_code,
+                "exaggeration": exag,
+                "cfg_weight": cfg
+            }
+            if ref_path:
+                kwargs["audio_prompt_path"] = ref_path
+
+            wav = model.generate(text, **kwargs)
+        finally:
+            set_active_progress_callback(None)
+
+        if progress_callback:
+            progress_callback(1, 1, 100, 100, 0)
+
         ta.save(out_path, wav.cpu(), model.sr)
         logger.info("Sinh đa ngôn ngữ thành công: %s", out_path)
         return out_path
 
-    def convert_voice(self, src_path, tgt_path, out_path):
+    def convert_voice(self, src_path, tgt_path, out_path, progress_callback=None):
         """Chuyển đổi giọng nói từ audio sang audio (VC)."""
         m_name = "Voice Conversion (VC)"
         model = self.load_model(m_name)
         
         logger.info("Bắt đầu thực hiện chuyển đổi giọng nói (VC)")
-        wav = model.generate(src_path, target_voice_path=tgt_path)
+        gen_start_time = time.time()
+
+        def on_sampling_step(step_pct):
+            if progress_callback:
+                elapsed = time.time() - gen_start_time
+                if step_pct > 0:
+                    total_est = elapsed / (step_pct / 100.0)
+                    eta = max(0, int(total_est - elapsed))
+                else:
+                    eta = 0
+                progress_callback(1, 1, step_pct, step_pct, eta)
+
+        set_active_progress_callback(on_sampling_step)
+
+        try:
+            wav = model.generate(src_path, target_voice_path=tgt_path)
+        finally:
+            set_active_progress_callback(None)
+
+        if progress_callback:
+            progress_callback(1, 1, 100, 100, 0)
+
         ta.save(out_path, wav.cpu(), model.sr)
         logger.info("Chuyển đổi giọng hoàn tất: %s", out_path)
         return out_path
