@@ -15,6 +15,8 @@ from ui.tabs.batch_tab import BatchTab
 from ui.tabs.mtl_tab import MtlTab
 from ui.tabs.vc_tab import VcTab
 from ui.tabs.history_tab import HistoryTab
+from ui.tabs.settings_tab import SettingsTab
+from config.settings import settings_manager
 
 class MainWindow:
     def __init__(self, root, engine):
@@ -32,8 +34,9 @@ class MainWindow:
 
         self._build_ui()
 
-        # Tự động tải model mặc định khi khởi chạy
-        self.load_model("Chatterbox Standard (500M)")
+        # Tự động tải model mặc định khi khởi chạy (lấy từ Settings)
+        startup_model = settings_manager.get("default_startup_model", "Chatterbox Standard (500M)")
+        self.load_model(startup_model)
 
     def _build_ui(self):
         # 1. Header
@@ -67,7 +70,8 @@ class MainWindow:
             ("batch", "📦 Batch Studio"),
             ("mtl", "🌐 Multilingual TTS"),
             ("vc", "🔁 Voice Conversion"),
-            ("history", "📜 Lịch sử âm thanh")
+            ("history", "📜 Lịch sử âm thanh"),
+            ("settings", "⚙️ Cài đặt")
         ]
 
         self.active_tab = "tts"
@@ -95,13 +99,15 @@ class MainWindow:
         self.tab_mtl = MtlTab(self.panel_container, self.engine, self)
         self.tab_vc = VcTab(self.panel_container, self.engine, self)
         self.tab_history = HistoryTab(self.panel_container, self.engine, self)
+        self.tab_settings = SettingsTab(self.panel_container, self.engine, self)
 
         self.panels = {
             "tts": self.tab_tts,
             "batch": self.tab_batch,
             "mtl": self.tab_mtl,
             "vc": self.tab_vc,
-            "history": self.tab_history
+            "history": self.tab_history,
+            "settings": self.tab_settings
         }
 
         # Show default active panel
@@ -167,12 +173,13 @@ class MainWindow:
 
     def _register_keyboard_shortcuts(self):
         """Đăng ký toàn bộ phím tắt bàn phím thông dụng"""
-        # 1. Chuyển tab nhanh bằng Ctrl + 1..5
+        # 1. Chuyển tab nhanh bằng Ctrl + 1..6
         self.root.bind_all("<Control-Key-1>", lambda e: self._switch_tab("tts"))
         self.root.bind_all("<Control-Key-2>", lambda e: self._switch_tab("batch"))
         self.root.bind_all("<Control-Key-3>", lambda e: self._switch_tab("mtl"))
         self.root.bind_all("<Control-Key-4>", lambda e: self._switch_tab("vc"))
         self.root.bind_all("<Control-Key-5>", lambda e: self._switch_tab("history"))
+        self.root.bind_all("<Control-Key-6>", lambda e: self._switch_tab("settings"))
 
         # Ctrl + Tab / Ctrl + Shift + Tab duyệt Tab
         self.root.bind_all("<Control-Tab>", lambda e: self._cycle_tab(1))
@@ -189,7 +196,7 @@ class MainWindow:
         self.root.bind_all("<F1>", lambda e: self.show_shortcuts_cheat_sheet())
 
     def _cycle_tab(self, direction):
-        codes = ["tts", "batch", "mtl", "vc", "history"]
+        codes = ["tts", "batch", "mtl", "vc", "history", "settings"]
         if self.active_tab in codes:
             idx = codes.index(self.active_tab)
             new_idx = (idx + direction) % len(codes)
@@ -212,6 +219,8 @@ class MainWindow:
             self.tab_mtl.save_action()
         elif self.active_tab == "vc":
             self.tab_vc.save_action()
+        elif self.active_tab == "settings":
+            self.tab_settings.save_settings_action()
 
     def shortcut_escape(self):
         if self.active_tab == "tts":
@@ -240,11 +249,11 @@ class MainWindow:
 
         shortcuts = [
             ("Ctrl + Enter", "Khởi chạy sinh giọng đọc / Batch Run"),
-            ("Ctrl + S", "Lưu file âm thanh vừa tạo"),
+            ("Ctrl + S", "Lưu file âm thanh hoặc Cài đặt hệ thống"),
             ("Ctrl + A", "Chọn tất cả văn bản (Select All)"),
             ("Ctrl + L", "Xóa sạch nội dung ô văn bản (Clear Text)"),
             ("Ctrl + Backspace", "Xóa từ phía trước con trỏ"),
-            ("Ctrl + 1 .. 5", "Chuyển nhanh tới Tab tương ứng (1:TTS, 2:Batch...)"),
+            ("Ctrl + 1 .. 6", "Chuyển nhanh tới Tab tương ứng (1:TTS, 2:Batch... 6:Settings)"),
             ("Ctrl + Tab", "Chuyển sang Tab tiếp theo"),
             ("Ctrl + Shift + Tab", "Chuyển về Tab trước đó"),
             ("Escape (Esc)", "Dừng âm thanh đang phát ngay lập tức"),

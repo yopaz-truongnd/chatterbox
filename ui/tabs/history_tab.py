@@ -210,6 +210,10 @@ class HistoryTab(tk.Frame):
 
         idx = sel[0]
         if idx < len(self.filtered_history):
+            from config.settings import settings_manager
+            if settings_manager.get("confirm_delete_history", True):
+                if not messagebox.askyesno("Xác nhận xóa", "Bạn có chắc chắn muốn xóa mục này khỏi Lịch sử không?"):
+                    return
             item = self.filtered_history[idx]
             self.main_window.remove_from_history(item.get("label"))
             self.refresh_history_ui()

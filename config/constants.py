@@ -20,7 +20,7 @@ from pathlib import Path
 # Đường dẫn file và thư mục xuất mặc định
 PRESETS_FILE = Path("voice_presets.json")
 DEFAULT_EXPORT_DIR = os.path.expanduser("~/Downloads")
-MAX_CHUNK_CHARS = 400
+MAX_CHUNK_CHARS = 4000
 
 # Paralinguistic tags
 PARALINGUISTIC_TAGS = {

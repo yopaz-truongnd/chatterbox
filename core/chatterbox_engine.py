@@ -13,6 +13,7 @@ import threading
 import time
 from utils.logger import logger, set_active_progress_callback
 from config.constants import MAX_CHUNK_CHARS
+from config.settings import settings_manager
 
 def set_seed(seed: int):
     torch.manual_seed(seed)
@@ -21,8 +22,10 @@ def set_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
 
-def split_text(text, max_len=MAX_CHUNK_CHARS):
+def split_text(text, max_len=None):
     """Chia văn bản dài thành các câu nhỏ <= max_len ký tự để tránh VRAM OOM."""
+    if max_len is None:
+        max_len = settings_manager.get("max_chunk_chars", MAX_CHUNK_CHARS)
     sentences = re.split(r"(?<=[.!?\n])\s+", text.strip())
     chunks, current = [], ""
     for s in sentences:
@@ -38,6 +41,46 @@ def split_text(text, max_len=MAX_CHUNK_CHARS):
         chunks.append(current)
     return chunks if chunks else [text]
 
+import gc
+
+def apply_hardware_limits():
+    """Áp dụng các cấu hình giới hạn tài nguyên CPU, VRAM và độ ưu tiên tiến trình để tránh treo máy"""
+    try:
+        # 1. Giới hạn số luồng CPU
+        threads = settings_manager.get("cpu_threads_limit", 4)
+        if isinstance(threads, int) and threads > 0:
+            torch.set_num_threads(threads)
+            os.environ["OMP_NUM_THREADS"] = str(threads)
+            os.environ["MKL_NUM_THREADS"] = str(threads)
+
+        # 2. Giới hạn % VRAM GPU tối đa
+        if torch.cuda.is_available():
+            vram_pct = settings_manager.get("max_vram_fraction", 80)
+            if isinstance(vram_pct, (int, float)) and 10 <= vram_pct <= 100:
+                fraction = float(vram_pct) / 100.0
+                try:
+                    torch.cuda.set_per_process_memory_fraction(fraction)
+                except Exception:
+                    pass
+
+        # 3. Đổi mức ưu tiên tiến trình (Process Priority / Nice Level)
+        prio = settings_manager.get("process_priority", "low")
+        if prio == "low" and hasattr(os, "nice"):
+            try:
+                # Tăng nice level để giảm độ ưu tiên CPU, ưu tiên tài nguyên cho OS/UI
+                os.nice(5)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning("Lỗi khi áp dụng giới hạn phần cứng: %s", e)
+
+def cleanup_memory():
+    """Dọn dẹp bộ nhớ RAM và GPU VRAM sau khi hoàn thành công việc"""
+    if settings_manager.get("force_gc_after_gen", True):
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
 # Khởi tạo pygame mixer cho phát âm thanh
 try:
     pygame.mixer.init(frequency=24000)
@@ -46,7 +89,18 @@ except Exception:
 
 class ChatterboxEngine:
     def __init__(self, device="cpu"):
-        self.device = device
+        # Lấy cấu hình device từ settings nếu có
+        saved_device = settings_manager.get("device", "auto")
+        if saved_device == "cuda" and torch.cuda.is_available():
+            self.device = "cuda"
+        elif saved_device == "cpu":
+            self.device = "cpu"
+        else:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # Áp dụng giới hạn phần cứng chống treo máy
+        apply_hardware_limits()
+
         self.loaded_models = {}
         self.current_model = None
         self.active_model_name = None
@@ -59,6 +113,12 @@ class ChatterboxEngine:
     def load_model(self, model_name, extra_args=None):
         """Tải mô hình Chatterbox và lưu vào cache cache."""
         with self._lock:
+            if settings_manager.get("auto_unload_models", False) and self.active_model_name != model_name:
+                logger.info("Giải phóng các model cũ khỏi VRAM...")
+                self.loaded_models.clear()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
             if model_name in self.loaded_models:
                 self.current_model = self.loaded_models[model_name]
                 self.active_model_name = model_name
@@ -146,6 +206,7 @@ class ChatterboxEngine:
         sr = getattr(model, "sr", 24000)
         ta.save(out_path, full_wav.cpu(), sr)
         
+        cleanup_memory()
         logger.info("Sinh thành công! File lưu tại: %s", out_path)
         return out_path, seed
 
@@ -186,6 +247,7 @@ class ChatterboxEngine:
             progress_callback(1, 1, 100, 100, 0)
 
         ta.save(out_path, wav.cpu(), model.sr)
+        cleanup_memory()
         logger.info("Sinh đa ngôn ngữ thành công: %s", out_path)
         return out_path
 
@@ -218,6 +280,7 @@ class ChatterboxEngine:
             progress_callback(1, 1, 100, 100, 0)
 
         ta.save(out_path, wav.cpu(), model.sr)
+        cleanup_memory()
         logger.info("Chuyển đổi giọng hoàn tất: %s", out_path)
         return out_path
 

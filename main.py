@@ -49,7 +49,14 @@ def main():
     logger.info("Khởi chạy ứng dụng Chatterbox TTS Studio...")
     logger.info("Thư mục lưu trữ model hiện tại: %s", cache_dir)
     
-    root = tk.Tk()
+    try:
+        import tkinterdnd2
+        root = tkinterdnd2.TkinterDnD.Tk()
+        logger.info("Đã nạp thành công bộ hỗ trợ Kéo-Thả TkinterDnD2!")
+    except Exception as e:
+        logger.warning("Không nạp được TkinterDnD2 (%s), chuyển sang tk.Tk() mặc định", e)
+        root = tk.Tk()
+
     root.title("Chatterbox TTS Studio")
     
     # Thiết lập màu nền mặc định cho cửa sổ chính để tránh chớp giật trắng
