@@ -3,10 +3,12 @@ Tab 2: Multilingual TTS Tab
 """
 
 import os
+import shutil
 import tempfile
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import ttk, filedialog, messagebox
 from config.constants import *
+from ui.components.audio_player import AudioPlayerWidget
 from ui.components.waveform_canvas import WaveformCanvas
 from utils.threading_helper import run_in_background
 from utils.context_menu import bind_right_click_menu
@@ -18,6 +20,7 @@ class MtlTab(tk.Frame):
         self.main_window = main_window
         
         self.mtl_ref_path = None
+        self.last_temp_wav = None
 
         self._build_ui()
 
@@ -60,12 +63,12 @@ class MtlTab(tk.Frame):
         # LEFT PANE
         # Text input card
         text_card = tk.Frame(left_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
-        text_card.pack(fill="both", expand=True, pady=(0, 12))
+        text_card.pack(fill="both", expand=True, pady=(0, 10))
 
         title_lbl = tk.Label(text_card, text="Văn bản đa ngôn ngữ", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG)
         title_lbl.pack(anchor="w", padx=14, pady=(10, 4))
 
-        self.mtl_text_box = tk.Text(text_card, height=12, font=("Segoe UI", 11), bg="#0e1621", fg=TEXT_COLOR,
+        self.mtl_text_box = tk.Text(text_card, height=10, font=("Segoe UI", 11), bg="#0e1621", fg=TEXT_COLOR,
                                     bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
                                     insertbackground="white")
         self.mtl_text_box.pack(fill="both", expand=True, padx=14, pady=4)
@@ -73,22 +76,26 @@ class MtlTab(tk.Frame):
         bind_right_click_menu(self.mtl_text_box)
 
         self.mtl_char_lbl = tk.Label(text_card, text="64 / 1000 ký tự", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
-        self.mtl_char_lbl.pack(anchor="e", padx=14, pady=(0, 8))
+        self.mtl_char_lbl.pack(anchor="e", padx=14, pady=(0, 6))
+
+        # Khối Audio Player HTML5 (Ẩn mặc định khi chưa render)
+        self.audio_player = AudioPlayerWidget(left_pane, self.engine, on_delete=self._on_audio_deleted)
+        self.audio_player.pack_forget()
 
         # Toolbar
-        tb = tk.Frame(left_pane, bg=PANEL_BG)
-        tb.pack(fill="x")
+        self.tb = tk.Frame(left_pane, bg=PANEL_BG)
+        self.tb.pack(fill="x")
 
-        tk.Button(tb, text="▶ Đọc thử", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        tk.Button(self.tb, text="▶ Chạy", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                   activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, padx=16, pady=7, cursor="hand2",
                   command=self.play_action).pack(side="left", padx=(0, 8))
 
-        tk.Button(tb, text="■ Dừng", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
-                  activebackground="#2563eb", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
+        tk.Button(self.tb, text="■ Dừng", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+                  activebackground="#e11d48", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                   padx=14, pady=6, cursor="hand2",
                   command=self.stop_action).pack(side="left", padx=(0, 8))
 
-        tk.Button(tb, text="💾 Lưu File WAV", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(self.tb, text="💾 Lưu File WAV", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   activebackground="#2563eb", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                   padx=14, pady=6, cursor="hand2",
                   command=self.save_action).pack(side="left")
@@ -154,10 +161,18 @@ class MtlTab(tk.Frame):
         self.mtl_ref_var.set("Mặc định")
         self.mtl_waveform.set_audio_file(None)
 
+    def _on_audio_deleted(self):
+        self.last_temp_wav = None
+        try:
+            self.audio_player.pack_forget()
+        except Exception:
+            pass
+        self.main_window.set_status("🗑 Đã xóa file âm thanh tạm thời và reset trình phát.", progress=None)
+
     def play_action(self):
         text = self.mtl_text_box.get("1.0", "end").strip()
         if not text:
-            messagebox.showwarning("Thiếu văn bản", "Vui lòng nhập văn bản.")
+            messagebox.showwarning("Thiếu văn bản", "Vui lòng nhập văn bản trước khi chạy.")
             return
 
         ver = self.mtl_ver_var.get()
@@ -173,12 +188,19 @@ class MtlTab(tk.Frame):
 
         def callback(success, result):
             if success:
-                self.engine.play_audio(tmp_path)
-                self.main_window.set_status("Đang phát Multilingual...")
+                self.last_temp_wav = tmp_path
+                try:
+                    self.audio_player.pack(fill="x", pady=(0, 10), before=self.tb)
+                except Exception:
+                    pass
+                self.audio_player.load_audio(tmp_path)
+                self.audio_player.play()
+                self.main_window.set_status("✓ Sinh đa ngôn ngữ hoàn tất! Đang phát...", progress=100)
             else:
-                self.main_window.set_status("Lỗi sinh Multilingual.")
+                self.main_window.set_status("❌ Lỗi sinh Multilingual.", progress=None)
                 messagebox.showerror("Lỗi", str(result))
 
+        self.main_window.set_status(f"⏳ Đang sinh đa ngôn ngữ [{lang_code}]...", progress="indeterminate")
         run_in_background(
             self.engine.generate_multilingual,
             callback,
@@ -193,45 +215,28 @@ class MtlTab(tk.Frame):
         )
 
     def stop_action(self):
-        self.engine.stop_audio()
-        self.main_window.set_status("Đã dừng âm thanh.")
+        self.audio_player.stop()
+        self.main_window.set_status("■ Đã dừng âm thanh.", progress=None)
 
     def save_action(self):
-        text = self.mtl_text_box.get("1.0", "end").strip()
-        if not text:
-            messagebox.showwarning("Thiếu văn bản", "Vui lòng nhập văn bản.")
+        if not self.last_temp_wav or not os.path.exists(self.last_temp_wav):
+            messagebox.showwarning(
+                "Chưa tạo file âm thanh",
+                "Chưa có file âm thanh nào được tạo.\nVui lòng bấm nút '▶ Chạy' trước để sinh file âm thanh!"
+            )
             return
 
-        save_path = filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV audio", "*.wav")])
+        text = self.mtl_text_box.get("1.0", "end").strip()
+        save_path = filedialog.asksaveasfilename(initialdir=DEFAULT_EXPORT_DIR, defaultextension=".wav", filetypes=[("WAV audio", "*.wav")])
         if not save_path:
             return
 
-        ver = self.mtl_ver_var.get()
         lang_str = self.mtl_lang_var.get()
-        lang_code = "en"
-        for k, v in LANGUAGES_WITH_FLAGS.items():
-            if v == lang_str:
-                lang_code = k
-                break
-
-        def callback(success, result):
-            if success:
-                self.main_window.set_status(f"Đã lưu: {save_path}")
-                self.main_window.add_to_history(save_path, f"MTL [{lang_code}]: {text[:30]}")
-                messagebox.showinfo("Thành công", f"Đã lưu file:\n{save_path}")
-            else:
-                self.main_window.set_status("Lỗi khi lưu file.")
-                messagebox.showerror("Lỗi", str(result))
-
-        run_in_background(
-            self.engine.generate_multilingual,
-            callback,
-            self,
-            text=text,
-            lang_code=lang_code,
-            ref_path=self.mtl_ref_path,
-            exag=self.mtl_exag_var.get(),
-            cfg=self.mtl_cfg_var.get(),
-            model_ver=ver,
-            out_path=save_path
-        )
+        try:
+            shutil.copyfile(self.last_temp_wav, save_path)
+            self.main_window.set_status(f"✓ Đã lưu: {save_path}", progress=None)
+            self.main_window.add_to_history(save_path, f"MTL [{lang_str}]: {text[:30]}")
+            messagebox.showinfo("Thành công", f"Đã lưu thành công file âm thanh tại:\n{save_path}")
+        except Exception as e:
+            self.main_window.set_status("❌ Lỗi khi lưu file.", progress=None)
+            messagebox.showerror("Lỗi", str(e))

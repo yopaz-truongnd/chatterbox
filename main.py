@@ -19,7 +19,10 @@ def get_model_cache_dir():
                 data = json.load(f)
                 custom_dir = data.get("model_cache_dir")
                 if custom_dir:
-                    return Path(custom_dir).absolute()
+                    default_dir = Path(custom_dir).absolute()
+                hf_token = data.get("hf_token")
+                if hf_token:
+                    os.environ["HF_TOKEN"] = hf_token
         except Exception:
             pass
     else:
@@ -27,7 +30,7 @@ def get_model_cache_dir():
         try:
             SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump({"model_cache_dir": str(default_dir)}, f, ensure_ascii=False, indent=2)
+                json.dump({"model_cache_dir": str(default_dir), "hf_token": ""}, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
     return default_dir
@@ -46,7 +49,14 @@ def main():
     logger.info("Khởi chạy ứng dụng Chatterbox TTS Studio...")
     logger.info("Thư mục lưu trữ model hiện tại: %s", cache_dir)
     
-    root = tk.Tk()
+    try:
+        import tkinterdnd2
+        root = tkinterdnd2.TkinterDnD.Tk()
+        logger.info("Đã nạp thành công bộ hỗ trợ Kéo-Thả TkinterDnD2!")
+    except Exception as e:
+        logger.warning("Không nạp được TkinterDnD2 (%s), chuyển sang tk.Tk() mặc định", e)
+        root = tk.Tk()
+
     root.title("Chatterbox TTS Studio")
     
     # Thiết lập màu nền mặc định cho cửa sổ chính để tránh chớp giật trắng
