@@ -81,25 +81,16 @@ python3 main.py
 
 ---
 
-### 🌐 Chế độ 2: Web Interface (Gradio App - Localhost)
-Dành cho việc trải nghiệm qua giao diện trình duyệt Web (`http://127.0.0.1:7860`):
+### 🌐 Chế độ 2: Các Gradio Demo riêng lẻ
 
 ```bash
-# Khởi chạy toàn bộ Web Interface (Khuyên dùng - Đã có Tiếng Việt & Settings)
-chmod +x run_chatterbox_web.sh
-./run_chatterbox_web.sh
-
-# Hoặc khởi chạy từng ứng dụng web riêng lẻ:
-# 1. Chatterbox Unified Web App
-python3 web_app.py
-
-# 2. Chatterbox Turbo Web App (English, Siêu nhanh)
+# 1. Chatterbox Turbo Web App (English, Siêu nhanh)
 python3 gradio_tts_turbo_app.py
 
-# 3. Multilingual Web App (Đa ngôn ngữ 23+ tiếng)
+# 2. Multilingual Web App (Đa ngôn ngữ 23+ tiếng)
 python3 multilingual_app.py
 
-# 4. Voice Conversion Web App (Chuyển đổi giọng nói)
+# 3. Voice Conversion Web App (Chuyển đổi giọng nói)
 python3 gradio_vc_app.py
 ```
 
@@ -116,13 +107,6 @@ python3 example_tts_turbo.py
 ## 5. Tóm tắt Lệnh Khởi chạy Nhanh (Cheat Sheet)
 
 Mỗi lần khởi động máy hoặc mở Terminal mới:
-
-- **Khởi chạy Giao diện Web (Localhost http://127.0.0.1:7860):**
-```bash
-cd /var/www/chatterbox
-source venv/bin/activate
-./run_chatterbox_web.sh
-```
 
 - **Khởi chạy Giao diện Desktop GUI (Tkinter):**
 ```bash
@@ -242,7 +226,7 @@ Test sử dụng model giả:
 Kết quả thành công có dạng:
 
 ```text
-Ran 9 tests in ...s
+Ran 16 tests in ...s
 
 OK
 ```
@@ -256,5 +240,64 @@ Các nhóm hành vi được kiểm tra:
 - Cleanup upload Voice Conversion.
 - Chỉ giữ một model trong RAM khi chuyển model.
 - Lọc và xóa completed job.
+- Character JSON CRUD không chứa model.
+- Reference audio tùy chọn: thêm, tải, thay và xóa.
+- `character_id` áp dụng voice profile/reference và upload request được ưu tiên.
 
 Xem mô tả chi tiết tại `PROJECT_ARCHITECTURE.md`, mục **Test suite**.
+
+---
+
+## 8. Character Voice Preset
+
+Character lưu cấu hình voice độc lập model trong `data/characters.json`. Reference audio là tùy chọn và được quản lý riêng.
+
+Tạo Character không có reference audio:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/characters \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name":"Sarah",
+    "description":"Calm support voice",
+    "language":"en",
+    "tags":["female","calm"],
+    "notes":"Neutral support style",
+    "voice":{
+      "expressiveness":0.5,
+      "pace":0.5,
+      "stability":0.7,
+      "seed":12345
+    }
+  }'
+```
+
+Thêm hoặc thay reference audio:
+
+```bash
+curl -X PUT http://127.0.0.1:8000/api/v1/characters/CHARACTER_ID/reference-audio \
+  -F 'reference_audio=@voice.wav'
+```
+
+Sinh TTS bằng Character:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/tts \
+  -F 'text=Hello, how may I help you today?' \
+  -F 'character_id=CHARACTER_ID'
+```
+
+Thứ tự ưu tiên audio: `audio_prompt` trong TTS request, reference audio Character, sau cùng là giọng mặc định model. Tham số TTS gửi trực tiếp ưu tiên hơn voice profile Character.
+
+Các endpoint:
+
+```text
+POST   /api/v1/characters
+GET    /api/v1/characters
+GET    /api/v1/characters/{id}
+PATCH  /api/v1/characters/{id}
+DELETE /api/v1/characters/{id}
+PUT    /api/v1/characters/{id}/reference-audio
+GET    /api/v1/characters/{id}/reference-audio
+DELETE /api/v1/characters/{id}/reference-audio
+```

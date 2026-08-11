@@ -84,6 +84,7 @@ We provide a professional, dark-themed Desktop GUI built on a clean modular arch
 
 ### Key Features:
 - **🗣️ TTS Studio:** Real-time character counts, direct paralinguistic tag insertion chips, interactive preset combos, and full audio generation controls.
+- **🎭 Characters:** JSON-only voice presets with optional reference audio and reusable `character_id` across TTS endpoints.
 - **🌐 Multilingual TTS:** Support for V3/V2 multilingual voice cloning with 23+ languages.
 - **🔁 Voice Conversion:** Audio-to-audio speech conversion with dual interactive waveform graphs.
 - **📦 Batch & History:** Session history search, custom batch export folders, and progressive batch generation.
@@ -103,11 +104,6 @@ We provide a professional, dark-themed Desktop GUI built on a clean modular arch
   ```shell
   chmod +x run_chatterbox_gui.sh
   ./run_chatterbox_gui.sh
-  ```
-- Launch Web Interface (Localhost `http://127.0.0.1:7860` - Vietnamese default):
-  ```shell
-  chmod +x run_chatterbox_web.sh
-  ./run_chatterbox_web.sh
   ```
 
 ## Usage

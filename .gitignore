@@ -57,3 +57,7 @@ chatterbox_studio.log
 config/settings.json
 tts_chatterbox_gui_backup.py
 voice_presets.json
+
+# Local Character profiles and optional reference audio
+data/characters.json
+data/characters/

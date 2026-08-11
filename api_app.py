@@ -22,6 +22,8 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile, statu
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+import character_api
+
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
 from chatterbox.tts import ChatterboxTTS
 from chatterbox.tts_turbo import ChatterboxTurboTTS
@@ -224,10 +226,12 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Chatterbox TTS API",
-    version="1.2.0",
+    version="1.3.0",
     description="Local API cho Chatterbox TTS, Turbo, Nano, Multilingual và Voice Conversion.",
     lifespan=lifespan,
 )
+
+app.include_router(character_api.router)
 
 
 async def save_upload(upload: UploadFile, job_id: str, label: str) -> str:
@@ -249,6 +253,34 @@ async def save_upload(upload: UploadFile, job_id: str, label: str) -> str:
     finally:
         await upload.close()
     return str(destination_path)
+
+
+async def resolve_character_prompt(
+    character_id: str | None,
+    audio_prompt: UploadFile | None,
+    upload_id: str,
+) -> tuple[str | None, list[str], dict | None]:
+    character_prompt, voice_profile = character_api.resolve_character_voice(character_id)
+    if audio_prompt is not None:
+        uploaded_prompt = await save_upload(audio_prompt, upload_id, "prompt")
+        return uploaded_prompt, [uploaded_prompt], voice_profile
+    return character_prompt, [], voice_profile
+
+
+def effective_temperature(explicit: float | None, voice_profile: dict | None, default: float) -> float:
+    if explicit is not None:
+        return explicit
+    if voice_profile is None:
+        return default
+    return round(1.2 - (0.7 * voice_profile["stability"]), 3)
+
+
+def effective_value(explicit, voice_profile: dict | None, profile_key: str, default):
+    if explicit is not None:
+        return explicit
+    if voice_profile is not None:
+        return voice_profile[profile_key]
+    return default
 
 
 def validate_text(text: str) -> str:
@@ -334,28 +366,32 @@ def health() -> dict:
 async def create_tts_job(
     text: Annotated[str, Form(min_length=1, max_length=4000)],
     audio_prompt: Annotated[UploadFile | None, File()] = None,
-    exaggeration: Annotated[float, Form(ge=0.25, le=2.0)] = 0.5,
-    temperature: Annotated[float, Form(ge=0.05, le=5.0)] = 0.8,
-    seed: Annotated[int, Form(ge=0)] = 0,
-    cfg_weight: Annotated[float, Form(ge=0.0, le=1.0)] = 0.5,
+    character_id: Annotated[str | None, Form()] = None,
+    exaggeration: Annotated[float | None, Form(ge=0.25, le=2.0)] = None,
+    temperature: Annotated[float | None, Form(ge=0.05, le=5.0)] = None,
+    seed: Annotated[int | None, Form(ge=0)] = None,
+    cfg_weight: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
     min_p: Annotated[float, Form(ge=0.0, le=1.0)] = 0.05,
     top_p: Annotated[float, Form(ge=0.0, le=1.0)] = 1.0,
     repetition_penalty: Annotated[float, Form(ge=1.0, le=2.0)] = 1.2,
 ) -> dict:
     job_id = uuid.uuid4().hex
-    audio_prompt_path = await save_upload(audio_prompt, job_id, "prompt") if audio_prompt else None
+    audio_prompt_path, input_paths, voice_profile = await resolve_character_prompt(
+        character_id, audio_prompt, job_id
+    )
     params = {
         "text": validate_text(text),
+        "character_id": character_id,
         "audio_prompt_path": audio_prompt_path,
-        "exaggeration": exaggeration,
-        "temperature": temperature,
-        "seed": seed,
-        "cfg_weight": cfg_weight,
+        "exaggeration": effective_value(exaggeration, voice_profile, "expressiveness", 0.5),
+        "temperature": effective_temperature(temperature, voice_profile, 0.8),
+        "seed": effective_value(seed, voice_profile, "seed", 0),
+        "cfg_weight": effective_value(cfg_weight, voice_profile, "pace", 0.5),
         "min_p": min_p,
         "top_p": top_p,
         "repetition_penalty": repetition_penalty,
     }
-    return submit_job("tts", params, [audio_prompt_path] if audio_prompt_path else [])
+    return submit_job("tts", params, input_paths)
 
 
 @app.post("/api/v1/tts", status_code=status.HTTP_202_ACCEPTED, tags=["tts"])
@@ -364,24 +400,28 @@ async def create_turbo_job(
     text: Annotated[str, Form(min_length=1, max_length=4000)],
     model: Annotated[Literal["turbo", "nano"], Form()] = "turbo",
     audio_prompt: Annotated[UploadFile | None, File()] = None,
-    temperature: Annotated[float, Form(ge=0.05, le=5.0)] = 0.8,
-    seed: Annotated[int, Form(ge=0)] = 0,
+    character_id: Annotated[str | None, Form()] = None,
+    temperature: Annotated[float | None, Form(ge=0.05, le=5.0)] = None,
+    seed: Annotated[int | None, Form(ge=0)] = None,
     top_k: Annotated[int, Form(ge=1, le=5000)] = 1000,
     top_p: Annotated[float, Form(ge=0.0, le=1.0)] = 0.95,
     repetition_penalty: Annotated[float, Form(ge=1.0, le=2.0)] = 1.2,
 ) -> dict:
     job_id = uuid.uuid4().hex
-    audio_prompt_path = await save_upload(audio_prompt, job_id, "prompt") if audio_prompt else None
+    audio_prompt_path, input_paths, voice_profile = await resolve_character_prompt(
+        character_id, audio_prompt, job_id
+    )
     params = {
         "text": validate_text(text),
+        "character_id": character_id,
         "audio_prompt_path": audio_prompt_path,
-        "temperature": temperature,
-        "seed": seed,
+        "temperature": effective_temperature(temperature, voice_profile, 0.8),
+        "seed": effective_value(seed, voice_profile, "seed", 0),
         "top_k": top_k,
         "top_p": top_p,
         "repetition_penalty": repetition_penalty,
     }
-    return submit_job(model, params, [audio_prompt_path] if audio_prompt_path else [])
+    return submit_job(model, params, input_paths)
 
 
 @app.post("/api/v1/tts/multilingual", status_code=status.HTTP_202_ACCEPTED, tags=["tts"])
@@ -389,10 +429,11 @@ async def create_multilingual_job(
     text: Annotated[str, Form(min_length=1, max_length=4000)],
     language_id: Annotated[str, Form()],
     audio_prompt: Annotated[UploadFile | None, File()] = None,
-    exaggeration: Annotated[float, Form(ge=0.25, le=2.0)] = 0.5,
-    temperature: Annotated[float, Form(ge=0.05, le=5.0)] = 0.8,
-    seed: Annotated[int, Form(ge=0)] = 0,
-    cfg_weight: Annotated[float, Form(ge=0.0, le=1.0)] = 0.5,
+    character_id: Annotated[str | None, Form()] = None,
+    exaggeration: Annotated[float | None, Form(ge=0.25, le=2.0)] = None,
+    temperature: Annotated[float | None, Form(ge=0.05, le=5.0)] = None,
+    seed: Annotated[int | None, Form(ge=0)] = None,
+    cfg_weight: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
     min_p: Annotated[float, Form(ge=0.0, le=1.0)] = 0.05,
     top_p: Annotated[float, Form(ge=0.0, le=1.0)] = 1.0,
     repetition_penalty: Annotated[float, Form(ge=1.0, le=2.0)] = 1.2,
@@ -401,20 +442,23 @@ async def create_multilingual_job(
     if language_id not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=422, detail={"message": "Ngôn ngữ không được hỗ trợ", "supported": SUPPORTED_LANGUAGES})
     job_id = uuid.uuid4().hex
-    audio_prompt_path = await save_upload(audio_prompt, job_id, "prompt") if audio_prompt else None
+    audio_prompt_path, input_paths, voice_profile = await resolve_character_prompt(
+        character_id, audio_prompt, job_id
+    )
     params = {
         "text": validate_text(text),
+        "character_id": character_id,
         "language_id": language_id,
         "audio_prompt_path": audio_prompt_path,
-        "exaggeration": exaggeration,
-        "temperature": temperature,
-        "seed": seed,
-        "cfg_weight": cfg_weight,
+        "exaggeration": effective_value(exaggeration, voice_profile, "expressiveness", 0.5),
+        "temperature": effective_temperature(temperature, voice_profile, 0.8),
+        "seed": effective_value(seed, voice_profile, "seed", 0),
+        "cfg_weight": effective_value(cfg_weight, voice_profile, "pace", 0.5),
         "min_p": min_p,
         "top_p": top_p,
         "repetition_penalty": repetition_penalty,
     }
-    return submit_job("multilingual", params, [audio_prompt_path] if audio_prompt_path else [])
+    return submit_job("multilingual", params, input_paths)
 
 
 @app.post("/api/v1/voice-conversion", status_code=status.HTTP_202_ACCEPTED, tags=["voice-conversion"])

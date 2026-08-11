@@ -9,17 +9,15 @@ Dự án cung cấp ba cách chạy độc lập:
 | Chế độ | Entrypoint | Launcher | Địa chỉ | Mục đích |
 | --- | --- | --- | --- | --- |
 | Desktop GUI | `main.py` | `run_chatterbox_gui.sh` | Cửa sổ Tkinter | Studio đầy đủ trên desktop |
-| Web UI | `web_app.py` | `run_chatterbox_web.sh` | `127.0.0.1:7860` | Giao diện Gradio tiếng Việt |
 | Local API | `api_app.py` | `run_chatterbox_api.sh` | `127.0.0.1:8000` | Tích hợp script và ứng dụng khác |
 
-Ba chế độ là ba process riêng. Nếu chạy đồng thời, mỗi process có model cache trong RAM riêng và làm tăng mức sử dụng RAM. Trên máy CPU/RAM hạn chế, chỉ nên chạy một chế độ tại một thời điểm.
+Hai chế độ chính là hai process riêng. Nếu chạy đồng thời, mỗi process có model cache trong RAM riêng và làm tăng mức sử dụng RAM. Trên máy CPU/RAM hạn chế, chỉ nên chạy một chế độ tại một thời điểm.
 
 ## 2. Cấu trúc thư mục
 
 ```text
 chatterbox/
 ├── api_app.py                 # FastAPI, queue, model cache RAM và endpoints
-├── web_app.py                 # Gradio Web UI hợp nhất
 ├── main.py                    # Desktop GUI entrypoint
 ├── core/
 │   └── chatterbox_engine.py   # Engine dùng bởi Desktop GUI
@@ -39,7 +37,6 @@ chatterbox/
 ├── models/                    # Hugging Face Hub cache của project
 ├── utils/                     # Logging, audio, threading, text và file helpers
 ├── run_chatterbox_gui.sh
-├── run_chatterbox_web.sh
 └── run_chatterbox_api.sh
 ```
 
@@ -79,7 +76,7 @@ Hệ quả:
 - Cho phép download model thiếu bằng `HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh`.
 - Di chuyển project sang đường dẫn khác vẫn dùng đúng thư mục `<project>/models`.
 
-Desktop GUI đọc `model_cache_dir` từ `config/settings.json`. Web UI hiện đọc settings để hiển thị/lưu nhưng các hàm `from_pretrained()` phụ thuộc biến Hugging Face của process. Không nên giả định thay đổi Settings trong một process sẽ đổi cache của process khác đang chạy.
+Desktop GUI đọc `model_cache_dir` từ `config/settings.json`; Local API luôn khóa cache vào `<project>/models`. Không nên giả định thay đổi Settings của Desktop sẽ đổi cache của API đang chạy.
 
 ## 5. Cấu hình chung
 
@@ -132,30 +129,9 @@ run_chatterbox_gui.sh
 
 `ChatterboxEngine` dùng lock nội bộ khi load model. Nếu `auto_unload_models=true`, engine clear model cũ khi chuyển sang model khác.
 
-## 7. Luồng Web UI
+## 7. Luồng FastAPI
 
-```text
-run_chatterbox_web.sh
-    → kích hoạt venv
-    → web_app.py
-    → Gradio Blocks tại 127.0.0.1:7860
-    → model được lazy-load theo tab đầu tiên sử dụng
-    → generate TTS / multilingual / VC
-    → Gradio trả audio waveform cho trình duyệt
-```
-
-Web UI gồm bốn tab:
-
-- TTS Studio: giao diện tiếng Việt, sinh tiếng Anh.
-- Multilingual TTS: chọn ngôn ngữ checkpoint hỗ trợ.
-- Voice Conversion: upload source và target voice.
-- Settings: cấu hình local và ngôn ngữ giao diện.
-
-Web UI và API không chia sẻ object model trong RAM, kể cả khi chạy trên cùng máy.
-
-## 8. Luồng FastAPI
-
-### 8.1 Khởi động
+### 7.1 Khởi động
 
 ```text
 run_chatterbox_api.sh
@@ -169,7 +145,7 @@ run_chatterbox_api.sh
 
 Model chưa được load khi server vừa khởi động. Lần gọi job đầu tiên hoặc endpoint preload mới đọc model từ ổ đĩa vào RAM.
 
-### 8.2 Vòng đời job
+### 7.2 Vòng đời job
 
 ```text
 POST endpoint
@@ -205,7 +181,7 @@ queued → processing → completed
 
 Job chỉ tồn tại trong RAM của process. Restart API sẽ mất danh sách job, nhưng các WAV cũ trong `CHATTERBOX_API_DATA_DIR/outputs` không tự động bị xóa.
 
-## 9. Danh sách API
+## 8. Danh sách API
 
 Swagger UI: `http://127.0.0.1:8000/docs`.
 
@@ -250,7 +226,7 @@ Tên model hợp lệ: `standard`, `turbo`, `nano`, `multilingual`, `voice-conve
 
 Không thể xóa job đang `queued` hoặc `processing`.
 
-## 10. API chia văn bản
+## 9. API chia văn bản
 
 Request JSON:
 
@@ -276,7 +252,7 @@ Mỗi chunk có `index`, `start`, `end`, `text`. Điều kiện luôn được k
 "".join(chunk["text"] for chunk in chunks) == original_text
 ```
 
-## 11. Ví dụ flow client API
+## 10. Ví dụ flow client API
 
 ```bash
 # 1. Tạo Turbo job
@@ -293,7 +269,7 @@ curl -o output.wav \
 
 Client nên poll trạng thái với khoảng nghỉ hợp lý, ví dụ 1–3 giây, thay vì gọi liên tục.
 
-## 12. Chính sách tài nguyên khuyến nghị
+## 11. Chính sách tài nguyên khuyến nghị
 
 Máy local hiện chạy CPU nên cấu hình ưu tiên ổn định:
 
@@ -305,7 +281,7 @@ Máy local hiện chạy CPU nên cấu hình ưu tiên ổn định:
 - Theo dõi `free -h` và swap trước khi chạy Standard/Multilingual.
 - Standard và Multilingual nặng hơn, có thể làm máy phản hồi chậm khi RAM thấp.
 
-## 13. File tạm và dữ liệu tồn tại
+## 12. File tạm và dữ liệu tồn tại
 
 | Dữ liệu | Vị trí | Vòng đời |
 | --- | --- | --- |
@@ -317,7 +293,7 @@ Máy local hiện chạy CPU nên cấu hình ưu tiên ổn định:
 | Desktop settings | `config/settings.json` | Giữ local, không commit |
 | Desktop log | `chatterbox_studio.log` | Giữ local, không commit |
 
-## 14. Giới hạn hiện tại
+## 13. Giới hạn hiện tại
 
 - API chỉ bind `127.0.0.1` và không có authentication.
 - Job store chưa persistent.
@@ -325,12 +301,11 @@ Máy local hiện chạy CPU nên cấu hình ưu tiên ổn định:
 - Không có endpoint hủy job đang chạy.
 - API chưa tự ghép WAV từ nhiều text chunk.
 - Không có TTL tự động xóa output WAV.
-- Web UI và API chưa dùng chung model service.
 - Multilingual checkpoint hiện không hỗ trợ tiếng Việt; tiếng Việt chỉ dùng cho giao diện.
 
 Nếu cần public API hoặc nhiều máy client, cần bổ sung authentication, rate limit, CORS có giới hạn, persistent job store và reverse proxy trước khi bind ra mạng ngoài.
 
-## 15. Kiểm tra vận hành
+## 14. Kiểm tra vận hành
 
 ```bash
 # API health
@@ -347,12 +322,11 @@ ss -ltnp | rg ':7860|:8000'
 
 # Kiểm tra Python và launcher
 source venv/bin/activate
-PYTHONPATH=src python3 -m py_compile api_app.py web_app.py
+PYTHONPATH=src python3 -m py_compile api_app.py
 bash -n run_chatterbox_api.sh
-bash -n run_chatterbox_web.sh
 ```
 
-## 16. Test suite
+## 15. Test suite
 
 Test API dùng `unittest`, FastAPI `TestClient` và model giả nên không tải checkpoint hoặc chạy inference thật.
 
@@ -372,3 +346,41 @@ Bộ test hiện kiểm tra:
 - Inference lỗi chuyển job sang `failed`.
 - Load model mới giải phóng model cũ nhưng cleanup nhẹ giữ model active.
 - Lọc, tải và xóa completed job.
+- Character JSON CRUD, PATCH voice từng phần và cấm field model.
+- Reference audio tùy chọn và vòng đời file.
+- `character_id` TTS, voice mapping và audio precedence.
+
+## 16. Character Voice Preset
+
+Character là voice preset độc lập model và được lưu dưới dạng JSON:
+
+```text
+data/characters.json
+```
+
+Reference audio là tùy chọn:
+
+```text
+data/characters/<character_id>/reference.<ext>
+```
+
+Character không chấp nhận field `model`. Model vẫn được quyết định bởi endpoint TTS. Voice profile gồm:
+
+- `expressiveness`: ánh xạ sang exaggeration cho Standard/Multilingual.
+- `pace`: ánh xạ sang CFG weight cho Standard/Multilingual.
+- `stability`: ánh xạ sang temperature cho các model TTS.
+- `seed`: giữ kết quả sampling ổn định hơn.
+
+Flow:
+
+```text
+TTS request có character_id
+    → đọc Character JSON
+    → lấy voice profile
+    → lấy reference audio nếu Character có
+    → nếu request có audio_prompt thì ghi đè reference Character
+    → nếu request có generation parameter thì ghi đè voice profile
+    → tạo job queue như bình thường
+```
+
+Character không có reference vẫn sử dụng được; model dùng built-in voice cùng voice profile. Job response chỉ chứa `character_id` và effective parameters, không lộ đường dẫn reference audio trên filesystem.
