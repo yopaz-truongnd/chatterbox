@@ -200,6 +200,15 @@ class SettingsTab(tk.Frame):
                                      activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, selectcolor="#0e1621")
         chk_confirm.pack(anchor="w", pady=4)
 
+        # 4.3 Language Dropdown Option
+        r_lang = tk.Frame(sec4, bg=PANEL2_BG)
+        r_lang.pack(fill="x", pady=6)
+        tk.Label(r_lang, text="Ngôn ngữ mặc định (Language):", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        self.language_var = tk.StringVar(value="🇻🇳 Tiếng Việt")
+        lang_cb = ttk.Combobox(r_lang, textvariable=self.language_var, state="readonly", width=25,
+                               values=list(UI_LANGUAGES.values()))
+        lang_cb.pack(side="left")
+
         # ACTION BUTTONS FOOTER
         btn_bar = tk.Frame(self, bg=PANEL_BG)
         btn_bar.pack(fill="x", pady=(10, 0))
@@ -261,6 +270,7 @@ class SettingsTab(tk.Frame):
 
         self.desktop_notif_var.set(settings_manager.get("desktop_notifications"))
         self.confirm_delete_var.set(settings_manager.get("confirm_delete_history"))
+        self.language_var.set(settings_manager.get("language", "🇻🇳 Tiếng Việt"))
 
     def save_settings_action(self):
         """Lưu cài đặt người dùng điều chỉnh"""
@@ -292,6 +302,7 @@ class SettingsTab(tk.Frame):
 
             settings_manager.set("desktop_notifications", self.desktop_notif_var.get())
             settings_manager.set("confirm_delete_history", self.confirm_delete_var.get())
+            settings_manager.set("language", self.language_var.get())
 
             settings_manager.save()
 

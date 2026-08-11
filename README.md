@@ -63,6 +63,12 @@ pip install -e .
 ```
 We developed and tested Chatterbox on Python 3.11 on Debian 11 OS; the versions of the dependencies are pinned in `pyproject.toml` to ensure consistency. You can modify the code or dependencies in this installation mode.
 
+## Project Documentation
+
+- [Project architecture and runtime flows](PROJECT_ARCHITECTURE.md)
+- [Linux setup and API usage](SETUP_GUIDE.md)
+- [Model selection guide](MODELS_GUIDE.md)
+
 ## Chatterbox TTS Studio (Desktop GUI)
 
 We provide a professional, dark-themed Desktop GUI built on a clean modular architecture (separated into `ui/`, `core/`, `config/`, and `utils/`) for an intuitive zero-shot voice cloning experience.
@@ -84,10 +90,15 @@ We provide a professional, dark-themed Desktop GUI built on a clean modular arch
 #### Linux / Ubuntu:
 - Install system Tkinter: `sudo apt install python3-tk`
 - Install dependencies: `pip install torch torchaudio pygame numpy`
-- Launch the application:
+- Launch Desktop GUI application:
   ```shell
   chmod +x run_chatterbox_gui.sh
   ./run_chatterbox_gui.sh
+  ```
+- Launch Web Interface (Localhost `http://127.0.0.1:7860` - Vietnamese default):
+  ```shell
+  chmod +x run_chatterbox_web.sh
+  ./run_chatterbox_web.sh
   ```
 
 ## Usage

@@ -81,17 +81,25 @@ python3 main.py
 
 ---
 
-### 🌐 Chế độ 2: Web Interface (Gradio App)
-Dành cho việc trải nghiệm qua giao diện trình duyệt Web:
+### 🌐 Chế độ 2: Web Interface (Gradio App - Localhost)
+Dành cho việc trải nghiệm qua giao diện trình duyệt Web (`http://127.0.0.1:7860`):
 
 ```bash
-# 1. Chatterbox Turbo Web App (English, Siêu nhanh)
+# Khởi chạy toàn bộ Web Interface (Khuyên dùng - Đã có Tiếng Việt & Settings)
+chmod +x run_chatterbox_web.sh
+./run_chatterbox_web.sh
+
+# Hoặc khởi chạy từng ứng dụng web riêng lẻ:
+# 1. Chatterbox Unified Web App
+python3 web_app.py
+
+# 2. Chatterbox Turbo Web App (English, Siêu nhanh)
 python3 gradio_tts_turbo_app.py
 
-# 2. Multilingual Web App (Đa ngôn ngữ 23+ tiếng)
+# 3. Multilingual Web App (Đa ngôn ngữ 23+ tiếng)
 python3 multilingual_app.py
 
-# 3. Voice Conversion Web App (Chuyển đổi giọng nói)
+# 4. Voice Conversion Web App (Chuyển đổi giọng nói)
 python3 gradio_vc_app.py
 ```
 
@@ -107,10 +115,105 @@ python3 example_tts_turbo.py
 
 ## 5. Tóm tắt Lệnh Khởi chạy Nhanh (Cheat Sheet)
 
-Mỗi lần khởi động máy hoặc mở Terminal mới để chạy Desktop GUI:
+Mỗi lần khởi động máy hoặc mở Terminal mới:
 
+- **Khởi chạy Giao diện Web (Localhost http://127.0.0.1:7860):**
+```bash
+cd /var/www/chatterbox
+source venv/bin/activate
+./run_chatterbox_web.sh
+```
+
+- **Khởi chạy Giao diện Desktop GUI (Tkinter):**
 ```bash
 cd /var/www/chatterbox
 source venv/bin/activate
 ./run_chatterbox_gui.sh
+```
+
+---
+
+## 6. FastAPI cho tích hợp ứng dụng
+
+Khởi chạy API độc lập tại `http://127.0.0.1:8000`:
+
+```bash
+chmod +x run_chatterbox_api.sh
+./run_chatterbox_api.sh
+```
+
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
+
+Tạo job TTS tiếng Anh bằng Turbo 350M mặc định:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/tts \
+  -F 'text=Hello from the Chatterbox Turbo API.'
+```
+
+Có thể gửi thêm audio mẫu bằng `-F 'audio_prompt=@voice.wav'`. Response trả về `job_id`; dùng ID đó để kiểm tra trạng thái và tải WAV:
+
+```bash
+curl http://127.0.0.1:8000/api/v1/jobs/JOB_ID
+curl -o output.wav http://127.0.0.1:8000/api/v1/jobs/JOB_ID/audio
+```
+
+### API mở rộng
+
+Turbo hoặc Nano (endpoint `/api/v1/tts` cũng mặc định Turbo):
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/tts/turbo \
+  -F 'text=Hello [laugh], this is Chatterbox Turbo.' \
+  -F 'model=turbo'
+```
+
+Multilingual:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/tts/multilingual \
+  -F 'text=Hello from the multilingual model.' \
+  -F 'language_id=en'
+```
+
+Voice Conversion:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/voice-conversion \
+  -F 'source_audio=@source.wav' \
+  -F 'target_voice=@target.wav'
+```
+
+Quản lý model và job:
+
+```bash
+curl http://127.0.0.1:8000/api/v1/languages
+curl http://127.0.0.1:8000/api/v1/models
+curl -X POST http://127.0.0.1:8000/api/v1/models/turbo/load
+curl -X DELETE http://127.0.0.1:8000/api/v1/models/turbo
+curl 'http://127.0.0.1:8000/api/v1/jobs?status=completed'
+curl -X DELETE http://127.0.0.1:8000/api/v1/jobs/JOB_ID
+```
+
+API chạy một job audio tại một thời điểm để tránh tranh chấp GPU/VRAM. Endpoint load model có thể mất thời gian ở lần đầu do tải checkpoint.
+
+Chia văn bản thành các đoạn 200–500 ký tự mà không sửa, trim hay chuẩn hóa nội dung:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/text/split \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Your long original text...","min_chars":200,"max_chars":500}'
+```
+
+Nối `text` của toàn bộ `chunks` theo thứ tự sẽ khôi phục chính xác text ban đầu. Standard 500M vẫn có tại `POST /api/v1/tts/standard`. API dùng 2 CPU thread theo mặc định; có thể đổi bằng `CHATTERBOX_API_CPU_THREADS`. Khi load model mới, model đang giữ trong RAM sẽ được unload trước.
+
+### Cache model của API
+
+API dùng trực tiếp Hugging Face cache trong thư mục dự án `models/` và chạy offline mặc định, vì vậy model đã có sẽ không được tải lại từ Internet.
+
+Nếu cần tải một model còn thiếu, cho phép kết nối trong lần chạy đó:
+
+```bash
+HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh
 ```

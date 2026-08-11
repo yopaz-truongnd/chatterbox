@@ -251,7 +251,7 @@ with gr.Blocks() as demo:
     gr.Markdown(get_supported_languages_display())
     with gr.Row():
         with gr.Column():
-            initial_lang = "fr"
+            initial_lang = "en"
             text = gr.Textbox(
                 value=default_text_for_ui(initial_lang),
                 label="Text to synthesize (max chars 300)",

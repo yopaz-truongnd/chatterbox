@@ -16,6 +16,7 @@ DEFAULT_SETTINGS = {
     "export_dir": os.path.expanduser("~/Downloads"),
     "model_cache_dir": str(Path("/var/www/chatterbox/models").absolute()),
     "auto_open_export_dir": True,
+    "language": "🇻🇳 Tiếng Việt",
     "device": "auto",
     "default_startup_model": "Chatterbox Standard (500M)",
     "max_chunk_chars": 4000,
