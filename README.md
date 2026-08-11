@@ -84,7 +84,7 @@ We provide a professional, dark-themed Desktop GUI built on a clean modular arch
 
 ### Key Features:
 - **🗣️ TTS Studio:** Real-time character counts, direct paralinguistic tag insertion chips, interactive preset combos, and full audio generation controls.
-- **🎭 Characters:** JSON-only voice presets with optional reference audio and reusable `character_id` across TTS endpoints.
+- **🎭 Characters:** JSON-only voice presets with optional reference audio, Default Character setting (`is_default`), voice preview audio test before creation, treeview context menu, and 5 clean RESTful API endpoints in Swagger `/docs`.
 - **🌐 Multilingual TTS:** Support for V3/V2 multilingual voice cloning with 23+ languages.
 - **🔁 Voice Conversion:** Audio-to-audio speech conversion with dual interactive waveform graphs.
 - **📦 Batch & History:** Session history search, custom batch export folders, and progressive batch generation.

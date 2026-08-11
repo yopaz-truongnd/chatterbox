@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -50,6 +50,7 @@ class CharacterCreate(BaseModel):
     language: str = Field(default="en", min_length=2, max_length=20)
     tags: list[str] = Field(default_factory=list)
     notes: str = Field(default="", max_length=2000)
+    is_default: bool = Field(default=False)
     voice: VoiceProfile = Field(default_factory=VoiceProfile)
 
 
@@ -61,6 +62,7 @@ class CharacterUpdate(BaseModel):
     language: str | None = Field(default=None, min_length=2, max_length=20)
     tags: list[str] | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    is_default: bool | None = Field(default=None)
     voice: VoiceProfileUpdate | None = None
 
 
@@ -102,6 +104,7 @@ def public_character(character: dict) -> dict:
     result = dict(character)
     reference_audio_path = result.pop("reference_audio_path", None)
     result["has_reference_audio"] = bool(reference_audio_path)
+    result["is_default"] = bool(result.get("is_default", False))
     result["reference_audio_url"] = (
         f"/api/v1/characters/{character['id']}/reference-audio" if reference_audio_path else None
     )
@@ -116,9 +119,37 @@ def get_character(character_id: str) -> dict:
         return dict(character)
 
 
+def get_default_character() -> dict | None:
+    with characters_lock:
+        for character in characters.values():
+            if character.get("is_default"):
+                return dict(character)
+        return None
+
+
+def set_default_character(character_id: str | None) -> dict | None:
+    with characters_lock:
+        if character_id is not None and character_id not in characters:
+            raise HTTPException(status_code=404, detail="Không tìm thấy Character")
+        target = None
+        for cid, character in characters.items():
+            if character_id is not None and cid == character_id:
+                character["is_default"] = True
+                character["updated_at"] = now_iso()
+                target = dict(character)
+            else:
+                character["is_default"] = False
+    save_characters()
+    return public_character(target) if target else None
+
+
 def resolve_character_voice(character_id: str | None) -> tuple[str | None, dict | None]:
     if not character_id:
-        return None, None
+        default_char = get_default_character()
+        if default_char:
+            character_id = default_char["id"]
+        else:
+            return None, None
     character = get_character(character_id)
     reference_audio_path = character.get("reference_audio_path")
     if reference_audio_path and not Path(reference_audio_path).exists():
@@ -128,6 +159,57 @@ def resolve_character_voice(character_id: str | None) -> tuple[str | None, dict 
 
 def normalized_tags(tags: list[str]) -> list[str]:
     return list(dict.fromkeys(tag.strip() for tag in tags if tag.strip()))
+
+
+def create_character_from_audio(
+    name: str,
+    audio_path: str | Path | None = None,
+    voice: VoiceProfile | None = None,
+    language: str = "en",
+) -> dict:
+    """Create a persistent Character from a local audio file or without audio (used by the desktop GUI)."""
+    payload = CharacterCreate(name=name, language=language, voice=voice or VoiceProfile())
+    character_id = f"char_{uuid.uuid4().hex}"
+    timestamp = now_iso()
+    character_dir = CHARACTER_DATA_DIR / character_id
+    character_dir.mkdir(parents=True, exist_ok=False)
+
+    managed_audio_path = None
+    if audio_path:
+        source_path = Path(audio_path).resolve()
+        suffix = source_path.suffix.lower()
+        if not source_path.is_file():
+            shutil.rmtree(character_dir, ignore_errors=True)
+            raise ValueError(f"Reference audio không tồn tại: {source_path}")
+        if suffix not in AUDIO_SUFFIXES:
+            shutil.rmtree(character_dir, ignore_errors=True)
+            raise ValueError(f"Định dạng reference audio không được hỗ trợ: {suffix}")
+        managed_audio_path = character_dir / f"reference{suffix}"
+        shutil.copy2(source_path, managed_audio_path)
+
+    try:
+        character = {
+            "id": character_id,
+            "name": payload.name.strip(),
+            "description": payload.description,
+            "language": payload.language.lower().strip(),
+            "tags": normalized_tags(payload.tags),
+            "notes": payload.notes,
+            "voice": payload.voice.model_dump(),
+            "is_default": False,
+            "reference_audio_path": str(managed_audio_path.resolve()) if managed_audio_path else None,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+        with characters_lock:
+            characters[character_id] = character
+        save_characters()
+    except Exception:
+        with characters_lock:
+            characters.pop(character_id, None)
+        shutil.rmtree(character_dir, ignore_errors=True)
+        raise
+    return public_character(character)
 
 
 async def save_reference_audio(upload: UploadFile, character_id: str) -> str:
@@ -153,6 +235,50 @@ async def save_reference_audio(upload: UploadFile, character_id: str) -> str:
     return str(destination_path)
 
 
+def apply_character_update(character_id: str, changes: dict) -> dict:
+    with characters_lock:
+        character = characters.get(character_id)
+        if character is None:
+            raise HTTPException(status_code=404, detail="Không tìm thấy Character")
+        
+        if "name" in changes and changes["name"] is not None:
+            character["name"] = str(changes["name"]).strip()
+        if "description" in changes and changes["description"] is not None:
+            character["description"] = str(changes["description"])
+        if "language" in changes and changes["language"] is not None:
+            character["language"] = str(changes["language"]).lower().strip()
+        if "tags" in changes and changes["tags"] is not None:
+            if isinstance(changes["tags"], str):
+                tags_list = [t.strip() for t in changes["tags"].split(",") if t.strip()]
+            else:
+                tags_list = changes["tags"]
+            character["tags"] = normalized_tags(tags_list)
+        if "notes" in changes and changes["notes"] is not None:
+            character["notes"] = str(changes["notes"])
+            
+        if "is_default" in changes and changes["is_default"] is not None:
+            is_def = bool(changes["is_default"])
+            if is_def:
+                for cid, c in characters.items():
+                    c["is_default"] = (cid == character_id)
+            else:
+                character["is_default"] = False
+
+        if "voice" in changes and isinstance(changes["voice"], dict):
+            for k, v in changes["voice"].items():
+                if v is not None and k in character["voice"]:
+                    character["voice"][k] = v
+
+        for v_field in ("expressiveness", "pace", "stability", "seed"):
+            if v_field in changes and changes[v_field] is not None:
+                character["voice"][v_field] = changes[v_field]
+
+        character["updated_at"] = now_iso()
+        result = dict(character)
+    save_characters()
+    return public_character(result)
+
+
 @router.post("", status_code=201)
 def create_character(payload: CharacterCreate) -> dict:
     character_id = f"char_{uuid.uuid4().hex}"
@@ -165,11 +291,15 @@ def create_character(payload: CharacterCreate) -> dict:
         "tags": normalized_tags(payload.tags),
         "notes": payload.notes,
         "voice": payload.voice.model_dump(),
+        "is_default": payload.is_default,
         "reference_audio_path": None,
         "created_at": timestamp,
         "updated_at": timestamp,
     }
     with characters_lock:
+        if payload.is_default:
+            for c in characters.values():
+                c["is_default"] = False
         characters[character_id] = character
     save_characters()
     return public_character(character)
@@ -189,65 +319,56 @@ def read_character(character_id: str) -> dict:
 
 
 @router.patch("/{character_id}")
-def update_character(character_id: str, payload: CharacterUpdate) -> dict:
-    changes = payload.model_dump(exclude_none=True)
-    with characters_lock:
-        character = characters.get(character_id)
-        if character is None:
-            raise HTTPException(status_code=404, detail="Không tìm thấy Character")
-        for field in ("name", "description", "language", "tags", "notes"):
-            if field in changes:
-                character[field] = normalized_tags(changes[field]) if field == "tags" else changes[field]
-        if "voice" in changes:
-            character["voice"].update(changes["voice"])
-        character["updated_at"] = now_iso()
-        result = dict(character)
-    save_characters()
-    return public_character(result)
-
-
-@router.put("/{character_id}/reference-audio")
-async def replace_reference_audio(
+async def update_character(
     character_id: str,
-    reference_audio: Annotated[UploadFile, File()],
+    request: Request,
+    reference_audio: Annotated[UploadFile | None, File()] = None,
+    name: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    language: Annotated[str | None, Form()] = None,
+    tags: Annotated[str | None, Form()] = None,
+    notes: Annotated[str | None, Form()] = None,
+    is_default: Annotated[bool | None, Form()] = None,
+    expressiveness: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
+    pace: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
+    stability: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
+    seed: Annotated[int | None, Form(ge=0)] = None,
 ) -> dict:
-    character = get_character(character_id)
-    old_path = Path(character["reference_audio_path"]) if character.get("reference_audio_path") else None
-    new_path = await save_reference_audio(reference_audio, character_id)
-    if old_path and old_path != Path(new_path):
-        old_path.unlink(missing_ok=True)
-    with characters_lock:
-        characters[character_id]["reference_audio_path"] = new_path
-        characters[character_id]["updated_at"] = now_iso()
-        result = dict(characters[character_id])
-    save_characters()
-    return public_character(result)
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            payload = CharacterUpdate(**body)
+            changes = payload.model_dump(exclude_none=True)
+            return apply_character_update(character_id, changes)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
+    # Form / Multipart request handling
+    changes = {}
+    if name is not None: changes["name"] = name
+    if description is not None: changes["description"] = description
+    if language is not None: changes["language"] = language
+    if tags is not None: changes["tags"] = tags
+    if notes is not None: changes["notes"] = notes
+    if is_default is not None: changes["is_default"] = is_default
+    if expressiveness is not None: changes["expressiveness"] = expressiveness
+    if pace is not None: changes["pace"] = pace
+    if stability is not None: changes["stability"] = stability
+    if seed is not None: changes["seed"] = seed
 
-@router.get("/{character_id}/reference-audio")
-def download_reference_audio(character_id: str) -> FileResponse:
-    character = get_character(character_id)
-    reference_audio_path = character.get("reference_audio_path")
-    if not reference_audio_path:
-        raise HTTPException(status_code=404, detail="Character chưa có reference audio")
-    reference_path = Path(reference_audio_path)
-    if not reference_path.exists():
-        raise HTTPException(status_code=410, detail="Reference audio không còn tồn tại")
-    return FileResponse(reference_path, filename=reference_path.name)
+    if reference_audio is not None and reference_audio.filename:
+        character = get_character(character_id)
+        old_path = Path(character["reference_audio_path"]) if character.get("reference_audio_path") else None
+        new_path = await save_reference_audio(reference_audio, character_id)
+        if old_path and old_path != Path(new_path):
+            old_path.unlink(missing_ok=True)
+        with characters_lock:
+            characters[character_id]["reference_audio_path"] = new_path
 
-
-@router.delete("/{character_id}/reference-audio")
-def delete_reference_audio(character_id: str) -> dict:
-    character = get_character(character_id)
-    reference_audio_path = character.get("reference_audio_path")
-    if reference_audio_path:
-        Path(reference_audio_path).unlink(missing_ok=True)
-    with characters_lock:
-        characters[character_id]["reference_audio_path"] = None
-        characters[character_id]["updated_at"] = now_iso()
-        result = dict(characters[character_id])
-    save_characters()
-    return public_character(result)
+    return apply_character_update(character_id, changes)
 
 
 @router.delete("/{character_id}")
@@ -260,6 +381,18 @@ def delete_character(character_id: str) -> dict:
     if reference_audio_path:
         shutil.rmtree(Path(reference_audio_path).parent, ignore_errors=True)
     return {"id": character_id, "deleted": True}
+
+
+@router.get("/{character_id}/reference-audio", include_in_schema=False)
+def download_reference_audio(character_id: str) -> FileResponse:
+    character = get_character(character_id)
+    reference_audio_path = character.get("reference_audio_path")
+    if not reference_audio_path:
+        raise HTTPException(status_code=404, detail="Character chưa có reference audio")
+    reference_path = Path(reference_audio_path)
+    if not reference_path.exists():
+        raise HTTPException(status_code=410, detail="Reference audio không còn tồn tại")
+    return FileResponse(reference_path, filename=reference_path.name)
 
 
 load_characters()

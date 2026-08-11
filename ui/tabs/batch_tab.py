@@ -15,6 +15,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
+import character_api
 from config.constants import *
 from ui.components.audio_player import AudioPlayerWidget
 from ui.components.waveform_canvas import WaveformCanvas
@@ -418,6 +419,21 @@ class BatchTab(tk.Frame):
         param_card.pack(fill="x", pady=(0, 10))
 
         tk.Label(param_card, text="🎛️ Thông số sinh âm thanh AI", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
+
+        default_char = character_api.get_default_character()
+        self.use_default_char_var = tk.BooleanVar(value=bool(default_char))
+        self.use_default_chk = tk.Checkbutton(
+            param_card,
+            text=f"⭐ Sử dụng Character mặc định ({default_char['name']})" if default_char else "⭐ Sử dụng Character mặc định (Chưa đặt)",
+            variable=self.use_default_char_var,
+            font=("Segoe UI", 9, "bold"),
+            fg="#f59e0b",
+            bg=PANEL2_BG,
+            selectcolor="#0e1621",
+            activebackground=PANEL2_BG,
+            activeforeground="#f59e0b"
+        )
+        self.use_default_chk.pack(anchor="w", padx=14, pady=(2, 6))
 
         qp_row = tk.Frame(param_card, bg=PANEL2_BG)
         qp_row.pack(fill="x", padx=14, pady=(2, 6))
@@ -945,6 +961,21 @@ class BatchTab(tk.Frame):
         if voice_name in self.presets:
             ref_p = self.presets[voice_name]
 
+        exag_val = self.exag_var.get()
+        cfg_val = self.cfg_var.get()
+        temp_val = self.temp_var.get()
+        seed_val = self.seed_var.get()
+
+        if self.use_default_char_var.get():
+            def_ref, def_voice = character_api.resolve_character_voice(None)
+            if def_voice:
+                if def_ref:
+                    ref_p = def_ref
+                exag_val = def_voice["expressiveness"]
+                cfg_val = def_voice["pace"]
+                temp_val = max(0.05, min(1.5, round(1.2 - 0.7 * def_voice["stability"], 3)))
+                seed_val = def_voice["seed"]
+
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav")
         os.close(tmp_fd)
 
@@ -965,10 +996,10 @@ class BatchTab(tk.Frame):
             text=text,
             ref_path=ref_p,
             model_name=self.main_window.get_active_model_name(),
-            exag=self.exag_var.get(),
-            cfg=self.cfg_var.get(),
-            temp=self.temp_var.get(),
-            seed=self.seed_var.get(),
+            exag=exag_val,
+            cfg=cfg_val,
+            temp=temp_val,
+            seed=seed_val,
             is_random_seed=self.random_seed_var.get(),
             out_path=tmp_path
         )
@@ -1084,6 +1115,21 @@ class BatchTab(tk.Frame):
                 if voice_name in self.presets:
                     ref_p = self.presets[voice_name]
 
+                exag_val = self.exag_var.get()
+                cfg_val = self.cfg_var.get()
+                temp_val = self.temp_var.get()
+                seed_val = self.seed_var.get()
+
+                if self.use_default_char_var.get():
+                    def_ref, def_voice = character_api.resolve_character_voice(None)
+                    if def_voice:
+                        if def_ref:
+                            ref_p = def_ref
+                        exag_val = def_voice["expressiveness"]
+                        cfg_val = def_voice["pace"]
+                        temp_val = max(0.05, min(1.5, round(1.2 - 0.7 * def_voice["stability"], 3)))
+                        seed_val = def_voice["seed"]
+
                 if merge_all:
                     tmp_fd, tmp_file = tempfile.mkstemp(suffix=f".{fmt}")
                     os.close(tmp_fd)
@@ -1099,10 +1145,10 @@ class BatchTab(tk.Frame):
                         text=line_text,
                         ref_path=ref_p,
                         model_name=m_name,
-                        exag=self.exag_var.get(),
-                        cfg=self.cfg_var.get(),
-                        temp=self.temp_var.get(),
-                        seed=self.seed_var.get(),
+                        exag=exag_val,
+                        cfg=cfg_val,
+                        temp=temp_val,
+                        seed=seed_val,
                         is_random_seed=self.random_seed_var.get(),
                         out_path=target_out_path,
                         progress_callback=lambda c, t, p, s, e, idx=orig_idx: self.after(0, lambda: self._update_current_item_prog(idx, s))

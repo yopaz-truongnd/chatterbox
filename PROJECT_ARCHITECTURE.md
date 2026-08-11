@@ -348,9 +348,9 @@ Bộ test hiện kiểm tra:
 - Lọc, tải và xóa completed job.
 - Character JSON CRUD, PATCH voice từng phần và cấm field model.
 - Reference audio tùy chọn và vòng đời file.
-- `character_id` TTS, voice mapping và audio precedence.
+- `character_id` TTS, voice mapping, default character resolution và audio precedence.
 
-## 16. Character Voice Preset
+## 16. Character Voice Preset & RESTful API
 
 Character là voice preset độc lập model và được lưu dưới dạng JSON:
 
@@ -364,6 +364,16 @@ Reference audio là tùy chọn:
 data/characters/<character_id>/reference.<ext>
 ```
 
+Character hỗ trợ cờ `is_default: true/false`. Khi một Character được đặt làm Mặc định, nếu TTS request hoặc GUI không truyền `character_id`, hệ thống sẽ tự động giải phóng voice profile và audio mẫu từ Character mặc định này.
+
+### 5 API RESTful Chuẩn trong Swagger `/docs`:
+
+1. `GET /api/v1/characters`: Lấy danh sách toàn bộ Character (bao gồm thuộc tính `is_default`).
+2. `POST /api/v1/characters`: Tạo Character mới.
+3. `GET /api/v1/characters/{character_id}`: Lấy chi tiết thông tin 1 Character.
+4. `PATCH /api/v1/characters/{character_id}`: **Cập nhật đa năng** (Tên, Ngôn ngữ, Mô tả, Voice Profile, **Đặt/Bỏ Mặc định `is_default`**, và **Upload/Cập nhật file audio mẫu `reference_audio`**).
+5. `DELETE /api/v1/characters/{character_id}`: Xóa Character.
+
 Character không chấp nhận field `model`. Model vẫn được quyết định bởi endpoint TTS. Voice profile gồm:
 
 - `expressiveness`: ánh xạ sang exaggeration cho Standard/Multilingual.
@@ -371,16 +381,19 @@ Character không chấp nhận field `model`. Model vẫn được quyết đị
 - `stability`: ánh xạ sang temperature cho các model TTS.
 - `seed`: giữ kết quả sampling ổn định hơn.
 
-Flow:
+Flow giải quyết giọng đọc (Voice Resolution):
 
 ```text
-TTS request có character_id
+TTS request có character_id (hoặc tự động lấy Default Character khi character_id rỗng)
     → đọc Character JSON
-    → lấy voice profile
-    → lấy reference audio nếu Character có
+    → lấy voice profile & reference audio nếu Character có
     → nếu request có audio_prompt thì ghi đè reference Character
     → nếu request có generation parameter thì ghi đè voice profile
     → tạo job queue như bình thường
 ```
 
 Character không có reference vẫn sử dụng được; model dùng built-in voice cùng voice profile. Job response chỉ chứa `character_id` và effective parameters, không lộ đường dẫn reference audio trên filesystem.
+
+### Tính năng Desktop GUI liên quan:
+- **Tab Character**: Hỗ trợ chọn ngôn ngữ dropdown, nút "🔊 Nghe thử giọng" xem trước âm thanh trước khi tạo, nút "⭐ Đặt Mặc định" và Menu chuột phải (Context Menu).
+- **TTS Studio & Batch Studio**: Thêm Checkbox "⭐ Sử dụng Character mặc định" tự động áp dụng thông số của Character mặc định khi được chọn.

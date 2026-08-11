@@ -91,6 +91,64 @@ class CharacterApiTestCase(unittest.TestCase):
         )
         self.assertEqual(rejected.status_code, 422)
 
+    def test_desktop_gui_character_is_persisted_for_api_use(self):
+        source_audio = self.root / "gui-reference.wav"
+        source_audio.write_bytes(b"gui-reference")
+
+        character = character_api.create_character_from_audio(
+            "GUI Voice",
+            source_audio,
+            character_api.VoiceProfile(expressiveness=0.8, pace=0.3, stability=0.6, seed=7),
+        )
+        character_api.load_characters()
+
+        response = self.client.get(f"/api/v1/characters/{character['id']}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["name"], "GUI Voice")
+        self.assertEqual(response.json()["voice"]["seed"], 7)
+        managed_path, _ = character_api.resolve_character_voice(character["id"])
+        self.assertNotEqual(Path(managed_path), source_audio)
+        self.assertEqual(Path(managed_path).read_bytes(), b"gui-reference")
+
+    def test_desktop_gui_character_without_reference_audio(self):
+        character = character_api.create_character_from_audio(
+            "GUI Voice No Ref",
+            None,
+            character_api.VoiceProfile(expressiveness=0.5, pace=0.5, stability=0.7, seed=0),
+            language="vi",
+        )
+        character_api.load_characters()
+
+        response = self.client.get(f"/api/v1/characters/{character['id']}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["name"], "GUI Voice No Ref")
+        self.assertEqual(response.json()["language"], "vi")
+        self.assertFalse(response.json()["has_reference_audio"])
+        managed_path, voice = character_api.resolve_character_voice(character["id"])
+        self.assertIsNone(managed_path)
+        self.assertEqual(voice["expressiveness"], 0.5)
+
+    def test_default_character_setting_and_voice_resolution(self):
+        source_audio = self.root / "default-reference.wav"
+        source_audio.write_bytes(b"default-reference")
+
+        character = character_api.create_character_from_audio(
+            "Default Voice",
+            source_audio,
+            character_api.VoiceProfile(expressiveness=0.9, pace=0.4, stability=0.8, seed=123),
+        )
+
+        res = self.client.patch(f"/api/v1/characters/{character['id']}", json={"is_default": True})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertTrue(res.json()["is_default"])
+
+        # When character_id is None, resolve_character_voice should automatically pick the default character
+        ref_path, voice = character_api.resolve_character_voice(None)
+        self.assertIsNotNone(ref_path)
+        self.assertEqual(Path(ref_path).read_bytes(), b"default-reference")
+        self.assertEqual(voice["expressiveness"], 0.9)
+        self.assertEqual(voice["seed"], 123)
+
     def test_character_patch_updates_only_requested_voice_fields(self):
         character = self.create_character()
 
@@ -111,23 +169,18 @@ class CharacterApiTestCase(unittest.TestCase):
         character = self.create_character()
         reference_url = f"/api/v1/characters/{character['id']}/reference-audio"
 
-        added = self.client.put(
-            reference_url,
+        added = self.client.patch(
+            f"/api/v1/characters/{character['id']}",
             files={"reference_audio": ("voice.wav", b"reference-bytes", "audio/wav")},
         )
         self.assertEqual(added.status_code, 200, added.text)
         self.assertTrue(added.json()["has_reference_audio"])
         self.assertEqual(self.client.get(reference_url).content, b"reference-bytes")
 
-        removed = self.client.delete(reference_url)
-        self.assertEqual(removed.status_code, 200)
-        self.assertFalse(removed.json()["has_reference_audio"])
-        self.assertEqual(self.client.get(reference_url).status_code, 404)
-
     def test_tts_character_id_applies_reference_and_voice_profile(self):
         character = self.create_character()
-        self.client.put(
-            f"/api/v1/characters/{character['id']}/reference-audio",
+        self.client.patch(
+            f"/api/v1/characters/{character['id']}",
             files={"reference_audio": ("voice.wav", b"reference-bytes", "audio/wav")},
         )
         recording_model = RecordingModel()
@@ -152,8 +205,8 @@ class CharacterApiTestCase(unittest.TestCase):
 
     def test_uploaded_prompt_overrides_character_reference(self):
         character = self.create_character()
-        self.client.put(
-            f"/api/v1/characters/{character['id']}/reference-audio",
+        self.client.patch(
+            f"/api/v1/characters/{character['id']}",
             files={"reference_audio": ("character.wav", b"character-reference", "audio/wav")},
         )
         persistent_reference, _ = character_api.resolve_character_voice(character["id"])
@@ -184,8 +237,8 @@ class CharacterApiTestCase(unittest.TestCase):
 
     def test_delete_character_removes_metadata_and_reference(self):
         character = self.create_character()
-        self.client.put(
-            f"/api/v1/characters/{character['id']}/reference-audio",
+        self.client.patch(
+            f"/api/v1/characters/{character['id']}",
             files={"reference_audio": ("voice.wav", b"reference-bytes", "audio/wav")},
         )
         reference_path, _ = character_api.resolve_character_voice(character["id"])

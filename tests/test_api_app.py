@@ -80,7 +80,6 @@ class ApiAppTestCase(unittest.TestCase):
             "/api/v1/voice-conversion",
             "/api/v1/characters",
             "/api/v1/characters/{character_id}",
-            "/api/v1/characters/{character_id}/reference-audio",
             "/api/v1/models",
             "/api/v1/jobs",
             "/api/v1/jobs/{job_id}",
