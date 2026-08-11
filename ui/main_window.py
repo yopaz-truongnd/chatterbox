@@ -14,6 +14,7 @@ from ui.tabs.tts_tab import TtsTab
 from ui.tabs.batch_tab import BatchTab
 from ui.tabs.mtl_tab import MtlTab
 from ui.tabs.vc_tab import VcTab
+from ui.tabs.character_tab import CharacterTab
 from ui.tabs.history_tab import HistoryTab
 from ui.tabs.settings_tab import SettingsTab
 from config.settings import settings_manager
@@ -70,6 +71,7 @@ class MainWindow:
             ("batch", "📦 Batch Studio"),
             ("mtl", "🌐 Multilingual TTS"),
             ("vc", "🔁 Voice Conversion"),
+            ("characters", "🎭 Characters"),
             ("history", "📜 Lịch sử âm thanh"),
             ("settings", "⚙️ Cài đặt")
         ]
@@ -98,6 +100,7 @@ class MainWindow:
         self.tab_batch = BatchTab(self.panel_container, self.engine, self)
         self.tab_mtl = MtlTab(self.panel_container, self.engine, self)
         self.tab_vc = VcTab(self.panel_container, self.engine, self)
+        self.tab_characters = CharacterTab(self.panel_container, self.engine, self)
         self.tab_history = HistoryTab(self.panel_container, self.engine, self)
         self.tab_settings = SettingsTab(self.panel_container, self.engine, self)
 
@@ -106,6 +109,7 @@ class MainWindow:
             "batch": self.tab_batch,
             "mtl": self.tab_mtl,
             "vc": self.tab_vc,
+            "characters": self.tab_characters,
             "history": self.tab_history,
             "settings": self.tab_settings
         }
@@ -166,6 +170,9 @@ class MainWindow:
         self.panels[self.active_tab].pack(fill="both", expand=True)
         self.tab_widgets[self.active_tab].config(bg=PANEL_BG, fg="#ffffff")
 
+        if code == "characters":
+            self.tab_characters.refresh_characters()
+
         logger.info("Chuyển sang Tab: %s", code.upper())
 
         # ---------------- Keyboard Shortcuts & Navigation ----------------
@@ -173,13 +180,14 @@ class MainWindow:
 
     def _register_keyboard_shortcuts(self):
         """Đăng ký toàn bộ phím tắt bàn phím thông dụng"""
-        # 1. Chuyển tab nhanh bằng Ctrl + 1..6
+        # 1. Chuyển tab nhanh bằng Ctrl + 1..7
         self.root.bind_all("<Control-Key-1>", lambda e: self._switch_tab("tts"))
         self.root.bind_all("<Control-Key-2>", lambda e: self._switch_tab("batch"))
         self.root.bind_all("<Control-Key-3>", lambda e: self._switch_tab("mtl"))
         self.root.bind_all("<Control-Key-4>", lambda e: self._switch_tab("vc"))
-        self.root.bind_all("<Control-Key-5>", lambda e: self._switch_tab("history"))
-        self.root.bind_all("<Control-Key-6>", lambda e: self._switch_tab("settings"))
+        self.root.bind_all("<Control-Key-5>", lambda e: self._switch_tab("characters"))
+        self.root.bind_all("<Control-Key-6>", lambda e: self._switch_tab("history"))
+        self.root.bind_all("<Control-Key-7>", lambda e: self._switch_tab("settings"))
 
         # Ctrl + Tab / Ctrl + Shift + Tab duyệt Tab
         self.root.bind_all("<Control-Tab>", lambda e: self._cycle_tab(1))
@@ -196,7 +204,7 @@ class MainWindow:
         self.root.bind_all("<F1>", lambda e: self.show_shortcuts_cheat_sheet())
 
     def _cycle_tab(self, direction):
-        codes = ["tts", "batch", "mtl", "vc", "history", "settings"]
+        codes = ["tts", "batch", "mtl", "vc", "characters", "history", "settings"]
         if self.active_tab in codes:
             idx = codes.index(self.active_tab)
             new_idx = (idx + direction) % len(codes)
@@ -253,7 +261,7 @@ class MainWindow:
             ("Ctrl + A", "Chọn tất cả văn bản (Select All)"),
             ("Ctrl + L", "Xóa sạch nội dung ô văn bản (Clear Text)"),
             ("Ctrl + Backspace", "Xóa từ phía trước con trỏ"),
-            ("Ctrl + 1 .. 6", "Chuyển nhanh tới Tab tương ứng (1:TTS, 2:Batch... 6:Settings)"),
+            ("Ctrl + 1 .. 7", "Chuyển nhanh tới Tab tương ứng (5:Characters, 6:History, 7:Settings)"),
             ("Ctrl + Tab", "Chuyển sang Tab tiếp theo"),
             ("Ctrl + Shift + Tab", "Chuyển về Tab trước đó"),
             ("Escape (Esc)", "Dừng âm thanh đang phát ngay lập tức"),

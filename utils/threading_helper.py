@@ -23,7 +23,8 @@ def run_in_background(task_fn, callback_fn=None, root_widget=None, *args, **kwar
         except Exception as e:
             logger.error("Lỗi xảy ra trong tác vụ nền %s: %s", task_fn.__name__, e, exc_info=True)
             if callback_fn and root_widget:
-                root_widget.after(0, lambda: callback_fn(False, e))
+                err_msg = str(e)
+                root_widget.after(0, lambda err=err_msg: callback_fn(False, err))
 
     thread = threading.Thread(target=thread_run, daemon=True)
     thread.start()

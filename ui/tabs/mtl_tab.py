@@ -72,7 +72,7 @@ class MtlTab(tk.Frame):
                                     bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
                                     insertbackground="white")
         self.mtl_text_box.pack(fill="both", expand=True, padx=14, pady=4)
-        self.mtl_text_box.insert("1.0", "Bonjour tout le monde, bienvenue trên Chatterbox Multilingual TTS!")
+        self.mtl_text_box.insert("1.0", "Hello everyone, welcome to Chatterbox Multilingual TTS!")
         bind_right_click_menu(self.mtl_text_box)
 
         self.mtl_char_lbl = tk.Label(text_card, text="64 / 1000 ký tự", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)

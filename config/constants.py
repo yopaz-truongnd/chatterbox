@@ -45,7 +45,12 @@ PRESET_COMBOS = [
     ("Thì thầm", 0.2, 0.8, 0.5)
 ]
 
-# Danh sách ngôn ngữ đa ngữ
+# Ngôn ngữ giao diện
+UI_LANGUAGES = {
+    "vi": "🇻🇳 Tiếng Việt",
+}
+
+# Danh sách ngôn ngữ model Multilingual hỗ trợ
 LANGUAGES_WITH_FLAGS = {
     "en": "🇬🇧 English",
     "es": "🇪🇸 Spanish",

@@ -17,6 +17,7 @@ from utils.threading_helper import run_in_background
 from utils.context_menu import bind_right_click_menu
 from utils.text_cleaner import clean_text, split_into_sentences
 from utils.audio_tools import change_audio_speed, normalize_audio, convert_audio_format, trim_audio, get_audio_duration
+import character_api
 
 class TtsTab(tk.Frame):
     def __init__(self, parent, engine, main_window):
@@ -24,6 +25,7 @@ class TtsTab(tk.Frame):
         self.engine = engine
         self.main_window = main_window
         self.presets = main_window.presets
+        self.character_choices = {}
         
         self.ref_audio_path = None
         self.last_temp_wav = None
@@ -230,17 +232,32 @@ class TtsTab(tk.Frame):
                   bd=0, activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, cursor="hand2",
                   command=self._clear_ref_audio).pack(side="left")
 
-        # Preset Row
-        tk.Label(vc_card, text="Preset đã lưu", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(4, 2))
-        self.preset_cb_var = tk.StringVar(value="-- Chọn Preset --")
+        # Characters are persisted in the same storage used by run_chatterbox_api.sh.
+        tk.Label(vc_card, text="Character đã lưu", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(4, 2))
+        self.preset_cb_var = tk.StringVar(value="-- Chọn Character --")
         self.preset_cb = ttk.Combobox(vc_card, textvariable=self.preset_cb_var, state="readonly")
-        self.preset_cb["values"] = list(self.presets.keys())
         self.preset_cb.pack(fill="x", padx=14, pady=2)
         self.preset_cb.bind("<<ComboboxSelected>>", self._on_select_preset)
 
-        tk.Button(vc_card, text="⭐ Lưu file hiện tại thành Preset", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        default_char = character_api.get_default_character()
+        self.use_default_char_var = tk.BooleanVar(value=bool(default_char))
+        self.use_default_chk = tk.Checkbutton(
+            vc_card,
+            text=f"⭐ Sử dụng Character mặc định ({default_char['name']})" if default_char else "⭐ Sử dụng Character mặc định (Chưa đặt)",
+            variable=self.use_default_char_var,
+            font=("Segoe UI", 9, "bold"),
+            fg="#f59e0b",
+            bg=PANEL2_BG,
+            selectcolor="#0e1621",
+            activebackground=PANEL2_BG,
+            activeforeground="#f59e0b"
+        )
+        self.use_default_chk.pack(anchor="w", padx=14, pady=(4, 4))
+
+        tk.Button(vc_card, text="⭐ Tạo Character từ giọng hiện tại", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", pady=4,
                   command=self._save_current_as_preset).pack(fill="x", padx=14, pady=(4, 8))
+        self._refresh_character_choices()
 
         # 2. Preset Combos Pill Box
         pills_card = tk.Frame(right_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
@@ -608,31 +625,65 @@ class TtsTab(tk.Frame):
         self.ref_audio_var.set("Mặc định (Default Speaker)")
         self.tts_waveform.set_audio_file(None)
 
+    def _refresh_character_choices(self):
+        character_api.load_characters()
+        with character_api.characters_lock:
+            items = [dict(item) for item in character_api.characters.values()]
+        self.character_choices = {}
+        default_label = None
+        for item in sorted(items, key=lambda item: item["created_at"]):
+            if item.get("reference_audio_path"):
+                label = f"{item['name']}{' ⭐' if item.get('is_default') else ''} · {item['id']}"
+                self.character_choices[label] = item
+                if item.get("is_default"):
+                    default_label = label
+        self.preset_cb["values"] = list(self.character_choices)
+        if default_label and (self.preset_cb_var.get() in ("-- Chọn Character --", "") or "⭐" in default_label):
+            self.preset_cb_var.set(default_label)
+            self._on_select_preset()
+
     def _on_select_preset(self, event=None):
-        name = self.preset_cb_var.get()
-        if name in self.presets:
-            path = self.presets[name]
-            if os.path.exists(path):
-                self.ref_audio_path = path
-                self.ref_audio_var.set(f"Preset: {name}")
-                self.tts_waveform.set_audio_file(path)
-            else:
-                messagebox.showwarning("File không tồn tại", f"File preset không còn tại: {path}")
+        label = self.preset_cb_var.get()
+        character = self.character_choices.get(label)
+        if not character:
+            return
+        path, _ = character_api.resolve_character_voice(character["id"])
+        if path:
+            self.ref_audio_path = path
+            self.ref_audio_var.set(f"Character: {character['name']} ({character['id']})")
+            self.tts_waveform.set_audio_file(path)
 
     def _save_current_as_preset(self):
         if not self.ref_audio_path or not os.path.exists(self.ref_audio_path):
-            messagebox.showwarning("Thiếu file mẫu", "Hãy chọn file giọng mẫu trước khi lưu preset.")
+            messagebox.showwarning("Thiếu file mẫu", "Hãy chọn file giọng mẫu trước khi tạo Character.")
             return
 
-        name = simpledialog.askstring("Lưu Preset", "Nhập tên cho Preset giọng này:")
+        name = simpledialog.askstring("Tạo Character", "Nhập tên Character:")
         if not name:
             return
 
-        self.presets[name] = self.ref_audio_path
-        self.main_window.save_presets(self.presets)
-        self.preset_cb['values'] = list(self.presets.keys())
-        self.preset_cb_var.set(name)
-        messagebox.showinfo("Thành công", f"Đã lưu preset '{name}' thành công!")
+        try:
+            stability = max(0.0, min(1.0, (1.2 - self.temp_var.get()) / 0.7))
+            voice = character_api.VoiceProfile(
+                expressiveness=max(0.0, min(1.0, self.exag_var.get())),
+                pace=max(0.0, min(1.0, self.cfg_var.get())),
+                stability=stability,
+                seed=max(0, self.seed_var.get()),
+            )
+            character = character_api.create_character_from_audio(name, self.ref_audio_path, voice)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Không thể tạo Character", str(exc))
+            return
+
+        self._refresh_character_choices()
+        label = f"{character['name']} · {character['id']}"
+        self.preset_cb_var.set(label)
+        self.ref_audio_path, _ = character_api.resolve_character_voice(character["id"])
+        self.ref_audio_var.set(f"Character: {character['name']} ({character['id']})")
+        messagebox.showinfo(
+            "Đã tạo Character",
+            f"Character ID:\n{character['id']}\n\nDùng ID này làm character_id khi gọi API.",
+        )
 
     # ---------------- A/B Comparison Playback ----------------
     def _play_ab(self, version):
@@ -689,6 +740,17 @@ class TtsTab(tk.Frame):
         exag_val = self.exag_var.get()
         cfg_val = self.cfg_var.get()
         temp_val = self.temp_var.get()
+        ref_path = self.ref_audio_path
+
+        if self.use_default_char_var.get():
+            def_ref, def_voice = character_api.resolve_character_voice(None)
+            if def_voice:
+                if def_ref:
+                    ref_path = def_ref
+                exag_val = def_voice["expressiveness"]
+                cfg_val = def_voice["pace"]
+                temp_val = max(0.05, min(1.5, round(1.2 - 0.7 * def_voice["stability"], 3)))
+                seed_val = def_voice["seed"]
 
         def callback(success, result):
             if success:
@@ -741,7 +803,7 @@ class TtsTab(tk.Frame):
             callback,
             self,
             text=text,
-            ref_path=self.ref_audio_path,
+            ref_path=ref_path,
             model_name=m_name,
             exag=exag_val,
             cfg=cfg_val,
