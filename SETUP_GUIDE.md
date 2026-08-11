@@ -217,3 +217,44 @@ Nếu cần tải một model còn thiếu, cho phép kết nối trong lần ch
 ```bash
 HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh
 ```
+
+---
+
+## 7. Chạy Test
+
+Test suite của Local API nằm tại `tests/test_api_app.py` và dùng `unittest` có sẵn trong Python:
+
+```bash
+cd /var/www/chatterbox
+source venv/bin/activate
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+```
+
+Không cần chạy API trước khi test. FastAPI `TestClient` tự khởi tạo ứng dụng trong process test.
+
+Test sử dụng model giả:
+
+- Không download checkpoint từ Hugging Face.
+- Không load Turbo, Nano, Standard hoặc Multilingual thật vào RAM.
+- Không chạy inference thật.
+- WAV nhỏ được tạo trong temporary directory và tự xóa sau test.
+
+Kết quả thành công có dạng:
+
+```text
+Ran 9 tests in ...s
+
+OK
+```
+
+Các nhóm hành vi được kiểm tra:
+
+- Health, CPU thread và Turbo 350M mặc định.
+- OpenAPI và danh sách endpoint.
+- Chia text 200–500 ký tự, bảo toàn Unicode và whitespace.
+- Queue, trạng thái `completed`/`failed` và tải WAV.
+- Cleanup upload Voice Conversion.
+- Chỉ giữ một model trong RAM khi chuyển model.
+- Lọc và xóa completed job.
+
+Xem mô tả chi tiết tại `PROJECT_ARCHITECTURE.md`, mục **Test suite**.

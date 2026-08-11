@@ -351,3 +351,24 @@ PYTHONPATH=src python3 -m py_compile api_app.py web_app.py
 bash -n run_chatterbox_api.sh
 bash -n run_chatterbox_web.sh
 ```
+
+## 16. Test suite
+
+Test API dùng `unittest`, FastAPI `TestClient` và model giả nên không tải checkpoint hoặc chạy inference thật.
+
+```bash
+source venv/bin/activate
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+```
+
+Bộ test hiện kiểm tra:
+
+- Health và chính sách CPU/Turbo mặc định.
+- OpenAPI có đầy đủ public endpoints.
+- Chia text bảo toàn Unicode, whitespace và vị trí ký tự.
+- Từ chối khoảng `min_chars`/`max_chars` không hợp lệ.
+- Queue Turbo mặc định, hoàn thành job và tải WAV.
+- Voice Conversion cleanup upload tạm.
+- Inference lỗi chuyển job sang `failed`.
+- Load model mới giải phóng model cũ nhưng cleanup nhẹ giữ model active.
+- Lọc, tải và xóa completed job.
