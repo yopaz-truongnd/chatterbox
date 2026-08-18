@@ -3,8 +3,12 @@ set -e
 
 cd "$(dirname "$0")"
 
-if [ -z "$VIRTUAL_ENV" ] && [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
+if [ -z "$VIRTUAL_ENV" ]; then
+    if [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    elif [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+    fi
 fi
 
 export PYTHONUNBUFFERED=1

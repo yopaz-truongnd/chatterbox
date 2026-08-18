@@ -10,7 +10,6 @@ import wave
 import shutil
 import json
 import tempfile
-import subprocess
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
@@ -23,6 +22,7 @@ from utils.threading_helper import run_in_background
 from utils.context_menu import bind_right_click_menu
 from utils.logger import logger
 from utils.audio_tools import mix_bgm, generate_srt, generate_vtt, get_audio_duration
+from utils.platform_tools import open_folder
 
 def parse_batch_file(file_path, split_mode="auto", custom_delimiter=""):
     """
@@ -1379,6 +1379,6 @@ class BatchTab(tk.Frame):
             folder = os.path.dirname(file_path)
             if os.path.exists(folder):
                 try:
-                    subprocess.Popen(["xdg-open", folder])
+                    open_folder(folder)
                 except Exception as e:
                     messagebox.showerror("Lỗi mở thư mục", str(e))

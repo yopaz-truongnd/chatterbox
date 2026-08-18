@@ -4,7 +4,6 @@ Tab 5: Lịch sử âm thanh đã tạo (Session & Global History Tab)
 
 import os
 import time
-import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -12,6 +11,7 @@ from config.constants import *
 from ui.components.audio_player import AudioPlayerWidget
 from utils.context_menu import bind_right_click_menu
 from utils.logger import logger
+from utils.platform_tools import open_folder
 
 class HistoryTab(tk.Frame):
     """Tab quản lý và nghe lại toàn bộ Lịch sử các file âm thanh đã sinh"""
@@ -195,7 +195,7 @@ class HistoryTab(tk.Frame):
                 folder = os.path.dirname(path)
                 if os.path.exists(folder):
                     try:
-                        subprocess.Popen(["xdg-open", folder])
+                        open_folder(folder)
                     except Exception as e:
                         messagebox.showerror("Lỗi mở thư mục", str(e))
                 else:

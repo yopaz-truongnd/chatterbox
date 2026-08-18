@@ -97,6 +97,18 @@ We provide a professional, dark-themed Desktop GUI built on a clean modular arch
 - Run with console log output: Double-click **`Run_Chatterbox_GUI.bat`**.
 - Run silently in the background: Double-click **`Run_Chatterbox_GUI_Silent.vbs`**.
 
+#### macOS (Apple Silicon):
+- Install Python 3.11: `brew install python@3.11`
+- Create the environment and install the project:
+  ```shell
+  /opt/homebrew/bin/python3.11 -m venv venv
+  source venv/bin/activate
+  python -m pip install --upgrade pip
+  python -m pip install -e .
+  ./run_chatterbox_gui.sh
+  ```
+- The GUI and API automatically use Metal (`mps`) when available, then fall back to CPU.
+
 #### Linux / Ubuntu:
 - Install system Tkinter: `sudo apt install python3-tk`
 - Install dependencies: `pip install torch torchaudio pygame numpy`
@@ -115,8 +127,10 @@ import torchaudio as ta
 import torch
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+
 # Load the Turbo model
-model = ChatterboxTurboTTS.from_pretrained(device="cuda")
+model = ChatterboxTurboTTS.from_pretrained(device=device)
 
 # Generate with Paralinguistic Tags
 text = "Hi there, Sarah here from MochaFone calling you back [chuckle], have you got one minute to chat about the billing issue?"
@@ -136,8 +150,10 @@ import torchaudio as ta
 import torch
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+
 # Load the Nano model (also runs on CPU: device="cpu")
-model = ChatterboxTurboTTS.from_pretrained(device="cuda", nano=True)
+model = ChatterboxTurboTTS.from_pretrained(device=device, nano=True)
 
 # Generate with Paralinguistic Tags
 text = "Hi there, Sarah here from MochaFone calling you back [chuckle], have you got one minute to chat about the billing issue?"

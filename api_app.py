@@ -28,9 +28,10 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
 from chatterbox.tts import ChatterboxTTS
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 from chatterbox.vc import ChatterboxVC
+from utils.platform_tools import clear_accelerator_cache, select_device
 
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = select_device(os.getenv("CHATTERBOX_DEVICE", "auto"))
 CPU_THREADS = int(os.getenv("CHATTERBOX_API_CPU_THREADS", "2"))
 torch.set_num_threads(CPU_THREADS)
 try:
@@ -100,8 +101,7 @@ def model_key_for_job(job_type: JobType) -> str:
 
 def cleanup_runtime() -> None:
     gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    clear_accelerator_cache()
 
 
 def load_model(model_name: str):

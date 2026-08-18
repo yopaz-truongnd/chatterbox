@@ -28,7 +28,7 @@ Tài liệu này cung cấp thông tin chi tiết, thông số kỹ thuật, tí
   from chatterbox.tts import ChatterboxTTS
   import torchaudio as ta
 
-  model = ChatterboxTTS.from_pretrained(device="cuda") # hoặc "cpu"
+  model = ChatterboxTTS.from_pretrained(device="cuda") # hoặc "mps" / "cpu"
   wav = model.generate("Hello world, welcome to Chatterbox!", exaggeration=0.8, cfg_weight=0.5)
   ta.save("output_standard.wav", wav, model.sr)
   ```
@@ -55,7 +55,7 @@ Tài liệu này cung cấp thông tin chi tiết, thông số kỹ thuật, tí
   from chatterbox.tts_turbo import ChatterboxTurboTTS
   import torchaudio as ta
 
-  model = ChatterboxTurboTTS.from_pretrained(device="cuda")
+  model = ChatterboxTurboTTS.from_pretrained(device="cuda") # hoặc "mps" / "cpu"
   text = "Hi there [chuckle], I am calling back about your order [cough], is now a good time?"
   wav = model.generate(text, audio_prompt_path="sample_ref.wav")
   ta.save("output_turbo.wav", wav, model.sr)

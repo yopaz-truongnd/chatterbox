@@ -3,9 +3,10 @@ import os
 import numpy as np
 import torch
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
+from utils.platform_tools import select_device
 import gradio as gr
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = select_device()
 T3_MODEL = os.getenv("CHATTERBOX_MULTILINGUAL_T3_MODEL", "v2")
 print(f"🚀 Running on device: {DEVICE}")
 print(f"Using multilingual T3 model: {T3_MODEL}")

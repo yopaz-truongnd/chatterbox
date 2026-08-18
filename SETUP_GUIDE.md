@@ -1,6 +1,19 @@
 # Hướng dẫn Cài đặt & Khởi chạy Chatterbox TTS Studio
 
-Tài liệu ghi nhớ tóm tắt các bước thiết lập môi trường Python, cài đặt thư viện và khởi chạy dự án **Chatterbox TTS** trên Linux (Ubuntu / Debian).
+Tài liệu ghi nhớ tóm tắt các bước thiết lập môi trường Python, cài đặt thư viện và khởi chạy dự án **Chatterbox TTS** trên Linux và macOS.
+
+## Cài đặt nhanh trên macOS (Apple Silicon)
+
+```bash
+brew install python@3.11
+/opt/homebrew/bin/python3.11 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+./run_chatterbox_gui.sh
+```
+
+Ứng dụng tự ưu tiên Metal (`mps`) trên Apple Silicon và chuyển về CPU nếu MPS không khả dụng. Có thể ép API dùng thiết bị cụ thể bằng `CHATTERBOX_DEVICE=mps ./run_chatterbox_api.sh`.
 
 ---
 

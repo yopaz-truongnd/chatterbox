@@ -10,9 +10,10 @@ import threading
 from pathlib import Path
 
 # Load settings and configure model cache directory
-SETTINGS_FILE = Path("config/settings.json")
+PROJECT_DIR = Path(__file__).resolve().parent
+SETTINGS_FILE = PROJECT_DIR / "config/settings.json"
 def get_model_cache_dir():
-    default_dir = Path("models").absolute()
+    default_dir = PROJECT_DIR / "models"
     if SETTINGS_FILE.exists():
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
@@ -44,6 +45,7 @@ import tkinter as tk
 from utils.logger import logger
 from core.chatterbox_engine import ChatterboxEngine
 from ui.main_window import MainWindow
+from utils.platform_tools import select_device
 
 def main():
     logger.info("Khởi chạy ứng dụng Chatterbox TTS Studio...")
@@ -63,8 +65,7 @@ def main():
     root.configure(bg="#0c121c")
 
     # Khởi tạo engine xử lý AI Core
-    import torch
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = select_device()
     engine = ChatterboxEngine(device=device)
 
     # Khởi tạo Giao diện MainWindow

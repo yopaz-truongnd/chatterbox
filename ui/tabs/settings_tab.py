@@ -99,7 +99,7 @@ class SettingsTab(tk.Frame):
         tk.Label(r3, text="Thiết bị tính toán (Device):", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.device_var = tk.StringVar(value="auto")
         device_cb = ttk.Combobox(r3, textvariable=self.device_var, state="readonly", width=25,
-                                 values=["auto (Tự động phát hiện)", "cuda (GPU Nvidia)", "cpu (Vi xử lý CPU)"])
+                                 values=["auto (Tự động phát hiện)", "cuda (GPU Nvidia)", "mps (Apple Silicon)", "cpu (Vi xử lý CPU)"])
         device_cb.pack(side="left")
 
         # 2.2 Default Startup Model
@@ -253,6 +253,8 @@ class SettingsTab(tk.Frame):
             self.device_var.set("auto (Tự động phát hiện)")
         elif dev == "cuda":
             self.device_var.set("cuda (GPU Nvidia)")
+        elif dev == "mps":
+            self.device_var.set("mps (Apple Silicon)")
         else:
             self.device_var.set("cpu (Vi xử lý CPU)")
 
@@ -285,6 +287,8 @@ class SettingsTab(tk.Frame):
                 dev_code = "auto"
             elif "cuda" in dev_raw:
                 dev_code = "cuda"
+            elif "mps" in dev_raw:
+                dev_code = "mps"
             else:
                 dev_code = "cpu"
             settings_manager.set("device", dev_code)

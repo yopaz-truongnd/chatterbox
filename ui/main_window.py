@@ -5,6 +5,7 @@ Khung cửa sổ chính main_window.py lắp ráp toàn bộ giao diện và qu�
 import os
 import json
 import tkinter as tk
+import torch
 from tkinter import ttk, messagebox
 from config.constants import *
 from utils.logger import logger
@@ -157,6 +158,8 @@ class MainWindow:
         if device == "cuda":
             gpu_name = torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else ""
             device_text = f"🟢 Device: GPU ({gpu_name[:15]}...)"
+        elif device == "mps":
+            device_text = "🟢 Device: Apple Metal (MPS)"
         self.device_lbl.config(text=device_text)
 
     def _switch_tab(self, code):
