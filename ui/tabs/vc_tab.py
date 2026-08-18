@@ -10,6 +10,7 @@ from config.constants import *
 from ui.components.waveform_canvas import WaveformCanvas
 from utils.logger import logger
 from utils.threading_helper import run_in_background
+from ui.button_styles import set_button_busy
 
 class VcTab(tk.Frame):
     def __init__(self, parent, engine, main_window):
@@ -27,9 +28,9 @@ class VcTab(tk.Frame):
         header_card = tk.Frame(self, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         header_card.pack(fill="x", side="top", pady=(0, 14))
 
-        tk.Label(header_card, text="Chatterbox Voice Conversion (Audio-to-Audio)", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 2))
+        tk.Label(header_card, text="Chatterbox Voice Conversion (Audio-to-Audio)", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 2))
         tk.Label(header_card, text="Chuyển đổi giọng nói trong File Âm thanh Nguồn sang chất giọng của File Giọng Mẫu Đích.",
-                 font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(0, 10))
+                 font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(0, 10))
 
         row = tk.Frame(self, bg=PANEL_BG)
         row.pack(fill="both", expand=True, pady=(0, 10))
@@ -38,18 +39,18 @@ class VcTab(tk.Frame):
         src_card = tk.Frame(row, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         src_card.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        tk.Label(src_card, text="1. File Âm thanh Nguồn (Source Audio)", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
+        tk.Label(src_card, text="1. File Âm thanh Nguồn (Source Audio)", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
         
         self.vc_src_var = tk.StringVar(value="Chưa chọn file nguồn...")
 
         drop_src = tk.Button(src_card, text="🎵 Kéo-thả file hoặc bấm để chọn\n(WAV · MP3 · FLAC — tối đa 5 phút)",
-                             font=("Segoe UI", 10), bg="#0e1621", fg=TEXT_DIM_COLOR,
+                             font=(UI_FONT, 10), bg="#0e1621", fg=TEXT_DIM_COLOR,
                              activebackground="#0e1621", activeforeground=TEXT_COLOR,
                              bd=1, relief="groove", cursor="hand2", pady=24,
                              command=self._pick_vc_src)
         drop_src.pack(fill="x", padx=14, pady=6)
 
-        tk.Label(src_card, textvariable=self.vc_src_var, bg="#0e1621", fg=TEXT_COLOR, font=("Segoe UI", 9),
+        tk.Label(src_card, textvariable=self.vc_src_var, bg="#0e1621", fg=TEXT_COLOR, font=(UI_FONT, 9),
                  anchor="w", relief="solid", bd=1, highlightthickness=0, padx=8, pady=5).pack(fill="x", padx=14, pady=4)
 
         self.vc_src_waveform = WaveformCanvas(src_card, height=34)
@@ -59,18 +60,18 @@ class VcTab(tk.Frame):
         tgt_card = tk.Frame(row, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         tgt_card.pack(side="right", fill="both", expand=True, padx=(8, 0))
 
-        tk.Label(tgt_card, text="2. File Giọng Mẫu Đích (Target Voice)", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
+        tk.Label(tgt_card, text="2. File Giọng Mẫu Đích (Target Voice)", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
         
         self.vc_tgt_var = tk.StringVar(value="Chưa chọn file giọng mẫu đích...")
 
         drop_tgt = tk.Button(tgt_card, text="🎯 Kéo-thả file hoặc bấm để chọn\n(WAV · MP3 · FLAC)",
-                             font=("Segoe UI", 10), bg="#0e1621", fg=TEXT_DIM_COLOR,
+                             font=(UI_FONT, 10), bg="#0e1621", fg=TEXT_DIM_COLOR,
                              activebackground="#0e1621", activeforeground=TEXT_COLOR,
                              bd=1, relief="groove", cursor="hand2", pady=24,
                              command=self._pick_vc_tgt)
         drop_tgt.pack(fill="x", padx=14, pady=6)
 
-        tk.Label(tgt_card, textvariable=self.vc_tgt_var, bg="#0e1621", fg="#a7f3d0", font=("Segoe UI", 9),
+        tk.Label(tgt_card, textvariable=self.vc_tgt_var, bg="#0e1621", fg="#a7f3d0", font=(UI_FONT, 9),
                  anchor="w", relief="solid", bd=1, highlightthickness=0, padx=8, pady=5).pack(fill="x", padx=14, pady=4)
 
         self.vc_tgt_waveform = WaveformCanvas(tgt_card, height=34)
@@ -80,7 +81,7 @@ class VcTab(tk.Frame):
         str_card = tk.Frame(self, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         str_card.pack(fill="x", pady=(0, 14))
 
-        self.vc_str_lbl = tk.Label(str_card, text="Conversion Strength: 0.70", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.vc_str_lbl = tk.Label(str_card, text="Conversion Strength: 0.70", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
         self.vc_str_lbl.pack(anchor="w", padx=14, pady=(8, 0))
 
         self.vc_str_var = tk.DoubleVar(value=0.7)
@@ -93,18 +94,18 @@ class VcTab(tk.Frame):
         tb = tk.Frame(self, bg=PANEL_BG)
         tb.pack(fill="x")
 
-        self.vc_convert_btn = tk.Button(tb, text="🔁 Chuyển Đổi Giọng  Ctrl+↵", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        self.vc_convert_btn = tk.Button(tb, text=f"🔁 Chuyển Đổi Giọng  {self.main_window.shortcut_label}+↵", font=(UI_FONT, 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                                         activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, padx=16, pady=7, cursor="hand2",
                                         command=self.convert_action)
         self.vc_convert_btn.pack(side="left", padx=(0, 8))
 
-        self.vc_play_btn = tk.Button(tb, text="▶ Nghe Kết Quả", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        self.vc_play_btn = tk.Button(tb, text="▶ Nghe Kết Quả", font=(UI_FONT, 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                                      activebackground="#2563eb", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                                      padx=14, pady=6, cursor="hand2",
                                      command=self.play_action, state="disabled")
         self.vc_play_btn.pack(side="left", padx=(0, 8))
 
-        self.vc_save_btn = tk.Button(tb, text="💾 Lưu File WAV", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        self.vc_save_btn = tk.Button(tb, text="💾 Lưu File WAV", font=(UI_FONT, 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                                      activebackground="#2563eb", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                                      padx=14, pady=6, cursor="hand2",
                                      command=self.save_action, state="disabled")
@@ -137,6 +138,7 @@ class VcTab(tk.Frame):
         os.close(tmp_fd)
 
         def callback(success, result):
+            set_button_busy(self.vc_convert_btn, False, f"🔁 Chuyển Đổi Giọng  {self.main_window.shortcut_label}+↵", "⏳ Đang chuyển đổi…")
             if success:
                 self.vc_last_result_path = tmp_path
                 self.main_window.add_to_history(tmp_path, f"VC: {os.path.basename(self.vc_src_path)}")
@@ -149,6 +151,7 @@ class VcTab(tk.Frame):
                 messagebox.showerror("Lỗi", str(result))
 
         self.main_window.set_status("⏳ Đang thực hiện chuyển đổi giọng nói (Voice Conversion)...", progress="indeterminate")
+        set_button_busy(self.vc_convert_btn, True, f"🔁 Chuyển Đổi Giọng  {self.main_window.shortcut_label}+↵", "⏳ Đang chuyển đổi…")
         run_in_background(
             self.engine.convert_voice,
             callback,

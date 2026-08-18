@@ -17,6 +17,7 @@ from utils.threading_helper import run_in_background
 from utils.context_menu import bind_right_click_menu
 from utils.text_cleaner import clean_text, split_into_sentences
 from utils.audio_tools import change_audio_speed, normalize_audio, convert_audio_format, trim_audio, get_audio_duration
+from ui.button_styles import set_button_busy
 import character_api
 
 class TtsTab(tk.Frame):
@@ -46,9 +47,9 @@ class TtsTab(tk.Frame):
         hdr_row = tk.Frame(model_card, bg=PANEL2_BG)
         hdr_row.pack(fill="x", padx=14, pady=(8, 4))
         
-        tk.Label(hdr_row, text="Chọn Mô hình (Model)", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(hdr_row, text="Chọn Mô hình (Model)", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
         
-        tk.Button(hdr_row, text="ℹ️ So sánh & Khác biệt các Model", font=("Segoe UI", 8, "bold"), bg="#1a2536", fg="#38bdf8",
+        tk.Button(hdr_row, text="ℹ️ So sánh & Khác biệt các Model", font=(UI_FONT, 8, "bold"), bg="#1a2536", fg="#38bdf8",
                   bd=1, relief="solid", cursor="hand2", padx=6, pady=1,
                   command=self._show_model_info_dialog).pack(side="right")
 
@@ -65,12 +66,12 @@ class TtsTab(tk.Frame):
         model_cb.pack(side="left", fill="x", expand=True, padx=(0, 12))
         model_cb.bind("<<ComboboxSelected>>", lambda e: self._on_model_change())
 
-        tk.Button(sel_row, text="⬇ Tải Model", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        tk.Button(sel_row, text="⬇ Tải Model", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                   activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, padx=14, pady=5, cursor="hand2",
                   command=self._on_model_change).pack(side="right")
 
         # Dynamic model description hint label
-        self.model_desc_lbl = tk.Label(model_card, text="", font=("Segoe UI", 8, "italic"), fg="#a7f3d0", bg=PANEL2_BG, anchor="w")
+        self.model_desc_lbl = tk.Label(model_card, text="", font=(UI_FONT, 8, "italic"), fg="#a7f3d0", bg=PANEL2_BG, anchor="w")
         self.model_desc_lbl.pack(fill="x", padx=14, pady=(0, 6))
 
         # Split left/right pane
@@ -88,22 +89,22 @@ class TtsTab(tk.Frame):
         text_hdr = tk.Frame(text_card, bg=PANEL2_BG)
         text_hdr.pack(fill="x", padx=14, pady=(10, 4))
 
-        tk.Label(text_hdr, text="Văn bản cần phát âm", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
+        tk.Label(text_hdr, text="Văn bản cần phát âm", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
 
         # Text action buttons
         tb_text_btns = tk.Frame(text_hdr, bg=PANEL2_BG)
         tb_text_btns.pack(side="right")
 
-        tk.Button(tb_text_btns, text="📥 Nhập File Text", font=("Segoe UI", 8, "bold"), bg="#1e293b", fg="#38bdf8",
+        tk.Button(tb_text_btns, text="📥 Nhập File Text", font=(UI_FONT, 8, "bold"), bg="#1e293b", fg="#38bdf8",
                   bd=1, relief="solid", cursor="hand2", padx=6, pady=2, command=self._import_file_action).pack(side="left", padx=(0, 4))
 
-        tk.Button(tb_text_btns, text="✨ Clean Text", font=("Segoe UI", 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(tb_text_btns, text="✨ Clean Text", font=(UI_FONT, 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=6, pady=2, command=self._do_clean_text).pack(side="left", padx=(0, 4))
 
-        tk.Button(tb_text_btns, text="➡️ Chuyển sang Batch Studio", font=("Segoe UI", 8, "bold"), bg="#1e3a8a", fg="#ffffff",
+        tk.Button(tb_text_btns, text="➡️ Chuyển sang Batch Studio", font=(UI_FONT, 8, "bold"), bg="#1e3a8a", fg="#ffffff",
                   bd=0, cursor="hand2", padx=8, pady=3, command=self._send_to_batch).pack(side="left")
 
-        self.tts_text_box = tk.Text(text_card, height=6, font=("Segoe UI", 11), bg="#0e1621", fg=TEXT_COLOR,
+        self.tts_text_box = tk.Text(text_card, height=6, font=(UI_FONT, 11), bg="#0e1621", fg=TEXT_COLOR,
                                     bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
                                     insertbackground="white")
         self.tts_text_box.pack(fill="both", expand=True, padx=14, pady=4)
@@ -115,15 +116,15 @@ class TtsTab(tk.Frame):
         self._setup_dnd_drop_target(self.tts_text_box, self._on_text_file_drop)
         self._setup_dnd_drop_target(text_card, self._on_text_file_drop)
 
-        self.tts_char_lbl = tk.Label(text_card, text="128 / 4000 ký tự", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.tts_char_lbl = tk.Label(text_card, text="128 / 4000 ký tự", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
         self.tts_char_lbl.pack(anchor="e", padx=14, pady=(0, 4))
 
         # Tags Section Header & Annotation Note
         tag_hdr = tk.Frame(text_card, bg=PANEL2_BG)
         tag_hdr.pack(fill="x", padx=14, pady=(4, 2))
 
-        tk.Label(tag_hdr, text="Chèn nhanh biểu cảm (Paralinguistic Tags)", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        self.tag_note_lbl = tk.Label(tag_hdr, text="💡 Chỉ hỗ trợ trên Turbo (350M) & Nano (110M)", font=("Segoe UI", 8, "italic"), fg="#38bdf8", bg=PANEL2_BG)
+        tk.Label(tag_hdr, text="Chèn nhanh biểu cảm (Paralinguistic Tags)", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        self.tag_note_lbl = tk.Label(tag_hdr, text="💡 Chỉ hỗ trợ trên Turbo (350M) & Nano (110M)", font=(UI_FONT, 8, "italic"), fg="#38bdf8", bg=PANEL2_BG)
         self.tag_note_lbl.pack(side="right")
 
         self.tags_frame = tk.Frame(text_card, bg=PANEL2_BG)
@@ -139,7 +140,7 @@ class TtsTab(tk.Frame):
             for tag, desc in chunk:
                 btn = tk.Button(row_frame, text=f"{tag} - {desc}", bg="#192c4b", fg="#a9c3ff",
                                 activebackground="#2563eb", activeforeground="#ffffff",
-                                font=("Segoe UI", 9, "bold"), padx=8, pady=3, cursor="hand2",
+                                font=(UI_FONT, 9, "bold"), padx=8, pady=3, cursor="hand2",
                                 bd=1, relief="solid", highlightbackground=BORDER_COLOR,
                                 command=lambda t=tag: self._insert_tag(self.tts_text_box, t))
                 btn.pack(side="left", padx=3)
@@ -155,16 +156,16 @@ class TtsTab(tk.Frame):
         
         ab_hdr = tk.Frame(self.ab_card, bg=PANEL2_BG)
         ab_hdr.pack(fill="x", padx=10, pady=4)
-        tk.Label(ab_hdr, text="🔄 So sánh A/B Audio (Audio Comparison)", font=("Segoe UI", 9, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
+        tk.Label(ab_hdr, text="🔄 So sánh A/B Audio (Audio Comparison)", font=(UI_FONT, 9, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
 
         ab_btns = tk.Frame(self.ab_card, bg=PANEL2_BG)
         ab_btns.pack(fill="x", padx=10, pady=(0, 6))
         
-        self.btn_ab_a = tk.Button(ab_btns, text="▶ Nghe Mẫu A (Lần 1)", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        self.btn_ab_a = tk.Button(ab_btns, text="▶ Nghe Mẫu A (Lần 1)", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                                   bd=1, relief="solid", cursor="hand2", command=lambda: self._play_ab("A"))
         self.btn_ab_a.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
-        self.btn_ab_b = tk.Button(ab_btns, text="▶ Nghe Mẫu B (Lần 2)", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        self.btn_ab_b = tk.Button(ab_btns, text="▶ Nghe Mẫu B (Lần 2)", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                                   bd=1, relief="solid", cursor="hand2", command=lambda: self._play_ab("B"))
         self.btn_ab_b.pack(side="right", fill="x", expand=True, padx=(4, 0))
 
@@ -172,16 +173,17 @@ class TtsTab(tk.Frame):
         self.tb = tk.Frame(left_pane, bg=PANEL_BG)
         self.tb.pack(fill="x")
 
-        tk.Button(self.tb, text="▶ Chạy  Ctrl+↵", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
-                  activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, padx=16, pady=7, cursor="hand2",
-                  command=self.play_action).pack(side="left", padx=(0, 8))
+        self.run_btn = tk.Button(self.tb, text=f"▶ Chạy  {self.main_window.shortcut_label}+↵", font=(UI_FONT, 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+                                 activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, padx=16, pady=7, cursor="hand2",
+                                 command=self.play_action)
+        self.run_btn.pack(side="left", padx=(0, 8))
 
-        tk.Button(self.tb, text="■ Dừng", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(self.tb, text="■ Dừng", font=(UI_FONT, 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   activebackground="#e11d48", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                   padx=14, pady=6, cursor="hand2",
                   command=self.stop_action).pack(side="left", padx=(0, 8))
 
-        tk.Button(self.tb, text="💾 Lưu File  Ctrl+S", font=("Segoe UI", 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(self.tb, text=f"💾 Lưu File  {self.main_window.shortcut_label}+S", font=(UI_FONT, 10, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   activebackground="#2563eb", activeforeground="#ffffff", bd=1, relief="solid", highlightcolor=BORDER_COLOR,
                   padx=14, pady=6, cursor="hand2",
                   command=self.save_action).pack(side="left")
@@ -194,7 +196,7 @@ class TtsTab(tk.Frame):
         # Progress Block
         self.prog_wrap = tk.Frame(left_pane, bg=PANEL_BG, pady=6)
         self.prog_wrap.pack(fill="x")
-        self.tts_prog_lbl = tk.Label(self.prog_wrap, text="Sẵn sàng.", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL_BG)
+        self.tts_prog_lbl = tk.Label(self.prog_wrap, text="Sẵn sàng.", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL_BG)
         self.tts_prog_lbl.pack(anchor="w", pady=(2, 2))
         self.tts_prog_bar = ttk.Progressbar(self.prog_wrap, orient="horizontal", mode="determinate")
         self.tts_prog_bar.pack(fill="x")
@@ -204,10 +206,10 @@ class TtsTab(tk.Frame):
         vc_card = tk.Frame(right_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         vc_card.pack(fill="x", pady=(0, 10))
 
-        tk.Label(vc_card, text="Giọng mẫu (Voice Cloning)", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
+        tk.Label(vc_card, text="Giọng mẫu (Voice Cloning)", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
         
         self.ref_audio_var = tk.StringVar(value="Mặc định (Default Speaker)")
-        tk.Label(vc_card, textvariable=self.ref_audio_var, bg="#0e1621", fg="#a7f3d0", font=("Segoe UI", 9),
+        tk.Label(vc_card, textvariable=self.ref_audio_var, bg="#0e1621", fg="#a7f3d0", font=(UI_FONT, 9),
                  anchor="w", relief="solid", bd=1, highlightthickness=0, padx=8, pady=4).pack(fill="x", padx=14, pady=2)
 
         self.tts_waveform = WaveformCanvas(vc_card, height=30)
@@ -216,24 +218,24 @@ class TtsTab(tk.Frame):
         ref_btns = tk.Frame(vc_card, bg=PANEL2_BG)
         ref_btns.pack(fill="x", padx=14, pady=4)
         
-        tk.Button(ref_btns, text="📁 Chọn file...", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(ref_btns, text="📁 Chọn file...", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=8, pady=3,
                   command=self._pick_ref_audio).pack(side="left", padx=(0, 4))
         
-        tk.Button(ref_btns, text="🎙️ Mic", font=("Segoe UI", 9, "bold"), bg="#831843", fg="#ffffff",
+        tk.Button(ref_btns, text="🎙️ Mic", font=(UI_FONT, 9, "bold"), bg="#831843", fg="#ffffff",
                   bd=0, cursor="hand2", padx=8, pady=4,
                   command=self._record_mic_dialog).pack(side="left", padx=(0, 4))
 
-        tk.Button(ref_btns, text="✂️ Cắt", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(ref_btns, text="✂️ Cắt", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=8, pady=3,
                   command=self._trim_ref_dialog).pack(side="left", padx=(0, 4))
 
-        tk.Button(ref_btns, text="✕ Bỏ chọn", font=("Segoe UI", 9), bg=PANEL2_BG, fg=TEXT_DIM_COLOR,
+        tk.Button(ref_btns, text="✕ Bỏ chọn", font=(UI_FONT, 9), bg=PANEL2_BG, fg=TEXT_DIM_COLOR,
                   bd=0, activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, cursor="hand2",
                   command=self._clear_ref_audio).pack(side="left")
 
         # Characters are persisted in the same storage used by run_chatterbox_api.sh.
-        tk.Label(vc_card, text="Character đã lưu", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(4, 2))
+        tk.Label(vc_card, text="Character đã lưu", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(4, 2))
         self.preset_cb_var = tk.StringVar(value="-- Chọn Character --")
         self.preset_cb = ttk.Combobox(vc_card, textvariable=self.preset_cb_var, state="readonly")
         self.preset_cb.pack(fill="x", padx=14, pady=2)
@@ -245,7 +247,7 @@ class TtsTab(tk.Frame):
             vc_card,
             text=f"⭐ Sử dụng Character mặc định ({default_char['name']})" if default_char else "⭐ Sử dụng Character mặc định (Chưa đặt)",
             variable=self.use_default_char_var,
-            font=("Segoe UI", 9, "bold"),
+            font=(UI_FONT, 9, "bold"),
             fg="#f59e0b",
             bg=PANEL2_BG,
             selectcolor="#0e1621",
@@ -254,7 +256,7 @@ class TtsTab(tk.Frame):
         )
         self.use_default_chk.pack(anchor="w", padx=14, pady=(4, 4))
 
-        tk.Button(vc_card, text="⭐ Tạo Character từ giọng hiện tại", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(vc_card, text="⭐ Tạo Character từ giọng hiện tại", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", pady=4,
                   command=self._save_current_as_preset).pack(fill="x", padx=14, pady=(4, 8))
         self._refresh_character_choices()
@@ -263,13 +265,13 @@ class TtsTab(tk.Frame):
         pills_card = tk.Frame(right_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         pills_card.pack(fill="x", pady=(0, 10))
 
-        tk.Label(pills_card, text="Combo thông số nhanh", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
+        tk.Label(pills_card, text="Combo thông số nhanh", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
         pills_frame = tk.Frame(pills_card, bg=PANEL2_BG)
         pills_frame.pack(fill="x", padx=14, pady=(0, 8))
 
         self.pill_btns = {}
         for name, ex, cfg, tm in PRESET_COMBOS:
-            btn = tk.Button(pills_frame, text=name, font=("Segoe UI", 9, "bold"),
+            btn = tk.Button(pills_frame, text=name, font=(UI_FONT, 9, "bold"),
                             bg=PANEL2_BG, fg=TEXT_DIM_COLOR,
                             activebackground=PANEL2_BG, activeforeground=TEXT_COLOR,
                             bd=1, relief="solid", highlightbackground=BORDER_COLOR, padx=6, pady=3, cursor="hand2",
@@ -281,14 +283,14 @@ class TtsTab(tk.Frame):
         params_card = tk.Frame(right_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         params_card.pack(fill="x")
 
-        tk.Label(params_card, text="Thông số sinh & Hậu xử lý", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
+        tk.Label(params_card, text="Thông số sinh & Hậu xử lý", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
 
         # Exaggeration
         self.exag_lbl_val = tk.StringVar(value="0.50")
         ex_hdr = tk.Frame(params_card, bg=PANEL2_BG)
         ex_hdr.pack(fill="x", padx=14, pady=(2, 0))
-        tk.Label(ex_hdr, text="Độ biểu cảm (Exaggeration)", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        tk.Label(ex_hdr, textvariable=self.exag_lbl_val, font=("Segoe UI", 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
+        tk.Label(ex_hdr, text="Độ biểu cảm (Exaggeration)", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(ex_hdr, textvariable=self.exag_lbl_val, font=(UI_FONT, 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
 
         self.exag_var = tk.DoubleVar(value=0.5)
         exag_scale = tk.Scale(params_card, variable=self.exag_var, from_=0.0, to=1.5, resolution=0.05,
@@ -301,8 +303,8 @@ class TtsTab(tk.Frame):
         self.cfg_lbl_val = tk.StringVar(value="0.50")
         cfg_hdr = tk.Frame(params_card, bg=PANEL2_BG)
         cfg_hdr.pack(fill="x", padx=14, pady=(2, 0))
-        tk.Label(cfg_hdr, text="Bám sát văn bản (CFG Weight)", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        tk.Label(cfg_hdr, textvariable=self.cfg_lbl_val, font=("Segoe UI", 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
+        tk.Label(cfg_hdr, text="Bám sát văn bản (CFG Weight)", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(cfg_hdr, textvariable=self.cfg_lbl_val, font=(UI_FONT, 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
 
         self.cfg_var = tk.DoubleVar(value=0.5)
         cfg_scale = tk.Scale(params_card, variable=self.cfg_var, from_=0.0, to=1.0, resolution=0.05,
@@ -315,8 +317,8 @@ class TtsTab(tk.Frame):
         self.temp_lbl_val = tk.StringVar(value="0.80")
         temp_hdr = tk.Frame(params_card, bg=PANEL2_BG)
         temp_hdr.pack(fill="x", padx=14, pady=(2, 0))
-        tk.Label(temp_hdr, text="Nhiệt độ (Temperature)", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        tk.Label(temp_hdr, textvariable=self.temp_lbl_val, font=("Segoe UI", 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
+        tk.Label(temp_hdr, text="Nhiệt độ (Temperature)", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(temp_hdr, textvariable=self.temp_lbl_val, font=(UI_FONT, 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
 
         self.temp_var = tk.DoubleVar(value=0.8)
         temp_scale = tk.Scale(params_card, variable=self.temp_var, from_=0.1, to=1.5, resolution=0.05,
@@ -329,8 +331,8 @@ class TtsTab(tk.Frame):
         speed_hdr = tk.Frame(params_card, bg=PANEL2_BG)
         speed_hdr.pack(fill="x", padx=14, pady=(2, 0))
         self.speed_lbl_val = tk.StringVar(value="1.00x")
-        tk.Label(speed_hdr, text="Tốc độ phát (Speed)", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        tk.Label(speed_hdr, textvariable=self.speed_lbl_val, font=("Segoe UI", 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
+        tk.Label(speed_hdr, text="Tốc độ phát (Speed)", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(speed_hdr, textvariable=self.speed_lbl_val, font=(UI_FONT, 9, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG).pack(side="right")
 
         self.speed_var = tk.DoubleVar(value=1.0)
         speed_scale = tk.Scale(params_card, variable=self.speed_var, from_=0.75, to=1.50, resolution=0.05,
@@ -343,13 +345,13 @@ class TtsTab(tk.Frame):
         norm_row.pack(fill="x", padx=14, pady=(2, 4))
         self.normalize_vol_var = tk.BooleanVar(value=True)
         tk.Checkbutton(norm_row, text="🔊 Chuẩn hóa âm lượng (Volume Normalization)", variable=self.normalize_vol_var,
-                       font=("Segoe UI", 8, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, selectcolor="#0e1621", activebackground=PANEL2_BG).pack(side="left")
+                       font=(UI_FONT, 8, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, selectcolor="#0e1621", activebackground=PANEL2_BG).pack(side="left")
 
         # Seed Row
         seed_row = tk.Frame(params_card, bg=PANEL2_BG)
         seed_row.pack(fill="x", padx=14, pady=(2, 8))
         
-        tk.Label(seed_row, text="Seed", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(seed_row, text="Seed", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
         
         self.seed_var = tk.IntVar(value=0)
         self.seed_entry = tk.Entry(seed_row, textvariable=self.seed_var, width=9, bg="#0e1621", fg=TEXT_COLOR,
@@ -374,9 +376,9 @@ class TtsTab(tk.Frame):
         dialog.transient(self)
         dialog.grab_set()
 
-        tk.Label(dialog, text="📊 So sánh đặc tính các Mô hình Chatterbox", font=("Segoe UI", 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=(14, 8))
+        tk.Label(dialog, text="📊 So sánh đặc tính các Mô hình Chatterbox", font=(UI_FONT, 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=(14, 8))
 
-        info_box = scrolledtext.ScrolledText(dialog, wrap="word", font=("Segoe UI", 9), bg="#0e1621", fg=TEXT_COLOR,
+        info_box = scrolledtext.ScrolledText(dialog, wrap="word", font=(UI_FONT, 9), bg="#0e1621", fg=TEXT_COLOR,
                                             bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
         info_box.pack(fill="both", expand=True, padx=16, pady=(0, 10))
 
@@ -401,7 +403,7 @@ class TtsTab(tk.Frame):
         info_box.insert("1.0", content)
         info_box.config(state="disabled")
 
-        tk.Button(dialog, text="Đóng", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff", padx=16, pady=4, command=dialog.destroy).pack(pady=(0, 10))
+        tk.Button(dialog, text="Đóng", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff", padx=16, pady=4, command=dialog.destroy).pack(pady=(0, 10))
 
     def _update_tag_buttons_state(self):
         m_name = self.tts_model_var.get()
@@ -479,9 +481,9 @@ class TtsTab(tk.Frame):
         dialog.transient(self)
         dialog.grab_set()
 
-        tk.Label(dialog, text="Ghi âm giọng nói mẫu (Khuyên dùng 5 - 10s)", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=(16, 8))
+        tk.Label(dialog, text="Ghi âm giọng nói mẫu (Khuyên dùng 5 - 10s)", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=(16, 8))
 
-        timer_lbl = tk.Label(dialog, text="0.0 giây", font=("Segoe UI", 18, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG)
+        timer_lbl = tk.Label(dialog, text="0.0 giây", font=(UI_FONT, 18, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG)
         timer_lbl.pack(pady=6)
 
         is_recording = {"val": False, "start_time": 0}
@@ -526,10 +528,10 @@ class TtsTab(tk.Frame):
         btns_f = tk.Frame(dialog, bg=PANEL2_BG)
         btns_f.pack(pady=12)
 
-        btn_rec = tk.Button(btns_f, text="🔴 Bắt đầu Thu", font=("Segoe UI", 9, "bold"), bg="#e11d48", fg="#ffffff", padx=12, pady=5, command=start_rec)
+        btn_rec = tk.Button(btns_f, text="🔴 Bắt đầu Thu", font=(UI_FONT, 9, "bold"), bg="#e11d48", fg="#ffffff", padx=12, pady=5, command=start_rec)
         btn_rec.pack(side="left", padx=6)
 
-        btn_stop = tk.Button(btns_f, text="⏹ Dừng & Dùng", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR, state="disabled", padx=12, pady=5, command=stop_rec)
+        btn_stop = tk.Button(btns_f, text="⏹ Dừng & Dùng", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR, state="disabled", padx=12, pady=5, command=stop_rec)
         btn_stop.pack(side="left", padx=6)
 
     def _trim_ref_dialog(self):
@@ -549,17 +551,17 @@ class TtsTab(tk.Frame):
         dialog.transient(self)
         dialog.grab_set()
 
-        tk.Label(dialog, text=f"Thời lượng gốc: {duration:.1f} giây", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=(14, 6))
+        tk.Label(dialog, text=f"Thời lượng gốc: {duration:.1f} giây", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=(14, 6))
 
         row1 = tk.Frame(dialog, bg=PANEL2_BG)
         row1.pack(fill="x", padx=20, pady=4)
-        tk.Label(row1, text="Bắt đầu (giây):", font=("Segoe UI", 9), fg=TEXT_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(row1, text="Bắt đầu (giây):", font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL2_BG).pack(side="left")
         start_var = tk.DoubleVar(value=0.0)
         tk.Entry(row1, textvariable=start_var, width=8, bg="#0e1621", fg=TEXT_COLOR).pack(side="right")
 
         row2 = tk.Frame(dialog, bg=PANEL2_BG)
         row2.pack(fill="x", padx=20, pady=4)
-        tk.Label(row2, text="Kết thúc (giây):", font=("Segoe UI", 9), fg=TEXT_COLOR, bg=PANEL2_BG).pack(side="left")
+        tk.Label(row2, text="Kết thúc (giây):", font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL2_BG).pack(side="left")
         end_var = tk.DoubleVar(value=min(10.0, duration))
         tk.Entry(row2, textvariable=end_var, width=8, bg="#0e1621", fg=TEXT_COLOR).pack(side="right")
 
@@ -581,7 +583,7 @@ class TtsTab(tk.Frame):
             except Exception as ex:
                 messagebox.showerror("Lỗi khi cắt audio", str(ex))
 
-        tk.Button(dialog, text="✂️ Áp dụng Cắt", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff", padx=16, pady=6, command=apply_trim).pack(pady=14)
+        tk.Button(dialog, text="✂️ Áp dụng Cắt", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff", padx=16, pady=6, command=apply_trim).pack(pady=14)
 
     def _update_char_count(self, event=None):
         text = self.tts_text_box.get("1.0", "end-1c")
@@ -753,6 +755,7 @@ class TtsTab(tk.Frame):
                 seed_val = def_voice["seed"]
 
         def callback(success, result):
+            set_button_busy(self.run_btn, False, f"▶ Chạy  {self.main_window.shortcut_label}+↵", "⏳ Đang tạo audio…")
             if success:
                 processed_path = tmp_path
                 # Post-processing: Speed & Volume Normalization
@@ -797,6 +800,8 @@ class TtsTab(tk.Frame):
                 messagebox.showerror("Lỗi", str(result))
 
         self.gen_start_time = time.time()
+        set_button_busy(self.run_btn, True, f"▶ Chạy  {self.main_window.shortcut_label}+↵", "⏳ Đang tạo audio…")
+        self.main_window.set_status(f"⏳ Đang chuẩn bị model '{m_name}'...", progress="indeterminate")
 
         run_in_background(
             self.engine.generate_tts,

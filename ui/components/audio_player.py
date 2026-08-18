@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk
 import pygame
 
-from config.constants import ACCENT_COLOR, PANEL2_BG, BORDER_COLOR, TEXT_COLOR, TEXT_DIM_COLOR
+from config.constants import ACCENT_COLOR, PANEL2_BG, BORDER_COLOR, TEXT_COLOR, TEXT_DIM_COLOR, UI_FONT
 from ui.components.waveform_canvas import WaveformCanvas
 from utils.logger import logger
 
@@ -46,10 +46,10 @@ class AudioPlayerWidget(tk.Frame):
         hdr = tk.Frame(self, bg="#0c1421")
         hdr.pack(fill="x", padx=12, pady=(6, 2))
 
-        self.title_lbl = tk.Label(hdr, text="🎵 Trình phát âm thanh (Audio Player)", font=("Segoe UI", 9, "bold"), fg="#a9c3ff", bg="#0c1421")
+        self.title_lbl = tk.Label(hdr, text="🎵 Trình phát âm thanh (Audio Player)", font=(UI_FONT, 9, "bold"), fg="#a9c3ff", bg="#0c1421")
         self.title_lbl.pack(side="left")
 
-        self.time_lbl = tk.Label(hdr, text="00:00 / 00:00", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg="#0c1421")
+        self.time_lbl = tk.Label(hdr, text="00:00 / 00:00", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg="#0c1421")
         self.time_lbl.pack(side="right")
 
         # Waveform Display Canvas inside Player
@@ -61,13 +61,13 @@ class AudioPlayerWidget(tk.Frame):
         ctrl_row.pack(fill="x", padx=12, pady=(2, 8))
 
         # Play / Pause Button
-        self.play_btn = tk.Button(ctrl_row, text="▶", font=("Segoe UI", 11, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        self.play_btn = tk.Button(ctrl_row, text="▶", font=(UI_FONT, 11, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                                   activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, width=3, height=1,
                                   cursor="hand2", command=self.toggle_play_pause, state="disabled")
         self.play_btn.pack(side="left", padx=(0, 6))
 
         # Stop Button
-        self.stop_btn = tk.Button(ctrl_row, text="■", font=("Segoe UI", 11, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        self.stop_btn = tk.Button(ctrl_row, text="■", font=(UI_FONT, 11, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                                   activebackground="#e11d48", activeforeground="#ffffff", bd=1, relief="solid",
                                   width=3, height=1, cursor="hand2", command=self.stop, state="disabled")
         self.stop_btn.pack(side="left", padx=(0, 10))
@@ -78,13 +78,13 @@ class AudioPlayerWidget(tk.Frame):
         self.seek_scale.pack(side="left", fill="x", expand=True, padx=(0, 12))
 
         # Volume Icon & Slider
-        tk.Label(ctrl_row, text="🔊", font=("Segoe UI", 10), fg=TEXT_DIM_COLOR, bg="#0c1421").pack(side="left", padx=(0, 2))
+        tk.Label(ctrl_row, text="🔊", font=(UI_FONT, 10), fg=TEXT_DIM_COLOR, bg="#0c1421").pack(side="left", padx=(0, 2))
         self.vol_var = tk.DoubleVar(value=100.0)
         vol_scale = ttk.Scale(ctrl_row, variable=self.vol_var, from_=0.0, to=100.0, orient="horizontal", length=60, command=self._on_vol_change)
         vol_scale.pack(side="left")
 
         # Delete / Reset Button
-        self.del_btn = tk.Button(ctrl_row, text="🗑 Xóa", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg="#f87171",
+        self.del_btn = tk.Button(ctrl_row, text="🗑 Xóa", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg="#f87171",
                                  activebackground="#e11d48", activeforeground="#ffffff", bd=1, relief="solid",
                                  padx=8, pady=2, cursor="hand2", command=self.clear_audio, state="disabled")
         self.del_btn.pack(side="right", padx=(8, 0))

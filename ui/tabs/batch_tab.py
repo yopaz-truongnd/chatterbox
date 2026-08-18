@@ -194,26 +194,26 @@ class BatchTab(tk.Frame):
         hdr = tk.Frame(list_card, bg=PANEL2_BG)
         hdr.pack(fill="x", padx=14, pady=(10, 6))
 
-        tk.Label(hdr, text="📦 Batch Studio — Danh sách câu thoại", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
+        tk.Label(hdr, text="📦 Batch Studio — Danh sách câu thoại", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
 
         tb_btns = tk.Frame(hdr, bg=PANEL2_BG)
         tb_btns.pack(side="right")
 
-        self.btn_add_row = tk.Button(tb_btns, text="➕ Thêm dòng", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        self.btn_add_row = tk.Button(tb_btns, text="➕ Thêm dòng", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                                      bd=0, cursor="hand2", padx=8, pady=4, command=lambda: self.add_row_item(""))
         self.btn_add_row.pack(side="left", padx=(0, 4))
         
-        self.btn_import_file = tk.Button(tb_btns, text="📄 Nhập .txt/.csv", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        self.btn_import_file = tk.Button(tb_btns, text="📄 Nhập .txt/.csv", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                                         bd=1, relief="solid", cursor="hand2", padx=8, pady=4, command=self._import_batch_file)
         self.btn_import_file.pack(side="left", padx=(0, 4))
 
-        tk.Button(tb_btns, text="💾 Lưu dự án", font=("Segoe UI", 9, "bold"), bg="#1e3a8a", fg="#ffffff",
+        tk.Button(tb_btns, text="💾 Lưu dự án", font=(UI_FONT, 9, "bold"), bg="#1e3a8a", fg="#ffffff",
                   bd=0, cursor="hand2", padx=8, pady=4, command=self._save_project_json).pack(side="left", padx=(0, 4))
 
-        tk.Button(tb_btns, text="📂 Mở dự án", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(tb_btns, text="📂 Mở dự án", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=8, pady=4, command=self._load_project_json).pack(side="left", padx=(0, 4))
 
-        self.btn_clear_all = tk.Button(tb_btns, text="🗑 Xóa hết", font=("Segoe UI", 9), bg=PANEL2_BG, fg="#f87171",
+        self.btn_clear_all = tk.Button(tb_btns, text="🗑 Xóa hết", font=(UI_FONT, 9), bg=PANEL2_BG, fg="#f87171",
                                        bd=0, activebackground=PANEL2_BG, activeforeground="#ffffff", cursor="hand2", command=self.clear_all_rows)
         self.btn_clear_all.pack(side="left")
 
@@ -221,7 +221,7 @@ class BatchTab(tk.Frame):
         rule_bar = tk.Frame(list_card, bg=PANEL2_BG)
         rule_bar.pack(fill="x", padx=14, pady=(0, 6))
 
-        tk.Label(rule_bar, text="✂️ Quy tắc tách dòng:", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(0, 6))
+        tk.Label(rule_bar, text="✂️ Quy tắc tách dòng:", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(0, 6))
 
         self.split_rule_var = tk.StringVar(value="Tự động (Dòng \\n hoặc CSV)")
         rule_cb = ttk.Combobox(rule_bar, textvariable=self.split_rule_var, state="readonly", width=28,
@@ -235,9 +235,9 @@ class BatchTab(tk.Frame):
         rule_cb.pack(side="left", padx=(0, 8))
         rule_cb.bind("<<ComboboxSelected>>", lambda e: self._on_split_rule_change())
 
-        self.delim_label = tk.Label(rule_bar, text="Ký tự tách:", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.delim_label = tk.Label(rule_bar, text="Ký tự tách:", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
         self.custom_delim_var = tk.StringVar(value="--------------------------")
-        self.delim_entry = tk.Entry(rule_bar, textvariable=self.custom_delim_var, font=("Segoe UI", 9), bg="#0e1621", fg=TEXT_COLOR,
+        self.delim_entry = tk.Entry(rule_bar, textvariable=self.custom_delim_var, font=(UI_FONT, 9), bg="#0e1621", fg=TEXT_COLOR,
                                     bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=22)
         bind_right_click_menu(self.delim_entry)
 
@@ -265,41 +265,41 @@ class BatchTab(tk.Frame):
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
 
-        self.batch_char_lbl = tk.Label(list_card, text="0 dòng văn bản", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.batch_char_lbl = tk.Label(list_card, text="0 dòng văn bản", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
         self.batch_char_lbl.pack(anchor="w", padx=14, pady=(0, 6))
 
         # 2. Output Configuration & Subtitles & BGM Mixing Card
         out_card = tk.Frame(left_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         out_card.pack(fill="x", pady=(0, 10))
 
-        tk.Label(out_card, text="⚙️ Cấu hình xuất file, Phụ đề SRT & Nhạc nền BGM", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
+        tk.Label(out_card, text="⚙️ Cấu hình xuất file, Phụ đề SRT & Nhạc nền BGM", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
 
         # Row 1: Output Dir
         row1 = tk.Frame(out_card, bg=PANEL2_BG)
         row1.pack(fill="x", padx=14, pady=2)
 
-        tk.Label(row1, text="Thư mục xuất:", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, width=12, anchor="w").pack(side="left")
+        tk.Label(row1, text="Thư mục xuất:", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, width=12, anchor="w").pack(side="left")
         self.batch_out_dir_var = tk.StringVar(value=DEFAULT_EXPORT_DIR)
-        tk.Entry(row1, textvariable=self.batch_out_dir_var, bg="#0e1621", fg=TEXT_COLOR, font=("Segoe UI", 9),
+        tk.Entry(row1, textvariable=self.batch_out_dir_var, bg="#0e1621", fg=TEXT_COLOR, font=(UI_FONT, 9),
                  bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR).pack(side="left", fill="x", expand=True, padx=(0, 6))
-        tk.Button(row1, text="📁 Chọn", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(row1, text="📁 Chọn", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=8, pady=2, command=self._pick_batch_out_dir).pack(side="right")
 
         # Row 2: Naming Pattern Template & Format
         row2 = tk.Frame(out_card, bg=PANEL2_BG)
         row2.pack(fill="x", padx=14, pady=4)
 
-        tk.Label(row2, text="Mẫu tên file:", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, width=12, anchor="w").pack(side="left")
+        tk.Label(row2, text="Mẫu tên file:", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, width=12, anchor="w").pack(side="left")
         self.naming_pattern_var = tk.StringVar(value="line_{index}_{text}")
         self.naming_pattern_var.trace_add("write", lambda *args: self._update_pattern_preview())
         
-        tk.Entry(row2, textvariable=self.naming_pattern_var, bg="#0e1621", fg=TEXT_COLOR, font=("Segoe UI", 9),
+        tk.Entry(row2, textvariable=self.naming_pattern_var, bg="#0e1621", fg=TEXT_COLOR, font=(UI_FONT, 9),
                  bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR).pack(side="left", fill="x", expand=True, padx=(0, 6))
         
         self.format_var = tk.StringVar(value="WAV")
         ttk.Combobox(row2, textvariable=self.format_var, state="readonly", width=6, values=["WAV", "MP3"]).pack(side="right")
 
-        self.pattern_preview_lbl = tk.Label(out_card, text="Ví dụ tên file: line_001_Hello_world.wav", font=("Segoe UI", 8, "italic"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.pattern_preview_lbl = tk.Label(out_card, text="Ví dụ tên file: line_001_Hello_world.wav", font=(UI_FONT, 8, "italic"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
         self.pattern_preview_lbl.pack(anchor="w", padx=14, pady=(0, 4))
 
         # Row 3: Merge option & Silence interval & Subtitles SRT
@@ -308,32 +308,32 @@ class BatchTab(tk.Frame):
 
         self.merge_all_var = tk.BooleanVar(value=False)
         tk.Checkbutton(row3, text="🔗 Gộp tất cả câu thành 1 file âm thanh duy nhất", variable=self.merge_all_var,
-                       font=("Segoe UI", 9, "bold"), fg="#a7f3d0", bg=PANEL2_BG, activebackground=PANEL2_BG, selectcolor="#0e1621").pack(side="left")
+                       font=(UI_FONT, 9, "bold"), fg="#a7f3d0", bg=PANEL2_BG, activebackground=PANEL2_BG, selectcolor="#0e1621").pack(side="left")
 
-        tk.Label(row3, text="Khoảng lặng:", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(12, 4))
+        tk.Label(row3, text="Khoảng lặng:", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(12, 4))
         self.silence_sec_var = tk.DoubleVar(value=0.5)
-        tk.Entry(row3, textvariable=self.silence_sec_var, width=5, bg="#0e1621", fg=TEXT_COLOR, font=("Segoe UI", 9),
+        tk.Entry(row3, textvariable=self.silence_sec_var, width=5, bg="#0e1621", fg=TEXT_COLOR, font=(UI_FONT, 9),
                  bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR).pack(side="left")
-        tk.Label(row3, text="s", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(2, 8))
+        tk.Label(row3, text="s", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(2, 8))
 
         self.export_srt_var = tk.BooleanVar(value=True)
         tk.Checkbutton(row3, text="📝 Xuất file phụ đề (.srt / .vtt)", variable=self.export_srt_var,
-                       font=("Segoe UI", 8, "bold"), fg="#38bdf8", bg=PANEL2_BG, selectcolor="#0e1621", activebackground=PANEL2_BG).pack(side="left")
+                       font=(UI_FONT, 8, "bold"), fg="#38bdf8", bg=PANEL2_BG, selectcolor="#0e1621", activebackground=PANEL2_BG).pack(side="left")
 
         # Row 4: Background Music (BGM) Mixing Card
         row_bgm = tk.Frame(out_card, bg=PANEL2_BG)
         row_bgm.pack(fill="x", padx=14, pady=(2, 6))
 
-        tk.Label(row_bgm, text="🎵 Nhạc nền (BGM):", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, width=14, anchor="w").pack(side="left")
+        tk.Label(row_bgm, text="🎵 Nhạc nền (BGM):", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, width=14, anchor="w").pack(side="left")
         
         self.bgm_var = tk.StringVar(value="Không chọn nhạc nền")
-        tk.Label(row_bgm, textvariable=self.bgm_var, bg="#0e1621", fg="#a7f3d0", font=("Segoe UI", 8),
+        tk.Label(row_bgm, textvariable=self.bgm_var, bg="#0e1621", fg="#a7f3d0", font=(UI_FONT, 8),
                  bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, anchor="w", padx=6, pady=2).pack(side="left", fill="x", expand=True, padx=(0, 6))
         
-        tk.Button(row_bgm, text="📁 Chọn BGM", font=("Segoe UI", 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(row_bgm, text="📁 Chọn BGM", font=(UI_FONT, 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=6, pady=2, command=self._pick_bgm_audio).pack(side="left", padx=(0, 4))
         
-        tk.Label(row_bgm, text="Âm lượng BGM:", font=("Segoe UI", 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(6, 2))
+        tk.Label(row_bgm, text="Âm lượng BGM:", font=(UI_FONT, 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(6, 2))
         self.bgm_vol_var = tk.DoubleVar(value=0.15)
         bgm_spin = ttk.Spinbox(row_bgm, from_=0.05, to=0.50, increment=0.05, textvariable=self.bgm_vol_var, width=5)
         bgm_spin.pack(side="left")
@@ -342,7 +342,7 @@ class BatchTab(tk.Frame):
         row4 = tk.Frame(out_card, bg=PANEL2_BG)
         row4.pack(fill="x", padx=14, pady=(2, 8))
 
-        tk.Label(row4, text="⚡ Số luồng song song (Workers):", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg=PANEL2_BG).pack(side="left", padx=(0, 6))
+        tk.Label(row4, text="⚡ Số luồng song song (Workers):", font=(UI_FONT, 9, "bold"), fg="#38bdf8", bg=PANEL2_BG).pack(side="left", padx=(0, 6))
         self.max_workers_var = tk.IntVar(value=2)
         sp = ttk.Spinbox(row4, from_=1, to=16, textvariable=self.max_workers_var, width=4)
         sp.pack(side="left", padx=(0, 6))
@@ -351,7 +351,7 @@ class BatchTab(tk.Frame):
         run_row = tk.Frame(left_pane, bg=PANEL_BG)
         run_row.pack(fill="x")
 
-        self.btn_run_batch = tk.Button(run_row, text="⚡ Bắt đầu tạo hàng loạt (Batch Run)", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        self.btn_run_batch = tk.Button(run_row, text="⚡ Bắt đầu tạo hàng loạt (Batch Run)", font=(UI_FONT, 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                                        activebackground="#6fa0ff", activeforeground="#ffffff", bd=0, pady=9, cursor="hand2",
                                        command=self.run_batch_action)
         self.btn_run_batch.pack(fill="x", pady=(0, 6))
@@ -362,10 +362,10 @@ class BatchTab(tk.Frame):
         t_hdr = tk.Frame(total_prog_card, bg=PANEL2_BG)
         t_hdr.pack(fill="x", padx=10, pady=(6, 2))
 
-        self.batch_total_lbl = tk.Label(t_hdr, text="📦 Tiến trình tổng: Sẵn sàng.", font=("Segoe UI", 9, "bold"), fg="#a9c3ff", bg=PANEL2_BG)
+        self.batch_total_lbl = tk.Label(t_hdr, text="📦 Tiến trình tổng: Sẵn sàng.", font=(UI_FONT, 9, "bold"), fg="#a9c3ff", bg=PANEL2_BG)
         self.batch_total_lbl.pack(side="left")
 
-        self.batch_timer_lbl = tk.Label(t_hdr, text="⏱ Đã chạy: 00:00 | Dự kiến xong: --:--:--", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg=PANEL2_BG)
+        self.batch_timer_lbl = tk.Label(t_hdr, text="⏱ Đã chạy: 00:00 | Dự kiến xong: --:--:--", font=(UI_FONT, 9, "bold"), fg="#38bdf8", bg=PANEL2_BG)
         self.batch_timer_lbl.pack(side="right")
 
         self.batch_total_bar = ttk.Progressbar(total_prog_card, orient="horizontal", mode="determinate")
@@ -377,7 +377,7 @@ class BatchTab(tk.Frame):
         c_hdr = tk.Frame(cur_prog_card, bg=PANEL2_BG)
         c_hdr.pack(fill="x", padx=10, pady=(6, 2))
 
-        self.batch_item_lbl = tk.Label(c_hdr, text="⚡ Tiến trình dòng hiện tại: Đang chờ...", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.batch_item_lbl = tk.Label(c_hdr, text="⚡ Tiến trình dòng hiện tại: Đang chờ...", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
         self.batch_item_lbl.pack(side="left")
 
         self.batch_item_bar = ttk.Progressbar(cur_prog_card, orient="horizontal", mode="determinate")
@@ -388,29 +388,29 @@ class BatchTab(tk.Frame):
         vc_card = tk.Frame(right_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         vc_card.pack(fill="x", pady=(0, 10))
 
-        tk.Label(vc_card, text="🎙️ Giọng đọc mặc định & Preset", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
+        tk.Label(vc_card, text="🎙️ Giọng đọc mặc định & Preset", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
 
         self.ref_var = tk.StringVar(value="Mặc định")
-        tk.Label(vc_card, textvariable=self.ref_var, bg="#0e1621", fg="#a7f3d0", font=("Segoe UI", 9),
+        tk.Label(vc_card, textvariable=self.ref_var, bg="#0e1621", fg="#a7f3d0", font=(UI_FONT, 9),
                  bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, anchor="w", padx=8, pady=4).pack(fill="x", padx=14, pady=(0, 6))
 
         btn_r = tk.Frame(vc_card, bg=PANEL2_BG)
         btn_r.pack(fill="x", padx=14, pady=(0, 8))
-        tk.Button(btn_r, text="📁 Chọn giọng...", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(btn_r, text="📁 Chọn giọng...", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=8, pady=3, command=self._pick_ref_audio).pack(side="left", padx=(0, 6))
-        tk.Button(btn_r, text="✖ Xóa giọng", font=("Segoe UI", 9), bg=PANEL2_BG, fg=TEXT_DIM_COLOR,
+        tk.Button(btn_r, text="✖ Xóa giọng", font=(UI_FONT, 9), bg=PANEL2_BG, fg=TEXT_DIM_COLOR,
                   bd=0, cursor="hand2", command=self._clear_ref_audio).pack(side="left")
 
         pr_row = tk.Frame(vc_card, bg=PANEL2_BG)
         pr_row.pack(fill="x", padx=14, pady=(0, 8))
 
-        tk.Label(pr_row, text="Preset:", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(0, 6))
+        tk.Label(pr_row, text="Preset:", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(0, 6))
         self.preset_var = tk.StringVar(value="Mặc định")
         self.preset_cb = ttk.Combobox(pr_row, textvariable=self.preset_var, state="readonly", values=list(self.presets.keys()))
         self.preset_cb.pack(side="left", fill="x", expand=True, padx=(0, 6))
         self.preset_cb.bind("<<ComboboxSelected>>", self._on_preset_selected)
 
-        tk.Button(vc_card, text="⏩ Áp dụng giọng này cho TẤT CẢ các dòng", font=("Segoe UI", 9, "bold"), bg="#1e293b", fg="#a9c3ff",
+        tk.Button(vc_card, text="⏩ Áp dụng giọng này cho TẤT CẢ các dòng", font=(UI_FONT, 9, "bold"), bg="#1e293b", fg="#a9c3ff",
                   activebackground=ACCENT_COLOR, activeforeground="#ffffff", bd=1, relief="solid", pady=5, cursor="hand2",
                   command=self.apply_voice_to_all_rows).pack(fill="x", padx=14, pady=(0, 10))
 
@@ -418,7 +418,7 @@ class BatchTab(tk.Frame):
         param_card = tk.Frame(right_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         param_card.pack(fill="x", pady=(0, 10))
 
-        tk.Label(param_card, text="🎛️ Thông số sinh âm thanh AI", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
+        tk.Label(param_card, text="🎛️ Thông số sinh âm thanh AI", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(8, 4))
 
         default_char = character_api.get_default_character()
         self.use_default_char_var = tk.BooleanVar(value=bool(default_char))
@@ -426,7 +426,7 @@ class BatchTab(tk.Frame):
             param_card,
             text=f"⭐ Sử dụng Character mặc định ({default_char['name']})" if default_char else "⭐ Sử dụng Character mặc định (Chưa đặt)",
             variable=self.use_default_char_var,
-            font=("Segoe UI", 9, "bold"),
+            font=(UI_FONT, 9, "bold"),
             fg="#f59e0b",
             bg=PANEL2_BG,
             selectcolor="#0e1621",
@@ -437,7 +437,7 @@ class BatchTab(tk.Frame):
 
         qp_row = tk.Frame(param_card, bg=PANEL2_BG)
         qp_row.pack(fill="x", padx=14, pady=(2, 6))
-        tk.Label(qp_row, text="Thông số nhanh:", font=("Segoe UI", 9, "bold"), fg="#a7f3d0", bg=PANEL2_BG).pack(side="left", padx=(0, 6))
+        tk.Label(qp_row, text="Thông số nhanh:", font=(UI_FONT, 9, "bold"), fg="#a7f3d0", bg=PANEL2_BG).pack(side="left", padx=(0, 6))
 
         self.quick_presets = {
             "⚖️ Mặc định (Cân bằng)": {"exag": 0.50, "cfg": 0.70, "temp": 0.80},
@@ -454,36 +454,36 @@ class BatchTab(tk.Frame):
 
         ex_row = tk.Frame(param_card, bg=PANEL2_BG)
         ex_row.pack(fill="x", padx=14, pady=2)
-        tk.Label(ex_row, text="Exaggeration:", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        self.exag_val_lbl = tk.Label(ex_row, text="0.50", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG)
+        tk.Label(ex_row, text="Exaggeration:", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        self.exag_val_lbl = tk.Label(ex_row, text="0.50", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG)
         self.exag_val_lbl.pack(side="right")
         self.exag_var = tk.DoubleVar(value=0.5)
         ttk.Scale(param_card, variable=self.exag_var, from_=0.0, to=2.0, command=lambda v: self.exag_val_lbl.config(text=f"{float(v):.2f}")).pack(fill="x", padx=14, pady=(0, 6))
 
         cfg_row = tk.Frame(param_card, bg=PANEL2_BG)
         cfg_row.pack(fill="x", padx=14, pady=2)
-        tk.Label(cfg_row, text="CFG Scale:", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        self.cfg_val_lbl = tk.Label(cfg_row, text="0.70", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG)
+        tk.Label(cfg_row, text="CFG Scale:", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        self.cfg_val_lbl = tk.Label(cfg_row, text="0.70", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG)
         self.cfg_val_lbl.pack(side="right")
         self.cfg_var = tk.DoubleVar(value=0.7)
         ttk.Scale(param_card, variable=self.cfg_var, from_=0.1, to=2.0, command=lambda v: self.cfg_val_lbl.config(text=f"{float(v):.2f}")).pack(fill="x", padx=14, pady=(0, 6))
 
         temp_row = tk.Frame(param_card, bg=PANEL2_BG)
         temp_row.pack(fill="x", padx=14, pady=2)
-        tk.Label(temp_row, text="Temperature:", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
-        self.temp_val_lbl = tk.Label(temp_row, text="0.80", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG)
+        tk.Label(temp_row, text="Temperature:", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left")
+        self.temp_val_lbl = tk.Label(temp_row, text="0.80", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG)
         self.temp_val_lbl.pack(side="right")
         self.temp_var = tk.DoubleVar(value=0.8)
         ttk.Scale(param_card, variable=self.temp_var, from_=0.1, to=1.5, command=lambda v: self.temp_val_lbl.config(text=f"{float(v):.2f}")).pack(fill="x", padx=14, pady=(0, 6))
 
         seed_row = tk.Frame(param_card, bg=PANEL2_BG)
         seed_row.pack(fill="x", padx=14, pady=(2, 8))
-        tk.Label(seed_row, text="Seed:", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(0, 4))
+        tk.Label(seed_row, text="Seed:", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=(0, 4))
         self.seed_var = tk.IntVar(value=12345)
-        tk.Entry(seed_row, textvariable=self.seed_var, width=8, bg="#0e1621", fg=TEXT_COLOR, font=("Segoe UI", 9),
+        tk.Entry(seed_row, textvariable=self.seed_var, width=8, bg="#0e1621", fg=TEXT_COLOR, font=(UI_FONT, 9),
                  bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR).pack(side="left", padx=(0, 6))
         self.random_seed_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(seed_row, text="☑ Ngẫu nhiên", variable=self.random_seed_var, font=("Segoe UI", 9),
+        tk.Checkbutton(seed_row, text="☑ Ngẫu nhiên", variable=self.random_seed_var, font=(UI_FONT, 9),
                        fg=TEXT_COLOR, bg=PANEL2_BG, activebackground=PANEL2_BG, selectcolor="#0e1621").pack(side="left")
 
         # 3. Batch Results Card
@@ -492,8 +492,8 @@ class BatchTab(tk.Frame):
 
         res_hdr = tk.Frame(self.res_card, bg=PANEL2_BG)
         res_hdr.pack(fill="x", padx=14, pady=(10, 4))
-        tk.Label(res_hdr, text="Kết quả đợt Batch vừa chạy", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
-        self.res_badge = tk.Label(res_hdr, text="0 file", font=("Segoe UI", 9, "bold"), bg="#192c4b", fg="#a9c3ff", padx=6, pady=2)
+        tk.Label(res_hdr, text="Kết quả đợt Batch vừa chạy", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
+        self.res_badge = tk.Label(res_hdr, text="0 file", font=(UI_FONT, 9, "bold"), bg="#192c4b", fg="#a9c3ff", padx=6, pady=2)
         self.res_badge.pack(side="right")
 
         self.res_body = tk.Frame(self.res_card, bg=PANEL2_BG)
@@ -556,13 +556,13 @@ class BatchTab(tk.Frame):
         left_box = tk.Frame(row_frame, bg="#131e2e", width=50)
         left_box.pack(side="left", padx=6, pady=4)
 
-        lbl_idx = tk.Label(left_box, text=f"#{row_id}", font=("Segoe UI", 9, "bold"), fg="#a9c3ff", bg="#131e2e")
+        lbl_idx = tk.Label(left_box, text=f"#{row_id}", font=(UI_FONT, 9, "bold"), fg="#a9c3ff", bg="#131e2e")
         lbl_idx.pack(anchor="center")
 
-        lbl_pct = tk.Label(left_box, text="", font=("Segoe UI", 8, "bold"), fg="#64748b", bg="#131e2e")
+        lbl_pct = tk.Label(left_box, text="", font=(UI_FONT, 8, "bold"), fg="#64748b", bg="#131e2e")
         lbl_pct.pack(anchor="center", pady=(2, 0))
 
-        txt_box = tk.Text(row_frame, height=2, font=("Segoe UI", 10), bg="#0e1621", fg=TEXT_COLOR,
+        txt_box = tk.Text(row_frame, height=2, font=(UI_FONT, 10), bg="#0e1621", fg=TEXT_COLOR,
                           bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
                           insertbackground="white")
         txt_box.pack(side="left", fill="x", expand=True, padx=4, pady=4)
@@ -576,28 +576,28 @@ class BatchTab(tk.Frame):
         voice_cb = ttk.Combobox(row_frame, textvariable=voice_var, state="readonly", width=12, values=self.get_available_voices())
         voice_cb.pack(side="left", padx=4)
 
-        btn_up = tk.Button(row_frame, text="▲", font=("Segoe UI", 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        btn_up = tk.Button(row_frame, text="▲", font=(UI_FONT, 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                            bd=0, cursor="hand2", width=2, command=lambda: self.move_row(row_frame, -1))
         btn_up.pack(side="left", padx=1)
 
-        btn_dn = tk.Button(row_frame, text="▼", font=("Segoe UI", 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        btn_dn = tk.Button(row_frame, text="▼", font=(UI_FONT, 8, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                            bd=0, cursor="hand2", width=2, command=lambda: self.move_row(row_frame, 1))
         btn_dn.pack(side="left", padx=1)
 
-        btn_dup = tk.Button(row_frame, text="📋", font=("Segoe UI", 9), bg="#1a2536", fg=TEXT_COLOR,
+        btn_dup = tk.Button(row_frame, text="📋", font=(UI_FONT, 9), bg="#1a2536", fg=TEXT_COLOR,
                             bd=0, cursor="hand2", width=2, command=lambda: self.duplicate_row(txt_box.get("1.0", "end").strip(), voice_var.get()))
         btn_dup.pack(side="left", padx=1)
 
-        btn_play = tk.Button(row_frame, text="▶", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        btn_play = tk.Button(row_frame, text="▶", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                              bd=0, cursor="hand2", width=2, command=lambda: self.preview_single_row(txt_box.get("1.0", "end").strip(), voice_var.get()))
         btn_play.pack(side="left", padx=1)
 
-        btn_del = tk.Button(row_frame, text="🗑", font=("Segoe UI", 9), bg="#131e2e", fg="#f87171",
+        btn_del = tk.Button(row_frame, text="🗑", font=(UI_FONT, 9), bg="#131e2e", fg="#f87171",
                             bd=0, cursor="hand2", width=2, command=lambda: self.delete_row(row_frame))
         btn_del.pack(side="left", padx=2)
 
         # Drag Handle (Thanh nắm Kéo-Thả bằng chuột trái)
-        drag_handle = tk.Label(row_frame, text=" ☰ ", font=("Segoe UI", 11, "bold"), fg="#7c8ba3", bg="#1a2536",
+        drag_handle = tk.Label(row_frame, text=" ☰ ", font=(UI_FONT, 11, "bold"), fg="#7c8ba3", bg="#1a2536",
                                cursor="fleur", width=3)
         drag_handle.pack(side="left", padx=(2, 4))
 
@@ -1262,10 +1262,10 @@ class BatchTab(tk.Frame):
             empty_frame = tk.Frame(self.res_body, bg=PANEL2_BG, pady=30)
             empty_frame.pack(fill="both", expand=True)
 
-            tk.Label(empty_frame, text="📦", font=("Segoe UI", 28), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(pady=(10, 4))
-            tk.Label(empty_frame, text="Chưa có kết quả đợt Batch nào", font=("Segoe UI", 10, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG).pack()
+            tk.Label(empty_frame, text="📦", font=(UI_FONT, 28), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(pady=(10, 4))
+            tk.Label(empty_frame, text="Chưa có kết quả đợt Batch nào", font=(UI_FONT, 10, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG).pack()
             tk.Label(empty_frame, text="Kết quả các file âm thanh sẽ tự động hiển thị ở đây\nsau khi bạn bấm '⚡ Bắt đầu tạo hàng loạt'",
-                     font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, justify="center").pack(pady=(4, 10))
+                     font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG, justify="center").pack(pady=(4, 10))
             self.res_badge.config(text="0 file")
             self.audio_player.pack_forget()
             return
@@ -1276,7 +1276,7 @@ class BatchTab(tk.Frame):
         sel_row = tk.Frame(self.res_body, bg=PANEL2_BG)
         sel_row.pack(fill="x", pady=(0, 6))
 
-        tk.Label(sel_row, text="🎧 Chọn voice nghe thử:", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg=PANEL2_BG).pack(side="left", padx=(0, 6))
+        tk.Label(sel_row, text="🎧 Chọn voice nghe thử:", font=(UI_FONT, 9, "bold"), fg="#38bdf8", bg=PANEL2_BG).pack(side="left", padx=(0, 6))
 
         self.res_items_map = {}
         cb_options = []
@@ -1320,15 +1320,15 @@ class BatchTab(tk.Frame):
             m_row = tk.Frame(m_card, bg="#1a2e4a")
             m_row.pack(fill="x", padx=8, pady=6)
 
-            tk.Label(m_row, text="🎵 File Gộp Tất Cả (Merged Audio)", font=("Segoe UI", 9, "bold"), fg="#a7f3d0", bg="#1a2e4a").pack(side="left")
+            tk.Label(m_row, text="🎵 File Gộp Tất Cả (Merged Audio)", font=(UI_FONT, 9, "bold"), fg="#a7f3d0", bg="#1a2e4a").pack(side="left")
 
             btn_box = tk.Frame(m_row, bg="#1a2e4a")
             btn_box.pack(side="right")
 
-            tk.Button(btn_box, text="▶ Play", font=("Segoe UI", 8, "bold"), bg=ACCENT_COLOR, fg="#ffffff", bd=0, padx=6, pady=2, cursor="hand2",
+            tk.Button(btn_box, text="▶ Play", font=(UI_FONT, 8, "bold"), bg=ACCENT_COLOR, fg="#ffffff", bd=0, padx=6, pady=2, cursor="hand2",
                       command=lambda: self._play_res_file(self.merged_file_path)).pack(side="left", padx=2)
 
-            tk.Button(btn_box, text="📂 Mở", font=("Segoe UI", 8), bg="#24344d", fg=TEXT_COLOR, bd=0, padx=6, pady=2, cursor="hand2",
+            tk.Button(btn_box, text="📂 Mở", font=(UI_FONT, 8), bg="#24344d", fg=TEXT_COLOR, bd=0, padx=6, pady=2, cursor="hand2",
                       command=lambda: self._open_res_dir(self.merged_file_path)).pack(side="left", padx=2)
 
         for res in self.batch_results:
@@ -1339,22 +1339,22 @@ class BatchTab(tk.Frame):
             r_line.pack(fill="x", padx=8, pady=4)
 
             if res['status']:
-                st_lbl = tk.Label(r_line, text="✓ Successful", font=("Segoe UI", 8, "bold"), fg="#34d399", bg="#064e3b", padx=6, pady=1)
+                st_lbl = tk.Label(r_line, text="✓ Successful", font=(UI_FONT, 8, "bold"), fg="#34d399", bg="#064e3b", padx=6, pady=1)
             else:
-                st_lbl = tk.Label(r_line, text="❌ Error", font=("Segoe UI", 8, "bold"), fg="#f87171", bg="#4c1d1d", padx=6, pady=1)
+                st_lbl = tk.Label(r_line, text="❌ Error", font=(UI_FONT, 8, "bold"), fg="#f87171", bg="#4c1d1d", padx=6, pady=1)
             st_lbl.pack(side="left", padx=(0, 6))
 
             fname = os.path.basename(res['path']) if res['path'] else f"Dòng #{res['index']}"
             t_str = f"#{res['index']}: {res['text'][:20]}... ({fname})"
-            tk.Label(r_line, text=t_str, font=("Segoe UI", 9), fg=TEXT_COLOR, bg="#0e1621", anchor="w").pack(side="left", fill="x", expand=True)
+            tk.Label(r_line, text=t_str, font=(UI_FONT, 9), fg=TEXT_COLOR, bg="#0e1621", anchor="w").pack(side="left", fill="x", expand=True)
 
             if res['status'] and res['path'] and os.path.exists(res['path']):
                 b_frame = tk.Frame(r_line, bg="#0e1621")
                 b_frame.pack(side="right")
 
-                tk.Button(b_frame, text="▶", font=("Segoe UI", 8, "bold"), bg=ACCENT_COLOR, fg="#ffffff", bd=0, width=2, cursor="hand2",
+                tk.Button(b_frame, text="▶", font=(UI_FONT, 8, "bold"), bg=ACCENT_COLOR, fg="#ffffff", bd=0, width=2, cursor="hand2",
                           command=lambda p=res['path']: self._play_res_file(p)).pack(side="left", padx=1)
-                tk.Button(b_frame, text="📂", font=("Segoe UI", 8), bg="#1a2536", fg=TEXT_COLOR, bd=0, width=2, cursor="hand2",
+                tk.Button(b_frame, text="📂", font=(UI_FONT, 8), bg="#1a2536", fg=TEXT_COLOR, bd=0, width=2, cursor="hand2",
                           command=lambda p=res['path']: self._open_res_dir(p)).pack(side="left", padx=1)
 
         if cb_options:

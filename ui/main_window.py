@@ -18,14 +18,17 @@ from ui.tabs.vc_tab import VcTab
 from ui.tabs.character_tab import CharacterTab
 from ui.tabs.history_tab import HistoryTab
 from ui.tabs.settings_tab import SettingsTab
-from config.settings import settings_manager
+from utils.platform_tools import primary_shortcut
+from ui.button_styles import apply_button_theme
 
 class MainWindow:
     def __init__(self, root, engine):
         self.root = root
         self.engine = engine
+        self.model_loading = False
+        self.shortcut_modifier, self.shortcut_label = primary_shortcut()
 
-        # Đăng ký phím tắt toàn cục (Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X)
+        # Đăng ký phím tắt chỉnh sửa văn bản theo hệ điều hành.
         setup_global_keyboard_shortcuts(self.root)
 
         # Load voice presets
@@ -35,10 +38,9 @@ class MainWindow:
         self.history = []
 
         self._build_ui()
-
-        # Tự động tải model mặc định khi khởi chạy (lấy từ Settings)
-        startup_model = settings_manager.get("default_startup_model", "Chatterbox Standard (500M)")
-        self.load_model(startup_model)
+        apply_button_theme(self.root)
+        self._register_keyboard_shortcuts()
+        self.set_status("Sẵn sàng · Model sẽ được tải khi bạn yêu cầu.")
 
     def _build_ui(self):
         # 1. Header
@@ -48,19 +50,22 @@ class MainWindow:
         brand = tk.Frame(header, bg=BG_COLOR)
         brand.pack(side="left")
 
-        logo = tk.Label(brand, text="🎙️", font=("Segoe UI", 16), bg="#1c3a73", fg="#ffffff",
+        logo = tk.Label(brand, text="🎙️", font=(UI_FONT, 16), bg="#1c3a73", fg="#ffffff",
                         width=2, height=1, bd=0, highlightthickness=0)
         logo.pack(side="left", padx=(0, 10))
 
         title_box = tk.Frame(brand, bg=BG_COLOR)
         title_box.pack(side="left")
-        tk.Label(title_box, text="CHATTERBOX TTS STUDIO", font=("Segoe UI", 13, "bold"), fg="#eef3fb", bg=BG_COLOR).pack(anchor="w")
-        tk.Label(title_box, text="Mockup giao diện cải tiến — bản đề xuất", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR).pack(anchor="w")
+        tk.Label(title_box, text="CHATTERBOX TTS STUDIO", font=(UI_FONT, 13, "bold"), fg="#eef3fb", bg=BG_COLOR).pack(anchor="w")
+        tk.Label(title_box, text="Mockup giao diện cải tiến — bản đề xuất", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR).pack(anchor="w")
 
         # Active device status
-        self.device_lbl = tk.Label(header, text="🟢 Device: CPU", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR)
+        self.device_lbl = tk.Label(header, text="🟢 Device: CPU", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR)
         self.device_lbl.pack(side="right")
         self._update_device_lbl()
+
+        self.model_lbl = tk.Label(header, text="Model: Chưa tải", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR)
+        self.model_lbl.pack(side="right", padx=(0, 16))
 
         # 3. Custom Tabs Bar
         self.tabs_bar = tk.Frame(self.root, bg=BG_COLOR, padx=22)
@@ -79,7 +84,7 @@ class MainWindow:
 
         self.active_tab = "tts"
         for code, label in tabs_config:
-            btn = tk.Button(self.tabs_bar, text=label, font=("Segoe UI", 10, "bold"),
+            btn = tk.Button(self.tabs_bar, text=label, font=(UI_FONT, 10, "bold"),
                             bg=PANEL_BG if code == "tts" else BG_COLOR,
                             fg="#ffffff" if code == "tts" else TEXT_DIM_COLOR,
                             activebackground=PANEL_BG, activeforeground="#ffffff",
@@ -126,7 +131,7 @@ class MainWindow:
         status_left = tk.Frame(footer, bg="#0a0f17")
         status_left.pack(side="left", fill="x", expand=True)
 
-        self.footer_status_lbl = tk.Label(status_left, text="Sẵn sàng.", font=("Segoe UI", 9), fg="#eef3fb", bg="#0a0f17", anchor="w")
+        self.footer_status_lbl = tk.Label(status_left, text="Sẵn sàng.", font=(UI_FONT, 9), fg="#eef3fb", bg="#0a0f17", anchor="w")
         self.footer_status_lbl.pack(side="left", padx=(0, 10))
 
         # Progress bar container ở footer
@@ -149,7 +154,7 @@ class MainWindow:
         )
         self.footer_prog_bar.pack(side="left")
 
-        self.footer_ver_lbl = tk.Label(footer, text=f"Chatterbox v1.2 · {self.engine.get_device().upper()} mode", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg="#0a0f17")
+        self.footer_ver_lbl = tk.Label(footer, text=f"Chatterbox v1.2 · {self.engine.get_device().upper()} mode", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg="#0a0f17")
         self.footer_ver_lbl.pack(side="right")
 
     def _update_device_lbl(self):
@@ -183,24 +188,18 @@ class MainWindow:
 
     def _register_keyboard_shortcuts(self):
         """Đăng ký toàn bộ phím tắt bàn phím thông dụng"""
-        # 1. Chuyển tab nhanh bằng Ctrl + 1..7
-        self.root.bind_all("<Control-Key-1>", lambda e: self._switch_tab("tts"))
-        self.root.bind_all("<Control-Key-2>", lambda e: self._switch_tab("batch"))
-        self.root.bind_all("<Control-Key-3>", lambda e: self._switch_tab("mtl"))
-        self.root.bind_all("<Control-Key-4>", lambda e: self._switch_tab("vc"))
-        self.root.bind_all("<Control-Key-5>", lambda e: self._switch_tab("characters"))
-        self.root.bind_all("<Control-Key-6>", lambda e: self._switch_tab("history"))
-        self.root.bind_all("<Control-Key-7>", lambda e: self._switch_tab("settings"))
+        modifier = self.shortcut_modifier
+        for number, tab in enumerate(("tts", "batch", "mtl", "vc", "characters", "history", "settings"), 1):
+            self.root.bind_all(f"<{modifier}-Key-{number}>", lambda e, code=tab: self._switch_tab(code))
 
-        # Ctrl + Tab / Ctrl + Shift + Tab duyệt Tab
-        self.root.bind_all("<Control-Tab>", lambda e: self._cycle_tab(1))
-        self.root.bind_all("<Control-ISO_Left_Tab>", lambda e: self._cycle_tab(-1))
-        self.root.bind_all("<Control-Shift-Tab>", lambda e: self._cycle_tab(-1))
+        # Duyệt tab bằng phím bổ trợ chuẩn của hệ điều hành.
+        self.root.bind_all(f"<{modifier}-Tab>", lambda e: self._cycle_tab(1))
+        self.root.bind_all(f"<{modifier}-Shift-Tab>", lambda e: self._cycle_tab(-1))
 
         # 2. Phím tắt thực thi hành động
-        self.root.bind_all("<Control-Return>", lambda e: self.shortcut_ctrl_enter())
-        self.root.bind_all("<Control-s>", lambda e: self.shortcut_ctrl_s())
-        self.root.bind_all("<Control-S>", lambda e: self.shortcut_ctrl_s())
+        self.root.bind_all(f"<{modifier}-Return>", lambda e: self.shortcut_ctrl_enter())
+        self.root.bind_all(f"<{modifier}-s>", lambda e: self.shortcut_ctrl_s())
+        self.root.bind_all(f"<{modifier}-S>", lambda e: self.shortcut_ctrl_s())
         self.root.bind_all("<Escape>", lambda e: self.shortcut_escape())
 
         # 3. Phím F1 tra cứu phím tắt
@@ -253,20 +252,21 @@ class MainWindow:
         win.configure(bg=PANEL2_BG)
         win.resizable(False, False)
 
-        tk.Label(win, text="⌨️ Danh sách phím tắt bàn phím thông dụng", font=("Segoe UI", 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=12)
+        tk.Label(win, text="⌨️ Danh sách phím tắt bàn phím thông dụng", font=(UI_FONT, 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=12)
 
         table_frame = tk.Frame(win, bg="#0e1621", bd=1, relief="solid", highlightbackground=BORDER_COLOR)
         table_frame.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
+        key = self.shortcut_label
         shortcuts = [
-            ("Ctrl + Enter", "Khởi chạy sinh giọng đọc / Batch Run"),
-            ("Ctrl + S", "Lưu file âm thanh hoặc Cài đặt hệ thống"),
-            ("Ctrl + A", "Chọn tất cả văn bản (Select All)"),
-            ("Ctrl + L", "Xóa sạch nội dung ô văn bản (Clear Text)"),
-            ("Ctrl + Backspace", "Xóa từ phía trước con trỏ"),
-            ("Ctrl + 1 .. 7", "Chuyển nhanh tới Tab tương ứng (5:Characters, 6:History, 7:Settings)"),
-            ("Ctrl + Tab", "Chuyển sang Tab tiếp theo"),
-            ("Ctrl + Shift + Tab", "Chuyển về Tab trước đó"),
+            (f"{key} + Enter", "Khởi chạy sinh giọng đọc / Batch Run"),
+            (f"{key} + S", "Lưu file âm thanh hoặc Cài đặt hệ thống"),
+            (f"{key} + A", "Chọn tất cả văn bản (Select All)"),
+            (f"{key} + L", "Xóa sạch nội dung ô văn bản (Clear Text)"),
+            (f"{key} + Backspace", "Xóa từ phía trước con trỏ"),
+            (f"{key} + 1 .. 7", "Chuyển nhanh tới Tab tương ứng (5:Characters, 6:History, 7:Settings)"),
+            (f"{key} + Tab", "Chuyển sang Tab tiếp theo"),
+            (f"{key} + Shift + Tab", "Chuyển về Tab trước đó"),
             ("Escape (Esc)", "Dừng âm thanh đang phát ngay lập tức"),
             ("Chuột phải (Right Click)", "Mở Menu sao chép/dán/cắt (Tự đóng khi click ngoài)"),
             ("F1", "Mở bảng tra cứu phím tắt này")
@@ -275,10 +275,10 @@ class MainWindow:
         for k, d in shortcuts:
             r = tk.Frame(table_frame, bg="#0e1621")
             r.pack(fill="x", padx=12, pady=4)
-            tk.Label(r, text=k, font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0e1621", width=18, anchor="w").pack(side="left")
-            tk.Label(r, text=d, font=("Segoe UI", 9), fg=TEXT_COLOR, bg="#0e1621", anchor="w").pack(side="left", fill="x", expand=True)
+            tk.Label(r, text=k, font=(UI_FONT, 9, "bold"), fg="#38bdf8", bg="#0e1621", width=18, anchor="w").pack(side="left")
+            tk.Label(r, text=d, font=(UI_FONT, 9), fg=TEXT_COLOR, bg="#0e1621", anchor="w").pack(side="left", fill="x", expand=True)
 
-        tk.Button(win, text="Đóng (Close)", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        tk.Button(win, text="Đóng (Close)", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                   bd=0, padx=16, pady=5, cursor="hand2", command=win.destroy).pack(pady=(0, 12))
 
     # ---------------- Presets ----------------
@@ -303,10 +303,16 @@ class MainWindow:
 
     # ---------------- Model loader helper ----------------
     def load_model(self, model_name, extra_args=None):
+        if self.model_loading:
+            self.set_status("⏳ Một model đang được tải, vui lòng chờ...", progress="indeterminate")
+            return
+        self.model_loading = True
         self.set_status(f"⏳ Đang tải model '{model_name}'...", progress="indeterminate")
 
         def on_done(success, result):
+            self.model_loading = False
             if success:
+                self._update_model_lbl()
                 self.set_status(f"✓ Tải model hoàn tất! ({model_name})", progress=100)
             else:
                 self.set_status("❌ Lỗi tải model.", progress=None)
@@ -326,6 +332,7 @@ class MainWindow:
         """
         import threading
         def _update():
+            self._update_model_lbl()
             self.footer_status_lbl.config(text=msg)
 
             if progress is None or progress is False:
@@ -349,6 +356,11 @@ class MainWindow:
             _update()
         else:
             self.root.after(0, _update)
+
+    def _update_model_lbl(self):
+        if hasattr(self, "model_lbl"):
+            name = self.engine.active_model_name or "Chưa tải"
+            self.model_lbl.config(text=f"Model: {name}")
 
     def _auto_hide_progress(self):
         try:

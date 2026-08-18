@@ -33,3 +33,8 @@ def open_folder(path):
         os.startfile(folder)
     else:
         subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", folder])
+
+
+def primary_shortcut():
+    """Return Tk's primary modifier and its user-facing label."""
+    return ("Command", "⌘") if sys.platform == "darwin" else ("Control", "Ctrl")

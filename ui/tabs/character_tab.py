@@ -62,8 +62,8 @@ class CharacterTab(tk.Frame):
     def _build_ui(self):
         header = tk.Frame(self, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         header.pack(fill="x", pady=(0, 10))
-        tk.Label(header, text="🎭 Quản lý Characters", font=("Segoe UI", 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left", padx=16, pady=10)
-        self.count_label = tk.Label(header, text="0 Characters", font=("Segoe UI", 9, "bold"), bg="#192c4b", fg="#a9c3ff", padx=10, pady=3)
+        tk.Label(header, text="🎭 Quản lý Characters", font=(UI_FONT, 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left", padx=16, pady=10)
+        self.count_label = tk.Label(header, text="0 Characters", font=(UI_FONT, 9, "bold"), bg="#192c4b", fg="#a9c3ff", padx=10, pady=3)
         self.count_label.pack(side="right", padx=16)
 
         content = tk.Frame(self, bg=PANEL_BG)
@@ -101,7 +101,7 @@ class CharacterTab(tk.Frame):
         tk.Button(toolbar, text="🗑 Xóa", bg=PANEL2_BG, fg="#f87171", bd=0, command=self.delete_selected).pack(side="right")
 
         # Right: Create Character Form & Player & Detail
-        tk.Label(right, text="Tạo Character mới", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
+        tk.Label(right, text="Tạo Character mới", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 4))
         form = tk.Frame(right, bg=PANEL2_BG)
         form.pack(fill="x", padx=14)
 
@@ -128,12 +128,12 @@ class CharacterTab(tk.Frame):
         tk.Label(form, text="Reference audio (Optional)", fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(anchor="w", pady=(6, 2))
         ref_box = tk.Frame(form, bg="#0e1621", bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         ref_box.pack(fill="x")
-        tk.Label(ref_box, textvariable=self.audio_var, bg="#0e1621", fg="#a7f3d0", anchor="w", padx=8, pady=4, font=("Segoe UI", 8)).pack(side="left", fill="x", expand=True)
+        tk.Label(ref_box, textvariable=self.audio_var, bg="#0e1621", fg="#a7f3d0", anchor="w", padx=8, pady=4, font=(UI_FONT, 8)).pack(side="left", fill="x", expand=True)
         
         btn_frame = tk.Frame(form, bg=PANEL2_BG)
         btn_frame.pack(fill="x", pady=4)
-        tk.Button(btn_frame, text="📁 Chọn file audio...", bg="#1a2536", fg=TEXT_COLOR, font=("Segoe UI", 8), command=self.pick_audio).pack(side="left")
-        tk.Button(btn_frame, text="❌ Bỏ chọn mẫu", bg="#1a2536", fg="#f87171", font=("Segoe UI", 8), command=self.clear_audio).pack(side="left", padx=6)
+        tk.Button(btn_frame, text="📁 Chọn file audio...", bg="#1a2536", fg=TEXT_COLOR, font=(UI_FONT, 8), command=self.pick_audio).pack(side="left")
+        tk.Button(btn_frame, text="❌ Bỏ chọn mẫu", bg="#1a2536", fg="#f87171", font=(UI_FONT, 8), command=self.clear_audio).pack(side="left", padx=6)
 
         # Sliders & Seed
         self._scale(form, "Độ biểu cảm", self.expressiveness_var)
@@ -147,20 +147,20 @@ class CharacterTab(tk.Frame):
         # Action Buttons: Test Voice & Create Character
         act_row = tk.Frame(form, bg=PANEL2_BG)
         act_row.pack(fill="x", pady=(10, 6))
-        self.test_btn = tk.Button(act_row, text="🔊 Nghe thử giọng", font=("Segoe UI", 9, "bold"), bg="#1e293b", fg="#a9c3ff", bd=1, relief="solid", cursor="hand2", pady=5, command=self.test_voice)
+        self.test_btn = tk.Button(act_row, text="🔊 Nghe thử giọng", font=(UI_FONT, 9, "bold"), bg="#1e293b", fg="#a9c3ff", bd=1, relief="solid", cursor="hand2", pady=5, command=self.test_voice)
         self.test_btn.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
-        self.create_btn = tk.Button(act_row, text="＋ Tạo Character", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="white", bd=0, cursor="hand2", pady=5, command=self.create_character)
+        self.create_btn = tk.Button(act_row, text="＋ Tạo Character", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="white", bd=0, cursor="hand2", pady=5, command=self.create_character)
         self.create_btn.pack(side="right", fill="x", expand=True, padx=(4, 0))
 
         # Detail Box Header Label (used as reference for audio_player packing)
-        self.detail_label = tk.Label(right, text="Chi tiết Character chọn trong bảng", font=("Segoe UI", 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
+        self.detail_label = tk.Label(right, text="Chi tiết Character chọn trong bảng", font=(UI_FONT, 9, "bold"), fg=TEXT_DIM_COLOR, bg=PANEL2_BG)
         self.detail_label.pack(anchor="w", padx=14, pady=(6, 0))
 
         # Audio Player Widget for Preview
         self.audio_player = AudioPlayerWidget(right, self.engine)
 
-        self.detail = tk.Text(right, height=5, bg="#0e1621", fg=TEXT_COLOR, bd=0, padx=8, pady=6, font=("Consolas", 8), state="disabled")
+        self.detail = tk.Text(right, height=5, bg="#0e1621", fg=TEXT_COLOR, bd=0, padx=8, pady=6, font=(MONO_FONT, 8), state="disabled")
         self.detail.pack(fill="both", expand=True, padx=14, pady=(2, 10))
 
     def _entry(self, parent, label, variable):

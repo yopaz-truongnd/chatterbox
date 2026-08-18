@@ -14,8 +14,21 @@ TEXT_DIM_COLOR = "#7c8ba3"
 ACCENT_COLOR = "#4f8cff"
 ACCENT2_COLOR = "#35d0a4"
 
+# Button states use darker active colors so light text keeps its contrast.
+BUTTON_PRIMARY_BG = "#2563EB"
+BUTTON_PRIMARY_ACTIVE = "#1D4ED8"
+BUTTON_SECONDARY_ACTIVE = "#334155"
+BUTTON_DANGER_BG = "#BE123C"
+BUTTON_DANGER_ACTIVE = "#9F1239"
+BUTTON_DISABLED_BG = "#263244"
+BUTTON_DISABLED_FG = "#94A3B8"
+
 import os
+import sys
 from pathlib import Path
+
+UI_FONT = "SF Pro Text" if sys.platform == "darwin" else "Segoe UI"
+MONO_FONT = "SF Mono" if sys.platform == "darwin" else "Consolas"
 
 # Đường dẫn file và thư mục xuất mặc định
 PRESETS_FILE = Path("voice_presets.json")

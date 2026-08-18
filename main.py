@@ -71,12 +71,6 @@ def main():
     # Khởi tạo Giao diện MainWindow
     app = MainWindow(root, engine)
 
-    # Đăng ký phím tắt global liên kết với MainWindow
-    root.bind("<Control-Return>", lambda event: app.shortcut_ctrl_enter())
-    root.bind("<Control-s>", lambda event: app.shortcut_ctrl_s())
-
-
-
     # Khởi chạy main loop
     root.mainloop()
 
