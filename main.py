@@ -41,6 +41,15 @@ cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ["HF_HOME"] = str(cache_dir)
 os.environ["HF_HUB_CACHE"] = str(cache_dir)
 
+# Cấu hình thư mục tạm trong dự án thay vì hệ thống
+import tempfile
+TMP_DIR = PROJECT_DIR / "tmp"
+TMP_DIR.mkdir(parents=True, exist_ok=True)
+tempfile.tempdir = str(TMP_DIR)
+os.environ["TMPDIR"] = str(TMP_DIR)
+os.environ["TEMP"] = str(TMP_DIR)
+os.environ["TMP"] = str(TMP_DIR)
+
 import tkinter as tk
 from utils.logger import logger
 from core.chatterbox_engine import ChatterboxEngine
@@ -61,8 +70,9 @@ def main():
 
     root.title("Chatterbox TTS Studio")
     
-    # Thiết lập màu nền mặc định cho cửa sổ chính để tránh chớp giật trắng
-    root.configure(bg="#0c121c")
+    # Thiết lập màu nền mặc định cho cửa sổ chính theo Material Design 3
+    from config.constants import BG_COLOR
+    root.configure(bg=BG_COLOR)
 
     # Khởi tạo engine xử lý AI Core
     device = select_device()

@@ -487,7 +487,7 @@ class TtsTab(tk.Frame):
         timer_lbl.pack(pady=6)
 
         is_recording = {"val": False, "start_time": 0}
-        tmp_mic_wav = tempfile.mktemp(suffix=".wav")
+        tmp_mic_wav = tempfile.mktemp(suffix=".wav", dir=str(TMP_DIR))
 
         def start_rec():
             is_recording["val"] = True
@@ -733,7 +733,7 @@ class TtsTab(tk.Frame):
                 self._on_model_change()
                 self.main_window.set_status("⚡ Đã tự động chuyển sang mô hình Chatterbox Turbo để phát âm thanh hiệu ứng biểu cảm!", progress=None)
 
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav")
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=str(TMP_DIR))
         os.close(tmp_fd)
 
         speed_val = self.speed_var.get()
@@ -760,12 +760,12 @@ class TtsTab(tk.Frame):
                 processed_path = tmp_path
                 # Post-processing: Speed & Volume Normalization
                 if abs(speed_val - 1.0) > 0.01:
-                    speed_out = tempfile.mktemp(suffix="_speed.wav")
+                    speed_out = tempfile.mktemp(suffix="_speed.wav", dir=str(TMP_DIR))
                     change_audio_speed(processed_path, speed_out, speed_val)
                     processed_path = speed_out
 
                 if do_norm:
-                    norm_out = tempfile.mktemp(suffix="_norm.wav")
+                    norm_out = tempfile.mktemp(suffix="_norm.wav", dir=str(TMP_DIR))
                     normalize_audio(processed_path, norm_out)
                     processed_path = norm_out
 

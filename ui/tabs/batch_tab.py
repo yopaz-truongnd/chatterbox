@@ -976,7 +976,7 @@ class BatchTab(tk.Frame):
                 temp_val = max(0.05, min(1.5, round(1.2 - 0.7 * def_voice["stability"], 3)))
                 seed_val = def_voice["seed"]
 
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav")
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=str(TMP_DIR))
         os.close(tmp_fd)
 
         def callback(success, result):
@@ -1131,7 +1131,7 @@ class BatchTab(tk.Frame):
                         seed_val = def_voice["seed"]
 
                 if merge_all:
-                    tmp_fd, tmp_file = tempfile.mkstemp(suffix=f".{fmt}")
+                    tmp_fd, tmp_file = tempfile.mkstemp(suffix=f".{fmt}", dir=str(TMP_DIR))
                     os.close(tmp_fd)
                     target_out_path = tmp_file
                     temp_paths_to_clean.append(tmp_file)

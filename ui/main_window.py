@@ -39,6 +39,7 @@ class MainWindow:
 
         self._build_ui()
         apply_button_theme(self.root)
+        self._switch_tab("tts", force=True)
         self._register_keyboard_shortcuts()
         self.set_status("Sẵn sàng · Model sẽ được tải khi bạn yêu cầu.")
 
@@ -50,25 +51,25 @@ class MainWindow:
         brand = tk.Frame(header, bg=BG_COLOR)
         brand.pack(side="left")
 
-        logo = tk.Label(brand, text="🎙️", font=(UI_FONT, 16), bg="#1c3a73", fg="#ffffff",
+        logo = tk.Label(brand, text="🎙️", font=(UI_FONT, 15), bg=ACCENT_COLOR, fg="#ffffff",
                         width=2, height=1, bd=0, highlightthickness=0)
         logo.pack(side="left", padx=(0, 10))
 
         title_box = tk.Frame(brand, bg=BG_COLOR)
         title_box.pack(side="left")
-        tk.Label(title_box, text="CHATTERBOX TTS STUDIO", font=(UI_FONT, 13, "bold"), fg="#eef3fb", bg=BG_COLOR).pack(anchor="w")
-        tk.Label(title_box, text="Mockup giao diện cải tiến — bản đề xuất", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR).pack(anchor="w")
+        tk.Label(title_box, text="CHATTERBOX TTS STUDIO", font=(UI_FONT, 13, "bold"), fg=TEXT_COLOR, bg=BG_COLOR).pack(anchor="w")
+        tk.Label(title_box, text="Studio tạo & chuyển đổi giọng nói AI", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR).pack(anchor="w")
 
         # Active device status
-        self.device_lbl = tk.Label(header, text="🟢 Device: CPU", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR)
+        self.device_lbl = tk.Label(header, text="🟢 Device: CPU", font=(MONO_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR)
         self.device_lbl.pack(side="right")
         self._update_device_lbl()
 
         self.model_lbl = tk.Label(header, text="Model: Chưa tải", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR)
         self.model_lbl.pack(side="right", padx=(0, 16))
 
-        # 3. Custom Tabs Bar
-        self.tabs_bar = tk.Frame(self.root, bg=BG_COLOR, padx=22)
+        # 3. Custom Tabs Bar (High-Contrast Material 3 Pill Tabs)
+        self.tabs_bar = tk.Frame(self.root, bg=BG_COLOR, padx=22, pady=4)
         self.tabs_bar.pack(fill="x")
 
         self.tab_widgets = {}
@@ -84,17 +85,21 @@ class MainWindow:
 
         self.active_tab = "tts"
         for code, label in tabs_config:
+            is_active = (code == "tts")
             btn = tk.Button(self.tabs_bar, text=label, font=(UI_FONT, 10, "bold"),
-                            bg=PANEL_BG if code == "tts" else BG_COLOR,
-                            fg="#ffffff" if code == "tts" else TEXT_DIM_COLOR,
-                            activebackground=PANEL_BG, activeforeground="#ffffff",
-                            bd=0, padx=16, pady=8, cursor="hand2",
+                            bg=TAB_ACTIVE_BG if is_active else TAB_INACTIVE_BG,
+                            fg=TAB_ACTIVE_FG if is_active else TAB_INACTIVE_FG,
+                            activebackground=BUTTON_PRIMARY_ACTIVE if is_active else TAB_HOVER_BG,
+                            activeforeground="#FFFFFF",
+                            bd=1, relief="solid", highlightthickness=0,
+                            highlightbackground=TAB_ACTIVE_BG if is_active else BORDER_COLOR,
+                            padx=16, pady=7, cursor="hand2",
                             command=lambda c=code: self._switch_tab(c))
-            btn.pack(side="left", padx=2)
+            btn.pack(side="left", padx=3)
             self.tab_widgets[code] = btn
 
         # Underline
-        self.tab_line = tk.Frame(self.root, height=1, bg="#1a2534")
+        self.tab_line = tk.Frame(self.root, height=1, bg=BORDER_COLOR)
         self.tab_line.pack(fill="x", padx=22)
 
         # 4. Content Panel Frame
@@ -124,18 +129,18 @@ class MainWindow:
         self.panels["tts"].pack(fill="both", expand=True)
 
         # 5. Footer status bar
-        footer = tk.Frame(self.root, bg="#0a0f17", padx=22, pady=8)
+        footer = tk.Frame(self.root, bg=BG_COLOR, padx=22, pady=8)
         footer.pack(fill="x", side="bottom")
 
         # Container bên trái chứa log và progress bar
-        status_left = tk.Frame(footer, bg="#0a0f17")
+        status_left = tk.Frame(footer, bg=BG_COLOR)
         status_left.pack(side="left", fill="x", expand=True)
 
-        self.footer_status_lbl = tk.Label(status_left, text="Sẵn sàng.", font=(UI_FONT, 9), fg="#eef3fb", bg="#0a0f17", anchor="w")
+        self.footer_status_lbl = tk.Label(status_left, text="Sẵn sàng.", font=(UI_FONT, 9), fg=TEXT_COLOR, bg=BG_COLOR, anchor="w")
         self.footer_status_lbl.pack(side="left", padx=(0, 10))
 
         # Progress bar container ở footer
-        self.footer_prog_frame = tk.Frame(status_left, bg="#0a0f17")
+        self.footer_prog_frame = tk.Frame(status_left, bg=BG_COLOR)
         
         # Style cho Progressbar ở footer
         style = ttk.Style()
@@ -143,7 +148,7 @@ class MainWindow:
             style.theme_use('default')
         except Exception:
             pass
-        style.configure("Footer.Horizontal.TProgressbar", troughcolor="#141e2e", background=ACCENT_COLOR, bordercolor="#0a0f17", thickness=8)
+        style.configure("Footer.Horizontal.TProgressbar", troughcolor=PANEL2_BG, background=ACCENT_COLOR, bordercolor=BG_COLOR, thickness=8)
 
         self.footer_prog_bar = ttk.Progressbar(
             self.footer_prog_frame,
@@ -154,7 +159,7 @@ class MainWindow:
         )
         self.footer_prog_bar.pack(side="left")
 
-        self.footer_ver_lbl = tk.Label(footer, text=f"Chatterbox v1.2 · {self.engine.get_device().upper()} mode", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg="#0a0f17")
+        self.footer_ver_lbl = tk.Label(footer, text=f"Chatterbox v1.2 · {self.engine.get_device().upper()} mode", font=(MONO_FONT, 9), fg=TEXT_DIM_COLOR, bg=BG_COLOR)
         self.footer_ver_lbl.pack(side="right")
 
     def _update_device_lbl(self):
@@ -167,16 +172,31 @@ class MainWindow:
             device_text = "🟢 Device: Apple Metal (MPS)"
         self.device_lbl.config(text=device_text)
 
-    def _switch_tab(self, code):
-        if code == self.active_tab:
+    def _switch_tab(self, code, force=False):
+        if code == self.active_tab and not force:
             return
 
-        self.panels[self.active_tab].pack_forget()
-        self.tab_widgets[self.active_tab].config(bg=BG_COLOR, fg=TEXT_DIM_COLOR)
+        # Deactivate previous tab
+        if not force:
+            self.panels[self.active_tab].pack_forget()
+            self.tab_widgets[self.active_tab].config(
+                bg=TAB_INACTIVE_BG,
+                fg=TAB_INACTIVE_FG,
+                activebackground=TAB_HOVER_BG,
+                activeforeground="#FFFFFF",
+                highlightbackground=BORDER_COLOR
+            )
 
+        # Activate selected tab
         self.active_tab = code
         self.panels[self.active_tab].pack(fill="both", expand=True)
-        self.tab_widgets[self.active_tab].config(bg=PANEL_BG, fg="#ffffff")
+        self.tab_widgets[self.active_tab].config(
+            bg=TAB_ACTIVE_BG,
+            fg=TAB_ACTIVE_FG,
+            activebackground=BUTTON_PRIMARY_ACTIVE,
+            activeforeground="#FFFFFF",
+            highlightbackground=TAB_ACTIVE_BG
+        )
 
         if code == "characters":
             self.tab_characters.refresh_characters()
@@ -252,9 +272,9 @@ class MainWindow:
         win.configure(bg=PANEL2_BG)
         win.resizable(False, False)
 
-        tk.Label(win, text="⌨️ Danh sách phím tắt bàn phím thông dụng", font=(UI_FONT, 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(pady=12)
+        tk.Label(win, text="⌨️ Danh sách phím tắt bàn phím thông dụng", font=(UI_FONT, 11, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG).pack(pady=12)
 
-        table_frame = tk.Frame(win, bg="#0e1621", bd=1, relief="solid", highlightbackground=BORDER_COLOR)
+        table_frame = tk.Frame(win, bg=PANEL_BG, bd=1, relief="solid", highlightbackground=BORDER_COLOR)
         table_frame.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
         key = self.shortcut_label
@@ -273,12 +293,13 @@ class MainWindow:
         ]
 
         for k, d in shortcuts:
-            r = tk.Frame(table_frame, bg="#0e1621")
+            r = tk.Frame(table_frame, bg=PANEL_BG)
             r.pack(fill="x", padx=12, pady=4)
-            tk.Label(r, text=k, font=(UI_FONT, 9, "bold"), fg="#38bdf8", bg="#0e1621", width=18, anchor="w").pack(side="left")
-            tk.Label(r, text=d, font=(UI_FONT, 9), fg=TEXT_COLOR, bg="#0e1621", anchor="w").pack(side="left", fill="x", expand=True)
+            tk.Label(r, text=k, font=(MONO_FONT, 9, "bold"), fg=ACCENT_COLOR, bg=PANEL_BG, width=18, anchor="w").pack(side="left")
+            tk.Label(r, text=d, font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL_BG, anchor="w").pack(side="left", fill="x", expand=True)
 
-        tk.Button(win, text="Đóng (Close)", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        tk.Button(win, text="Đóng (Close)", font=(UI_FONT, 9, "bold"), bg=BUTTON_PRIMARY_BG, fg="#ffffff",
+                  activebackground=BUTTON_PRIMARY_ACTIVE, activeforeground="#ffffff",
                   bd=0, padx=16, pady=5, cursor="hand2", command=win.destroy).pack(pady=(0, 12))
 
     # ---------------- Presets ----------------

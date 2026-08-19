@@ -7,16 +7,17 @@ import math
 import wave
 import threading
 import tkinter as tk
+from config.constants import ACCENT_LIGHT, BORDER_COLOR, PANEL2_BG, PANEL_BG, TEXT_MUTED
 from utils.logger import logger
 
 class WaveformCanvas(tk.Canvas):
     """
-    Custom Canvas render biểu đồ sóng âm thanh dạng capsule thanh lịch.
+    Custom Canvas render biểu đồ sóng âm thanh dạng capsule thanh lịch phong cách Material 3.
     Hỗ trợ:
     - Hiển thị tiến độ phát thực tế (highlight phần đã phát).
     - Tương tác click / hover để xem thời gian & tua vị trí.
     """
-    def __init__(self, parent, height=40, bg="#080e18", num_bars=70, on_seek=None, **kwargs):
+    def __init__(self, parent, height=40, bg=PANEL_BG, num_bars=70, on_seek=None, **kwargs):
         super().__init__(parent, height=height, bg=bg, highlightthickness=0, bd=0, cursor="hand2", **kwargs)
         self.num_bars = num_bars
         self.height = height
@@ -40,7 +41,7 @@ class WaveformCanvas(tk.Canvas):
         h = self.height or 40
         
         # Vẽ đường trục trung tâm
-        self.create_line(4, h / 2, w - 4, h / 2, fill="#131e2e", width=1)
+        self.create_line(4, h / 2, w - 4, h / 2, fill=BORDER_COLOR, width=1)
 
         bar_w = max(2, (w - 8 - (self.num_bars * 2)) / self.num_bars)
 
@@ -53,7 +54,7 @@ class WaveformCanvas(tk.Canvas):
             y2 = y1 + bh
 
             # Màu thanh xám tối nhẹ
-            self.create_line(x, y1, x, y2, fill="#1c293d", width=bar_w, capstyle="round")
+            self.create_line(x, y1, x, y2, fill=BORDER_COLOR, width=bar_w, capstyle="round")
 
     def set_audio_file(self, file_path):
         """Đọc và trích xuất độ cao sóng âm từ file audio"""
@@ -149,18 +150,18 @@ class WaveformCanvas(tk.Canvas):
 
             # Kiểm tra xem thanh này đã được phát qua hay chưa
             if x <= playhead_x:
-                # Đã phát: Màu xanh sáng nổi bật (Vibrant Blue/Cyan)
-                fill_color = "#38bdf8"
+                # Đã phát: Màu tím sáng Material 3 Primary (Lavender Purple)
+                fill_color = ACCENT_LIGHT
             else:
-                # Chưa phát: Màu xám xanh slate tối trầm
-                fill_color = "#1e2d42"
+                # Chưa phát: Màu viền M3 Outline
+                fill_color = BORDER_COLOR
 
             self.create_line(x, y1, x, y2, fill=fill_color, width=bar_w, capstyle="round")
 
         # Vẽ vạch Playhead đầu kim định vị vị trí phát hiện tại
         if self.progress_pct > 0:
-            self.create_line(playhead_x, 2, playhead_x, h - 2, fill="#60a5fa", width=2)
-            self.create_oval(playhead_x - 3, 1, playhead_x + 3, 7, fill="#ffffff", outline="#38bdf8")
+            self.create_line(playhead_x, 2, playhead_x, h - 2, fill=ACCENT_LIGHT, width=2)
+            self.create_oval(playhead_x - 3, 1, playhead_x + 3, 7, fill="#ffffff", outline=ACCENT_LIGHT)
 
     def _on_click(self, event):
         """Sự kiện click vào Waveform để tua vị trí phát"""

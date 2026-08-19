@@ -134,7 +134,7 @@ class VcTab(tk.Frame):
             messagebox.showwarning("Thiếu file mẫu đích", "Vui lòng chọn File Giọng Mẫu Đích (Target Voice).")
             return
 
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav")
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=str(TMP_DIR))
         os.close(tmp_fd)
 
         def callback(success, result):

@@ -185,7 +185,7 @@ class MtlTab(tk.Frame):
                 lang_code = k
                 break
 
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav")
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=str(TMP_DIR))
         os.close(tmp_fd)
 
         def callback(success, result):

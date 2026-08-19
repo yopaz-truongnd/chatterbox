@@ -18,8 +18,10 @@ os.environ["HF_HUB_CACHE"] = str(PROJECT_DIR / "models")
 import numpy as np
 import torch
 import torchaudio as ta
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import character_api
@@ -38,7 +40,9 @@ try:
     torch.set_num_interop_threads(1)
 except RuntimeError:
     pass
-API_DATA_DIR = Path(os.getenv("CHATTERBOX_API_DATA_DIR", "/tmp/chatterbox-api"))
+
+WEBUI_DIR = PROJECT_DIR / "webui"
+API_DATA_DIR = Path(os.getenv("CHATTERBOX_API_DATA_DIR", str(PROJECT_DIR / "tmp" / "api")))
 MAX_UPLOAD_BYTES = int(os.getenv("CHATTERBOX_API_MAX_UPLOAD_BYTES", 20 * 1024 * 1024))
 MODEL_NAMES = ("standard", "turbo", "nano", "multilingual", "voice-conversion")
 AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".ogg", ".m4a"}
@@ -225,13 +229,43 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Chatterbox TTS API",
+    title="Chatterbox TTS API & Web Studio",
     version="1.3.0",
-    description="Local API cho Chatterbox TTS, Turbo, Nano, Multilingual và Voice Conversion.",
+    description="Local API & Web GUI cho Chatterbox TTS, Turbo, Nano, Multilingual và Voice Conversion.",
     lifespan=lifespan,
 )
 
+# Kích hoạt CORS cho các client kết nối API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Gắn router Character API
 app.include_router(character_api.router)
+
+# Mount thư mục WebUI static files
+if WEBUI_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(WEBUI_DIR)), name="static")
+
+@app.get("/", response_class=FileResponse, tags=["gui"])
+@app.get("/gui", response_class=FileResponse, tags=["gui"])
+@app.get("/tts-studio", response_class=FileResponse, tags=["gui"])
+@app.get("/batch-studio", response_class=FileResponse, tags=["gui"])
+@app.get("/multilingual-tts", response_class=FileResponse, tags=["gui"])
+@app.get("/voice-clone", response_class=FileResponse, tags=["gui"])
+@app.get("/characters-studio", response_class=FileResponse, tags=["gui"])
+@app.get("/history-studio", response_class=FileResponse, tags=["gui"])
+@app.get("/settings-studio", response_class=FileResponse, tags=["gui"])
+def get_web_gui():
+    """Phục vụ giao diện Material Design 3 Web Dashboard trực tiếp trên trình duyệt"""
+    dashboard_file = WEBUI_DIR / "material_dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(dashboard_file, media_type="text/html")
+    return HTMLResponse("<h2>Chatterbox Studio Web GUI</h2><p>Đang tải tài nguyên giao diện...</p>")
 
 
 async def save_upload(upload: UploadFile, job_id: str, label: str) -> str:
@@ -348,6 +382,7 @@ def split_text(request: SplitTextRequest) -> dict:
 
 
 @app.get("/health", tags=["system"])
+@app.get("/api/v1/health", tags=["system"])
 def health() -> dict:
     with jobs_lock:
         processing = sum(job.status == "processing" for job in jobs.values())
@@ -553,3 +588,161 @@ def download_audio(job_id: str) -> FileResponse:
     if not output_path.exists():
         raise HTTPException(status_code=410, detail="File âm thanh không còn tồn tại")
     return FileResponse(output_path, media_type="audio/wav", filename=f"chatterbox-{job_id}.wav")
+
+
+@app.get("/api/v1/settings", tags=["settings"])
+def get_settings() -> dict:
+    from config.settings import settings_manager
+    return {"settings": settings_manager.settings}
+
+
+@app.post("/api/v1/settings", tags=["settings"])
+def update_settings(payload: dict = Body(...)) -> dict:
+    from config.settings import settings_manager
+    settings_manager.settings.update(payload)
+    settings_manager.save()
+    return {"status": "ok", "settings": settings_manager.settings}
+
+
+@app.post("/api/v1/system/clean-tmp", tags=["system"])
+def clean_temp_dir() -> dict:
+    from config.constants import TMP_DIR
+    count = 0
+    size_bytes = 0
+    if TMP_DIR.exists():
+        for f in TMP_DIR.glob("**/*"):
+            if f.is_file() and not f.name.startswith("."):
+                try:
+                    size_bytes += f.stat().st_size
+                    f.unlink(missing_ok=True)
+                    count += 1
+                except Exception:
+                    pass
+    return {"status": "ok", "deleted_files": count, "freed_bytes": size_bytes}
+
+
+@app.post("/api/v1/audio/merge", tags=["audio"])
+@app.post("/api/v1/batch/merge", tags=["audio"])
+async def merge_audio_jobs(
+    request: Request,
+    job_ids: Annotated[str | None, Form()] = None,
+    pause_duration: Annotated[float, Form(ge=0.0, le=5.0)] = 0.8,
+    bgm_file: Annotated[UploadFile | None, File()] = None,
+    bgm_volume: Annotated[float, Form(ge=0.0, le=1.0)] = 0.15,
+) -> dict:
+    """Ghép nối nhiều đoạn audio từ các job TTS thành 1 file hoàn chỉnh kèm khoảng lặng và nhạc nền BGM."""
+    content_type = request.headers.get("content-type", "")
+    target_job_ids = []
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            target_job_ids = body.get("job_ids", [])
+            if "pause_duration" in body:
+                pause_duration = float(body["pause_duration"])
+            if "bgm_volume" in body:
+                bgm_volume = float(body["bgm_volume"])
+        except Exception:
+            pass
+    elif job_ids:
+        target_job_ids = [j.strip() for j in job_ids.split(",") if j.strip()]
+
+    if not target_job_ids:
+        raise HTTPException(status_code=400, detail="Danh sách job_ids không được để trống")
+
+    chunks = []
+    target_sr = 24000
+    for jid in target_job_ids:
+        with jobs_lock:
+            job = jobs.get(jid)
+        if not job or job.status != "completed" or not job.output_path:
+            continue
+        p = Path(job.output_path)
+        if not p.exists():
+            continue
+        try:
+            wav, sr = ta.load(p)
+            if wav.shape[0] > 1:
+                wav = wav.mean(dim=0, keepdim=True)
+            if sr != target_sr:
+                wav = ta.transforms.Resample(orig_freq=sr, new_freq=target_sr)(wav)
+            chunks.append(wav)
+        except Exception:
+            continue
+
+    if not chunks:
+        raise HTTPException(status_code=404, detail="Không tìm thấy file audio hợp lệ từ các job đã chọn")
+
+    silence_samples = int(target_sr * max(0.0, pause_duration))
+    silence_tensor = torch.zeros(1, silence_samples)
+
+    speech_parts = []
+    for i, ch in enumerate(chunks):
+        speech_parts.append(ch)
+        if i < len(chunks) - 1 and silence_samples > 0:
+            speech_parts.append(silence_tensor)
+
+    merged_speech = torch.cat(speech_parts, dim=-1)
+
+    # Optional BGM mixing
+    if bgm_file is not None and bgm_file.filename:
+        bgm_temp = API_DATA_DIR / "inputs" / f"bgm_{uuid.uuid4().hex}_{bgm_file.filename}"
+        try:
+            with open(bgm_temp, "wb") as f:
+                while chunk := await bgm_file.read(1024 * 1024):
+                    f.write(chunk)
+            bgm_wav, bgm_sr = ta.load(bgm_temp)
+            if bgm_wav.shape[0] > 1:
+                bgm_wav = bgm_wav.mean(dim=0, keepdim=True)
+            if bgm_sr != target_sr:
+                bgm_wav = ta.transforms.Resample(orig_freq=bgm_sr, new_freq=target_sr)(bgm_wav)
+
+            speech_len = merged_speech.shape[-1]
+            if bgm_wav.shape[-1] < speech_len:
+                repeats = (speech_len // bgm_wav.shape[-1]) + 1
+                bgm_wav = bgm_wav.repeat(1, repeats)[:, :speech_len]
+            else:
+                bgm_wav = bgm_wav[:, :speech_len]
+
+            # Fade out last 1.5s
+            fade_len = min(int(target_sr * 1.5), bgm_wav.shape[-1])
+            if fade_len > 0:
+                fade_curve = torch.linspace(1.0, 0.0, fade_len)
+                bgm_wav[:, -fade_len:] *= fade_curve
+
+            merged_speech = merged_speech + (bgm_wav * bgm_volume)
+            max_amp = merged_speech.abs().max()
+            if max_amp > 1.0:
+                merged_speech = merged_speech / max_amp
+        except Exception:
+            pass
+        finally:
+            bgm_temp.unlink(missing_ok=True)
+
+    merge_id = f"merge_{uuid.uuid4().hex[:10]}"
+    out_file = API_DATA_DIR / "outputs" / f"{merge_id}.wav"
+    ta.save(out_file, merged_speech, target_sr)
+
+    total_duration = round(merged_speech.shape[-1] / target_sr, 2)
+    merge_job = AudioJob(
+        id=merge_id,
+        type="tts",
+        params={"merged_from_count": len(chunks), "pause_duration": pause_duration},
+        input_paths=[],
+        status="completed",
+        created_at=now_iso(),
+        completed_at=now_iso(),
+        output_path=str(out_file)
+    )
+    with jobs_lock:
+        jobs[merge_id] = merge_job
+
+    return {
+        "id": merge_id,
+        "audio_url": f"/api/v1/jobs/{merge_id}/audio",
+        "duration_seconds": total_duration,
+        "chunks_count": len(chunks),
+        "message": f"Đã ghép thành công {len(chunks)} đoạn audio thành 1 file hoàn chỉnh ({total_duration}s)!"
+    }
+
+
+
