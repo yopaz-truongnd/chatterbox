@@ -1,9 +1,10 @@
 import torch
 import gradio as gr
 from chatterbox.vc import ChatterboxVC
+from utils.platform_tools import select_device
 
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = select_device()
 
 
 model = ChatterboxVC.from_pretrained(DEVICE)

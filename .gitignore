@@ -61,3 +61,6 @@ voice_presets.json
 # Local Character profiles and optional reference audio
 data/characters.json
 data/characters/
+
+# Temporary audio files in project
+tmp/

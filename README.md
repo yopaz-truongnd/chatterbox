@@ -78,33 +78,42 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 The API tests use mocked models, so they do not download checkpoints or run real inference.
 
-## Chatterbox TTS Studio (Desktop GUI)
+## Chatterbox Studio (Web GUI & Desktop App)
 
-We provide a professional, dark-themed Desktop GUI built on a clean modular architecture (separated into `ui/`, `core/`, `config/`, and `utils/`) for an intuitive zero-shot voice cloning experience.
+We provide both a **Modern Material Design 3 Web GUI Studio** (served via FastAPI at `http://localhost:8000/`) and a native **Desktop GUI** (`main.py`) for zero-shot voice cloning, speech synthesis, and audio production.
 
 ### Key Features:
-- **🗣️ TTS Studio:** Real-time character counts, direct paralinguistic tag insertion chips, interactive preset combos, and full audio generation controls.
-- **🎭 Characters:** JSON-only voice presets with optional reference audio, Default Character setting (`is_default`), voice preview audio test before creation, treeview context menu, and 5 clean RESTful API endpoints in Swagger `/docs`.
-- **🌐 Multilingual TTS:** Support for V3/V2 multilingual voice cloning with 23+ languages.
-- **🔁 Voice Conversion:** Audio-to-audio speech conversion with dual interactive waveform graphs.
-- **📦 Batch & History:** Session history search, custom batch export folders, and progressive batch generation.
-- **⚙️ Configurable Cache:** Specify your model download folder inside `config/settings.json`.
-- **⌨️ Global Shortcuts:** `Ctrl+Enter` to generate/play, `Ctrl+S` to export WAV files.
+- **🌐 Material Design 3 Web Studio:** Modern, high-contrast dark dashboard with direct tab URL sub-routing (`/tts-studio`, `/batch-studio`, `/multilingual-tts`, `/voice-clone`, `/characters-studio`, `/history-studio`, `/settings-studio`), drag & drop text file loading, and Material 3 toast notifications.
+- **🗣️ TTS Studio:** Real-time character counts, 11 paralinguistic tag insertion chips (`[laugh]`, `[whisper]`, `[sigh]`, `[gasp]`, `[chuckle]`, etc.), interactive style preset combos (*Đọc tin tức, Kể chuyện, Biểu cảm mạnh, Thì thầm, Tiêu chuẩn*), and full audio generation controls.
+- **🎙️ Built-in Voice Library:** 6 pre-configured, studio-grade voices (*MC Nam Thời Sự, Nữ Biên Tập Viên, Kể Chuyện Đêm Khuya, Review & Recap Phim, Hoạt Hình / Anime, Trợ Lý Ảo AI*) ready with 1-click.
+- **🎭 Characters Management:** Complete voice profiles with custom reference audio upload, sliders for expressiveness, pace, stability, seed, system default character setting (`is_default`), and pre-creation voice preview testing (`🔊 Nghe thử giọng`).
+- **🎼 Batch Studio & Audio Merge:** Split scripts by lines, paragraphs, sentences, or custom delimiter (`|`, `;`, `---`), progressive batch execution, BGM mixing with volume & fade-out, and 1-click **Merge All Audio (`POST /api/v1/batch/merge`)** with configurable silence pause duration.
+- **🌐 Multilingual TTS:** Support for V3/V2 multilingual voice cloning across 23+ languages.
+- **🔁 Voice Conversion:** Audio-to-audio speech conversion with dual interactive waveform canvas and live microphone recording.
+- **🔌 REST API v1:** Comprehensive endpoints (`/api/v1/tts/turbo`, `/api/v1/tts/standard`, `/api/v1/tts/multilingual`, `/api/v1/voice-conversion`, `/api/v1/audio/merge`, `/api/v1/characters`, `/api/v1/settings`) with OpenAPI Swagger documentation at `http://localhost:8000/docs`.
+- **📁 Isolated Temp Storage:** Project-local `tmp/` folder isolated from system temporary files with 1-click cache purge (`POST /api/v1/system/clean-tmp`).
+
+---
 
 ### How to Run:
 
-#### Windows:
-- Run with console log output: Double-click **`Run_Chatterbox_GUI.bat`**.
-- Run silently in the background: Double-click **`Run_Chatterbox_GUI_Silent.vbs`**.
+#### 🟢 Launch Web GUI Studio & REST API (Recommended):
+```shell
+# 1. Start the server (FastAPI + Web Studio on port 8000)
+./run_chatterbox_api.sh
 
-#### Linux / Ubuntu:
-- Install system Tkinter: `sudo apt install python3-tk`
-- Install dependencies: `pip install torch torchaudio pygame numpy`
-- Launch Desktop GUI application:
+# 2. Open browser:
+# Web Studio: http://localhost:8000/
+# API Swagger Docs: http://localhost:8000/docs
+```
+
+#### 🖥️ Launch Desktop GUI (Tkinter):
+* **macOS / Linux:**
   ```shell
-  chmod +x run_chatterbox_gui.sh
   ./run_chatterbox_gui.sh
   ```
+* **Windows:**
+  * Double-click **`Run_Chatterbox_GUI.bat`** (or **`Run_Chatterbox_GUI_Silent.vbs`**).
 
 ## Usage
 
@@ -115,8 +124,10 @@ import torchaudio as ta
 import torch
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+
 # Load the Turbo model
-model = ChatterboxTurboTTS.from_pretrained(device="cuda")
+model = ChatterboxTurboTTS.from_pretrained(device=device)
 
 # Generate with Paralinguistic Tags
 text = "Hi there, Sarah here from MochaFone calling you back [chuckle], have you got one minute to chat about the billing issue?"
@@ -136,8 +147,10 @@ import torchaudio as ta
 import torch
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+
 # Load the Nano model (also runs on CPU: device="cpu")
-model = ChatterboxTurboTTS.from_pretrained(device="cuda", nano=True)
+model = ChatterboxTurboTTS.from_pretrained(device=device, nano=True)
 
 # Generate with Paralinguistic Tags
 text = "Hi there, Sarah here from MochaFone calling you back [chuckle], have you got one minute to chat about the billing issue?"

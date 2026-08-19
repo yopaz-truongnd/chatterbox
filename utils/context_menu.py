@@ -4,6 +4,7 @@ Bộ tạo menu chuột phải (Right-click Context Menu) và Phím tắt Bàn p
 
 import tkinter as tk
 from tkinter import ttk
+from utils.platform_tools import primary_shortcut
 
 def select_all_event(event):
     """Xử lý phím tắt Ctrl+A (Select All) chuẩn cho cả Text và Entry trên Linux/Windows"""
@@ -54,11 +55,12 @@ def clear_text_event(event):
 
 def setup_global_keyboard_shortcuts(root):
     """Đăng ký phím tắt toàn cục cho toàn bộ ứng dụng"""
-    root.bind_all("<Control-a>", select_all_event)
-    root.bind_all("<Control-A>", select_all_event)
-    root.bind_all("<Control-BackSpace>", delete_prev_word_event)
-    root.bind_all("<Control-l>", clear_text_event)
-    root.bind_all("<Control-L>", clear_text_event)
+    modifier, _ = primary_shortcut()
+    root.bind_all(f"<{modifier}-a>", select_all_event)
+    root.bind_all(f"<{modifier}-A>", select_all_event)
+    root.bind_all(f"<{modifier}-BackSpace>", delete_prev_word_event)
+    root.bind_all(f"<{modifier}-l>", clear_text_event)
+    root.bind_all(f"<{modifier}-L>", clear_text_event)
 
 def bind_right_click_menu(widget):
     """Liên kết menu chuột phải chuẩn (Cắt, Sao chép, Dán, Chọn tất cả, Xóa sạch) cho widget Entry hoặc Text."""
@@ -105,18 +107,19 @@ def bind_right_click_menu(widget):
         except Exception:
             pass
 
-    menu.add_command(label="✂ Cắt (Cut)", accelerator="Ctrl+X", command=cut)
-    menu.add_command(label="📋 Sao chép (Copy)", accelerator="Ctrl+C", command=copy)
-    menu.add_command(label="📥 Dán (Paste)", accelerator="Ctrl+V", command=paste)
+    modifier, shortcut = primary_shortcut()
+    menu.add_command(label="✂ Cắt (Cut)", accelerator=f"{shortcut}+X", command=cut)
+    menu.add_command(label="📋 Sao chép (Copy)", accelerator=f"{shortcut}+C", command=copy)
+    menu.add_command(label="📥 Dán (Paste)", accelerator=f"{shortcut}+V", command=paste)
     menu.add_separator()
-    menu.add_command(label="🔍 Chọn tất cả (Select All)", accelerator="Ctrl+A", command=select_all)
-    menu.add_command(label="🗑 Xóa sạch văn bản", accelerator="Ctrl+L", command=clear_all)
+    menu.add_command(label="🔍 Chọn tất cả (Select All)", accelerator=f"{shortcut}+A", command=select_all)
+    menu.add_command(label="🗑 Xóa sạch văn bản", accelerator=f"{shortcut}+L", command=clear_all)
 
     # Đăng ký phím tắt Ctrl+A & Ctrl+L trực tiếp cho widget này
-    widget.bind("<Control-a>", select_all_event)
-    widget.bind("<Control-A>", select_all_event)
-    widget.bind("<Control-l>", clear_text_event)
-    widget.bind("<Control-L>", clear_text_event)
+    widget.bind(f"<{modifier}-a>", select_all_event)
+    widget.bind(f"<{modifier}-A>", select_all_event)
+    widget.bind(f"<{modifier}-l>", clear_text_event)
+    widget.bind(f"<{modifier}-L>", clear_text_event)
 
     def show_menu(event):
         try:

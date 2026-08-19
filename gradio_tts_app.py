@@ -3,15 +3,17 @@ import numpy as np
 import torch
 import gradio as gr
 from chatterbox.tts import ChatterboxTTS
+from utils.platform_tools import select_device
 
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = select_device()
 
 
 def set_seed(seed: int):
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
     random.seed(seed)
     np.random.seed(seed)
 

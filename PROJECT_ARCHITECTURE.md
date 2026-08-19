@@ -4,40 +4,45 @@ Tài liệu này mô tả cấu hình, thành phần, model, entrypoint và lu�
 
 ## 1. Tổng quan
 
-Dự án cung cấp ba cách chạy độc lập:
+Dự án cung cấp các phương thức chạy linh hoạt:
 
 | Chế độ | Entrypoint | Launcher | Địa chỉ | Mục đích |
 | --- | --- | --- | --- | --- |
-| Desktop GUI | `main.py` | `run_chatterbox_gui.sh` | Cửa sổ Tkinter | Studio đầy đủ trên desktop |
-| Local API | `api_app.py` | `run_chatterbox_api.sh` | `127.0.0.1:8000` | Tích hợp script và ứng dụng khác |
+| **Material 3 Web Studio & API** | `api_app.py` | `run_chatterbox_api.sh` | `http://127.0.0.1:8000/` | Web GUI Material Design 3 đầy đủ tính năng + REST API v1 |
+| **Desktop GUI** | `main.py` | `run_chatterbox_gui.sh` | Cửa sổ Tkinter | Studio offline nguyên bản trên desktop |
 
-Hai chế độ chính là hai process riêng. Nếu chạy đồng thời, mỗi process có model cache trong RAM riêng và làm tăng mức sử dụng RAM. Trên máy CPU/RAM hạn chế, chỉ nên chạy một chế độ tại một thời điểm.
+Local API và Web Studio được tích hợp chung trên nền FastAPI, cung cấp giao diện Material Design 3 trực quan kèm đầy đủ các RESTful API endpoints tại `/api/v1/` và Swagger UI tại `/docs`.
 
 ## 2. Cấu trúc thư mục
 
 ```text
 chatterbox/
-├── api_app.py                 # FastAPI, queue, model cache RAM và endpoints
-├── main.py                    # Desktop GUI entrypoint
+├── api_app.py                 # FastAPI server, queue, audio worker và REST endpoints
+├── character_api.py           # Character profiles router, voice parameters & audio upload
+├── run_material_dashboard.py  # Standalone launcher cho Web Dashboard
+├── main.py                    # Desktop GUI Tkinter entrypoint
+├── webui/
+│   └── material_dashboard.html# Giao diện Material Design 3 Web Studio hoàn chỉnh
 ├── core/
 │   └── chatterbox_engine.py   # Engine dùng bởi Desktop GUI
 ├── ui/
 │   ├── main_window.py         # Cửa sổ chính Tkinter
-│   ├── tabs/                  # TTS, multilingual, VC, batch, history, settings
+│   ├── tabs/                  # TTS, multilingual, VC, batch, character, history, settings
 │   └── components/            # Audio player và waveform
 ├── config/
-│   ├── constants.py           # Theme, tags, preset và danh sách ngôn ngữ
+│   ├── constants.py           # Theme, tags, preset combos và danh sách ngôn ngữ
 │   ├── settings.py            # Default settings và SettingsManager
 │   └── settings.json          # Cấu hình local, không commit
 ├── src/chatterbox/
 │   ├── tts.py                 # Standard 500M
 │   ├── tts_turbo.py           # Turbo 350M và Nano 110M
-│   ├── mtl_tts.py             # Multilingual
+│   ├── mtl_tts.py             # Multilingual V3/V2
 │   └── vc.py                  # Voice Conversion
 ├── models/                    # Hugging Face Hub cache của project
+├── tmp/                       # Thư mục lưu audio tạm của project (thay vì /tmp hệ thống)
 ├── utils/                     # Logging, audio, threading, text và file helpers
-├── run_chatterbox_gui.sh
-└── run_chatterbox_api.sh
+├── run_chatterbox_gui.sh      # Launcher Desktop GUI
+└── run_chatterbox_api.sh      # Launcher Web Studio & API
 ```
 
 ## 3. Model và mục đích sử dụng
@@ -192,17 +197,30 @@ Swagger UI: `http://127.0.0.1:8000/docs`.
 | `GET` | `/health` | Device, CPU threads, queue và model đang load |
 | `POST` | `/api/v1/text/split` | Chia text theo ranh giới hợp lý, bảo toàn nội dung tuyệt đối |
 
-### Sinh và chuyển đổi audio
+### Sinh, chuyển đổi và ghép nối audio
 
-| Method | Endpoint | Model |
+| Method | Endpoint | Mô tả |
 | --- | --- | --- |
 | `POST` | `/api/v1/tts` | Turbo 350M mặc định |
 | `POST` | `/api/v1/tts/turbo` | Turbo hoặc Nano qua field `model` |
 | `POST` | `/api/v1/tts/standard` | Standard 500M |
-| `POST` | `/api/v1/tts/multilingual` | Multilingual |
-| `POST` | `/api/v1/voice-conversion` | Voice Conversion |
+| `POST` | `/api/v1/tts/multilingual` | Multilingual V3/V2 |
+| `POST` | `/api/v1/voice-conversion` | Voice Conversion (Audio-to-audio) |
+| `POST` | `/api/v1/audio/merge` | Ghép nhiều job audio thành 1 file kèm khoảng lặng và BGM |
+| `POST` | `/api/v1/batch/merge` | Alias cho audio merge từ Batch Studio |
 
-Các endpoint audio trả HTTP `202 Accepted` cùng `job.id`, không trả WAV ngay trong response đầu tiên.
+Các endpoint sinh audio trả HTTP `202 Accepted` cùng `job.id`. Endpoint merge trả `200 OK` cùng `audio_url` file ghép.
+
+### Character API (Quản lý Nhân vật & Giọng mẫu)
+
+| Method | Endpoint | Mô tả |
+| --- | --- | --- |
+| `GET` | `/api/v1/characters` | Lấy danh sách tất cả các nhân vật |
+| `POST` | `/api/v1/characters` | Tạo nhân vật mới (hỗ trợ cả JSON và multipart/form-data kèm file mẫu) |
+| `GET` | `/api/v1/characters/{id}` | Xem chi tiết hồ sơ nhân vật |
+| `PATCH` | `/api/v1/characters/{id}` | Cập nhật thông số hoặc đặt nhân vật mặc định (`is_default`) |
+| `DELETE` | `/api/v1/characters/{id}` | Xóa nhân vật và file âm thanh mẫu liên quan |
+| `GET` | `/api/v1/characters/{id}/reference-audio` | Tải/phát file âm thanh mẫu của nhân vật |
 
 ### Model
 
@@ -223,6 +241,14 @@ Tên model hợp lệ: `standard`, `turbo`, `nano`, `multilingual`, `voice-conve
 | `GET` | `/api/v1/jobs/{job_id}` | Chi tiết trạng thái |
 | `GET` | `/api/v1/jobs/{job_id}/audio` | Tải WAV khi completed |
 | `DELETE` | `/api/v1/jobs/{job_id}` | Xóa job terminal và WAV |
+
+### Cài đặt và Hệ thống
+
+| Method | Endpoint | Mô tả |
+| --- | --- | --- |
+| `GET` | `/api/v1/settings` | Đọc cấu hình settings hiện tại |
+| `POST` | `/api/v1/settings` | Cập nhật cấu hình settings |
+| `POST` | `/api/v1/system/clean-tmp` | Dọn dẹp toàn bộ file tạm trong thư mục `tmp/` của dự án |
 
 Không thể xóa job đang `queued` hoặc `processing`.
 

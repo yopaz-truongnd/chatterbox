@@ -7,14 +7,15 @@ import json
 from pathlib import Path
 from utils.logger import logger
 
-SETTINGS_FILE = Path("config/settings.json")
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+SETTINGS_FILE = PROJECT_DIR / "config/settings.json"
 
 cpu_count = os.cpu_count() or 4
 default_cpu_threads = max(1, min(4, cpu_count - 2 if cpu_count > 2 else cpu_count))
 
 DEFAULT_SETTINGS = {
     "export_dir": os.path.expanduser("~/Downloads"),
-    "model_cache_dir": str(Path("/var/www/chatterbox/models").absolute()),
+    "model_cache_dir": str(PROJECT_DIR / "models"),
     "auto_open_export_dir": True,
     "language": "🇻🇳 Tiếng Việt",
     "device": "auto",

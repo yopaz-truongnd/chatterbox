@@ -4,7 +4,6 @@ Tab 5: Lịch sử âm thanh đã tạo (Session & Global History Tab)
 
 import os
 import time
-import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -12,6 +11,7 @@ from config.constants import *
 from ui.components.audio_player import AudioPlayerWidget
 from utils.context_menu import bind_right_click_menu
 from utils.logger import logger
+from utils.platform_tools import open_folder
 
 class HistoryTab(tk.Frame):
     """Tab quản lý và nghe lại toàn bộ Lịch sử các file âm thanh đã sinh"""
@@ -32,8 +32,8 @@ class HistoryTab(tk.Frame):
         hdr_row = tk.Frame(hdr_card, bg=PANEL2_BG)
         hdr_row.pack(fill="x", padx=16, pady=10)
 
-        tk.Label(hdr_row, text="📜 Lịch sử âm thanh đã tạo", font=("Segoe UI", 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
-        self.hist_badge = tk.Label(hdr_row, text="0 mục", font=("Segoe UI", 9, "bold"), bg="#192c4b", fg="#a9c3ff", padx=10, pady=3)
+        tk.Label(hdr_row, text="📜 Lịch sử âm thanh đã tạo", font=(UI_FONT, 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
+        self.hist_badge = tk.Label(hdr_row, text="0 mục", font=(UI_FONT, 9, "bold"), bg="#192c4b", fg="#a9c3ff", padx=10, pady=3)
         self.hist_badge.pack(side="right")
 
         # Split left (List & Filter) / right (Audio Player & Info)
@@ -55,7 +55,7 @@ class HistoryTab(tk.Frame):
         sf_row.pack(fill="x", padx=14, pady=10)
 
         self.hist_search_var = tk.StringVar()
-        self.search_entry = tk.Entry(sf_row, textvariable=self.hist_search_var, bg="#0e1621", fg=TEXT_COLOR, font=("Segoe UI", 10),
+        self.search_entry = tk.Entry(sf_row, textvariable=self.hist_search_var, bg="#0e1621", fg=TEXT_COLOR, font=(UI_FONT, 10),
                                      bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR)
         self.search_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.search_entry.insert(0, "🔍 Tìm kiếm theo tên file hoặc nội dung...")
@@ -72,7 +72,7 @@ class HistoryTab(tk.Frame):
 
         # Listbox containing History
         self.hist_listbox = tk.Listbox(list_card, bg="#0e1621", fg=TEXT_COLOR, selectbackground=ACCENT_COLOR,
-                                       font=("Segoe UI", 10), bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR,
+                                       font=(UI_FONT, 10), bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR,
                                        activestyle="none")
         self.hist_listbox.pack(fill="both", expand=True, padx=14, pady=(0, 10))
         self.hist_listbox.bind("<<ListboxSelect>>", self._on_select_history_item)
@@ -81,13 +81,13 @@ class HistoryTab(tk.Frame):
         tb = tk.Frame(list_card, bg=PANEL2_BG)
         tb.pack(fill="x", padx=14, pady=(0, 12))
 
-        tk.Button(tb, text="▶ Nghe lại", font=("Segoe UI", 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        tk.Button(tb, text="▶ Nghe lại", font=(UI_FONT, 9, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                   bd=0, cursor="hand2", padx=12, pady=6, command=self.play_history_action).pack(side="left", padx=(0, 6))
 
-        tk.Button(tb, text="📂 Mở thư mục chứa", font=("Segoe UI", 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
+        tk.Button(tb, text="📂 Mở thư mục chứa", font=(UI_FONT, 9, "bold"), bg="#1a2536", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=10, pady=5, command=self.open_dir_action).pack(side="left", padx=(0, 6))
 
-        tk.Button(tb, text="🗑 Xóa khỏi lịch sử", font=("Segoe UI", 9), bg=PANEL2_BG, fg="#f87171",
+        tk.Button(tb, text="🗑 Xóa khỏi lịch sử", font=(UI_FONT, 9), bg=PANEL2_BG, fg="#f87171",
                   bd=0, activebackground=PANEL2_BG, activeforeground="#ffffff", cursor="hand2",
                   command=self.delete_history_action).pack(side="right")
 
@@ -95,14 +95,14 @@ class HistoryTab(tk.Frame):
         info_card = tk.Frame(right_pane, bg=PANEL2_BG, bd=1, highlightbackground=BORDER_COLOR, highlightthickness=1)
         info_card.pack(fill="both", expand=True)
 
-        tk.Label(info_card, text="Chi tiết file âm thanh", font=("Segoe UI", 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 6))
+        tk.Label(info_card, text="Chi tiết file âm thanh", font=(UI_FONT, 10, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(anchor="w", padx=14, pady=(10, 6))
 
         # Audio Player (ẩn khi chưa chọn file)
         self.audio_player = AudioPlayerWidget(info_card, self.engine)
         self.audio_player.pack_forget()
 
         # Detailed Text Info Box
-        self.info_text_box = tk.Text(info_card, height=10, font=("Segoe UI", 10), bg="#0e1621", fg=TEXT_COLOR,
+        self.info_text_box = tk.Text(info_card, height=10, font=(UI_FONT, 10), bg="#0e1621", fg=TEXT_COLOR,
                                      bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, state="disabled")
         self.info_text_box.pack(fill="both", expand=True, padx=14, pady=10)
 
@@ -195,7 +195,7 @@ class HistoryTab(tk.Frame):
                 folder = os.path.dirname(path)
                 if os.path.exists(folder):
                     try:
-                        subprocess.Popen(["xdg-open", folder])
+                        open_folder(folder)
                     except Exception as e:
                         messagebox.showerror("Lỗi mở thư mục", str(e))
                 else:

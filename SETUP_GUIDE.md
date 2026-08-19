@@ -1,6 +1,19 @@
 # Hướng dẫn Cài đặt & Khởi chạy Chatterbox TTS Studio
 
-Tài liệu ghi nhớ tóm tắt các bước thiết lập môi trường Python, cài đặt thư viện và khởi chạy dự án **Chatterbox TTS** trên Linux (Ubuntu / Debian).
+Tài liệu ghi nhớ tóm tắt các bước thiết lập môi trường Python, cài đặt thư viện và khởi chạy dự án **Chatterbox TTS** trên Linux và macOS.
+
+## Cài đặt nhanh trên macOS (Apple Silicon)
+
+```bash
+brew install python@3.11
+/opt/homebrew/bin/python3.11 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+./run_chatterbox_gui.sh
+```
+
+Ứng dụng tự ưu tiên Metal (`mps`) trên Apple Silicon và chuyển về CPU nếu MPS không khả dụng. Có thể ép API dùng thiết bị cụ thể bằng `CHATTERBOX_DEVICE=mps ./run_chatterbox_api.sh`.
 
 ---
 
@@ -62,36 +75,38 @@ pip install -e .
 
 ## 4. Các Chế độ Khởi chạy Dự án
 
-### 🟢 Chế độ 1: Desktop GUI (Tkinter Studio)
-Dành cho giao diện cửa sổ ứng dụng máy tính:
+### 🌐 Chế độ 1: Material Design 3 Web Studio & REST API (Khuyên dùng)
+Giao diện Web Dashboard Material Design 3 hiện đại, đầy đủ tính năng kết hợp cùng hệ thống RESTful API v1:
 
 ```bash
-# Đảm bảo đã kích hoạt môi trường ảo:
+# 1. Kích hoạt môi trường ảo:
 source venv/bin/activate
 
-# Chạy bằng script launcher:
-chmod +x run_chatterbox_gui.sh
-./run_chatterbox_gui.sh
-
-# Hoặc chạy trực tiếp bằng Python:
-python3 main.py
+# 2. Khởi chạy Web Studio & API server:
+chmod +x run_chatterbox_api.sh
+./run_chatterbox_api.sh
 ```
 
-*Dự án sẽ tự động phát hiện không có GPU (`torch.cuda.is_available() == False`) và tự động chuyển sang chế độ CPU.*
+Truy cập trên trình duyệt:
+* **Giao diện Web Studio chính:** `http://127.0.0.1:8000/`
+* **Các Tab chuyên dụng qua URL trực tiếp:**
+  * 🗣️ TTS Studio: `http://127.0.0.1:8000/tts-studio`
+  * 📦 Batch Studio (Kịch bản & Ghép Audio): `http://127.0.0.1:8000/batch-studio`
+  * 🌐 Multilingual TTS (23+ ngôn ngữ): `http://127.0.0.1:8000/multilingual-tts`
+  * 🔁 Voice Clone & Conversion: `http://127.0.0.1:8000/voice-clone`
+  * 🎭 Quản lý Nhân vật & Giọng mẫu: `http://127.0.0.1:8000/characters-studio`
+  * 📜 Lịch sử tạo âm thanh: `http://127.0.0.1:8000/history-studio`
+  * ⚙️ Cài đặt & Dọn dẹp bộ nhớ tạm: `http://127.0.0.1:8000/settings-studio`
+* **Swagger API Documentation:** `http://127.0.0.1:8000/docs`
 
 ---
 
-### 🌐 Chế độ 2: Các Gradio Demo riêng lẻ
+### 🖥️ Chế độ 2: Desktop GUI (Tkinter Studio)
+Dành cho giao diện cửa sổ ứng dụng máy tính nguyên bản:
 
 ```bash
-# 1. Chatterbox Turbo Web App (English, Siêu nhanh)
-python3 gradio_tts_turbo_app.py
-
-# 2. Multilingual Web App (Đa ngôn ngữ 23+ tiếng)
-python3 multilingual_app.py
-
-# 3. Voice Conversion Web App (Chuyển đổi giọng nói)
-python3 gradio_vc_app.py
+source venv/bin/activate
+./run_chatterbox_gui.sh
 ```
 
 ---
@@ -108,22 +123,18 @@ python3 example_tts_turbo.py
 
 Mỗi lần khởi động máy hoặc mở Terminal mới:
 
+- **Khởi chạy Web Studio & API:**
+```bash
+cd /var/www/chatterbox
+source venv/bin/activate
+./run_chatterbox_api.sh
+```
+
 - **Khởi chạy Giao diện Desktop GUI (Tkinter):**
 ```bash
 cd /var/www/chatterbox
 source venv/bin/activate
 ./run_chatterbox_gui.sh
-```
-
----
-
-## 6. FastAPI cho tích hợp ứng dụng
-
-Khởi chạy API độc lập tại `http://127.0.0.1:8000`:
-
-```bash
-chmod +x run_chatterbox_api.sh
-./run_chatterbox_api.sh
 ```
 
 - Swagger UI: `http://127.0.0.1:8000/docs`

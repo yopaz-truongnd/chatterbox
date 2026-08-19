@@ -10,9 +10,10 @@ import threading
 from pathlib import Path
 
 # Load settings and configure model cache directory
-SETTINGS_FILE = Path("config/settings.json")
+PROJECT_DIR = Path(__file__).resolve().parent
+SETTINGS_FILE = PROJECT_DIR / "config/settings.json"
 def get_model_cache_dir():
-    default_dir = Path("models").absolute()
+    default_dir = PROJECT_DIR / "models"
     if SETTINGS_FILE.exists():
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
@@ -40,10 +41,20 @@ cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ["HF_HOME"] = str(cache_dir)
 os.environ["HF_HUB_CACHE"] = str(cache_dir)
 
+# Cấu hình thư mục tạm trong dự án thay vì hệ thống
+import tempfile
+TMP_DIR = PROJECT_DIR / "tmp"
+TMP_DIR.mkdir(parents=True, exist_ok=True)
+tempfile.tempdir = str(TMP_DIR)
+os.environ["TMPDIR"] = str(TMP_DIR)
+os.environ["TEMP"] = str(TMP_DIR)
+os.environ["TMP"] = str(TMP_DIR)
+
 import tkinter as tk
 from utils.logger import logger
 from core.chatterbox_engine import ChatterboxEngine
 from ui.main_window import MainWindow
+from utils.platform_tools import select_device
 
 def main():
     logger.info("Khởi chạy ứng dụng Chatterbox TTS Studio...")
@@ -59,22 +70,16 @@ def main():
 
     root.title("Chatterbox TTS Studio")
     
-    # Thiết lập màu nền mặc định cho cửa sổ chính để tránh chớp giật trắng
-    root.configure(bg="#0c121c")
+    # Thiết lập màu nền mặc định cho cửa sổ chính theo Material Design 3
+    from config.constants import BG_COLOR
+    root.configure(bg=BG_COLOR)
 
     # Khởi tạo engine xử lý AI Core
-    import torch
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = select_device()
     engine = ChatterboxEngine(device=device)
 
     # Khởi tạo Giao diện MainWindow
     app = MainWindow(root, engine)
-
-    # Đăng ký phím tắt global liên kết với MainWindow
-    root.bind("<Control-Return>", lambda event: app.shortcut_ctrl_enter())
-    root.bind("<Control-s>", lambda event: app.shortcut_ctrl_s())
-
-
 
     # Khởi chạy main loop
     root.mainloop()

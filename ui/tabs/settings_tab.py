@@ -29,8 +29,8 @@ class SettingsTab(tk.Frame):
         hdr_row = tk.Frame(hdr_card, bg=PANEL2_BG)
         hdr_row.pack(fill="x", padx=16, pady=10)
 
-        tk.Label(hdr_row, text="⚙️ Cài đặt hệ thống (System & Project Settings)", font=("Segoe UI", 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
-        tk.Label(hdr_row, text="Tùy chỉnh cấu hình lưu trữ, mô hình và trải nghiệm", font=("Segoe UI", 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="right")
+        tk.Label(hdr_row, text="⚙️ Cài đặt hệ thống (System & Project Settings)", font=(UI_FONT, 11, "bold"), fg="#a9c3ff", bg=PANEL2_BG).pack(side="left")
+        tk.Label(hdr_row, text="Tùy chỉnh cấu hình lưu trữ, mô hình và trải nghiệm", font=(UI_FONT, 9), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="right")
 
         # Scrollable container or main container
         main_container = tk.Frame(self, bg=PANEL_BG)
@@ -62,31 +62,31 @@ class SettingsTab(tk.Frame):
         # 1.1 Export Directory
         r1 = tk.Frame(sec1, bg=PANEL2_BG)
         r1.pack(fill="x", pady=6)
-        tk.Label(r1, text="Thư mục xuất âm thanh mặc định:", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r1, text="Thư mục xuất âm thanh mặc định:", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.export_dir_var = tk.StringVar()
-        self.export_dir_entry = tk.Entry(r1, textvariable=self.export_dir_var, font=("Segoe UI", 9), bg="#0e1621", fg=TEXT_COLOR,
+        self.export_dir_entry = tk.Entry(r1, textvariable=self.export_dir_var, font=(UI_FONT, 9), bg="#0e1621", fg=TEXT_COLOR,
                                          bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR)
         self.export_dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
         bind_right_click_menu(self.export_dir_entry)
-        tk.Button(r1, text="📁 Chọn...", font=("Segoe UI", 9), bg="#1d2b3e", fg=TEXT_COLOR, bd=1, relief="solid",
+        tk.Button(r1, text="📁 Chọn...", font=(UI_FONT, 9), bg="#1d2b3e", fg=TEXT_COLOR, bd=1, relief="solid",
                   cursor="hand2", command=self._browse_export_dir).pack(side="right")
 
         # 1.2 Model Cache Directory
         r2 = tk.Frame(sec1, bg=PANEL2_BG)
         r2.pack(fill="x", pady=6)
-        tk.Label(r2, text="Thư mục lưu Cache Model:", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r2, text="Thư mục lưu Cache Model:", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.model_cache_var = tk.StringVar()
-        self.model_cache_entry = tk.Entry(r2, textvariable=self.model_cache_var, font=("Segoe UI", 9), bg="#0e1621", fg=TEXT_COLOR,
+        self.model_cache_entry = tk.Entry(r2, textvariable=self.model_cache_var, font=(UI_FONT, 9), bg="#0e1621", fg=TEXT_COLOR,
                                           bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR)
         self.model_cache_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
         bind_right_click_menu(self.model_cache_entry)
-        tk.Button(r2, text="📁 Chọn...", font=("Segoe UI", 9), bg="#1d2b3e", fg=TEXT_COLOR, bd=1, relief="solid",
+        tk.Button(r2, text="📁 Chọn...", font=(UI_FONT, 9), bg="#1d2b3e", fg=TEXT_COLOR, bd=1, relief="solid",
                   cursor="hand2", command=self._browse_model_cache_dir).pack(side="right")
 
         # 1.3 Auto-open Export Directory Checkbox
         self.auto_open_var = tk.BooleanVar()
         chk_auto_open = tk.Checkbutton(sec1, text="Tự động mở thư mục chứa file sau khi sinh âm thanh hoàn tất",
-                                       variable=self.auto_open_var, font=("Segoe UI", 9), fg=TEXT_COLOR, bg=PANEL2_BG,
+                                       variable=self.auto_open_var, font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL2_BG,
                                        activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, selectcolor="#0e1621")
         chk_auto_open.pack(anchor="w", pady=4)
 
@@ -96,16 +96,16 @@ class SettingsTab(tk.Frame):
         # 2.1 Device
         r3 = tk.Frame(sec2, bg=PANEL2_BG)
         r3.pack(fill="x", pady=6)
-        tk.Label(r3, text="Thiết bị tính toán (Device):", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r3, text="Thiết bị tính toán (Device):", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.device_var = tk.StringVar(value="auto")
         device_cb = ttk.Combobox(r3, textvariable=self.device_var, state="readonly", width=25,
-                                 values=["auto (Tự động phát hiện)", "cuda (GPU Nvidia)", "cpu (Vi xử lý CPU)"])
+                                 values=["auto (Tự động phát hiện)", "cuda (GPU Nvidia)", "mps (Apple Silicon)", "cpu (Vi xử lý CPU)"])
         device_cb.pack(side="left")
 
         # 2.2 Default Startup Model
         r4 = tk.Frame(sec2, bg=PANEL2_BG)
         r4.pack(fill="x", pady=6)
-        tk.Label(r4, text="Mô hình mặc định khi nạp:", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r4, text="Mô hình mặc định khi nạp:", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.startup_model_var = tk.StringVar()
         models_cb = ttk.Combobox(r4, textvariable=self.startup_model_var, state="readonly", width=35,
                                  values=[
@@ -119,17 +119,17 @@ class SettingsTab(tk.Frame):
         # 2.3 Max Chunk Characters
         r5 = tk.Frame(sec2, bg=PANEL2_BG)
         r5.pack(fill="x", pady=6)
-        tk.Label(r5, text="Số ký tự cắt đoạn tối đa (Max Chunk):", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r5, text="Số ký tự cắt đoạn tối đa (Max Chunk):", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.max_chunk_var = tk.IntVar(value=4000)
-        chunk_spin = tk.Spinbox(r5, from_=100, to=10000, increment=100, textvariable=self.max_chunk_var, font=("Segoe UI", 9),
+        chunk_spin = tk.Spinbox(r5, from_=100, to=10000, increment=100, textvariable=self.max_chunk_var, font=(UI_FONT, 9),
                                 bg="#0e1621", fg=TEXT_COLOR, width=10, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
         chunk_spin.pack(side="left")
-        tk.Label(r5, text="ký tự (Mặc định: 4000 - Cắt nhỏ văn bản dài tránh tràn GPU VRAM)", font=("Segoe UI", 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
+        tk.Label(r5, text="ký tự (Mặc định: 4000 - Cắt nhỏ văn bản dài tránh tràn GPU VRAM)", font=(UI_FONT, 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
 
         # 2.4 Auto Unload Models Checkbox
         self.auto_unload_var = tk.BooleanVar()
         chk_unload = tk.Checkbutton(sec2, text="Tự động giải phóng các mô hình cũ khỏi GPU VRAM khi đổi tab/mô hình",
-                                    variable=self.auto_unload_var, font=("Segoe UI", 9), fg=TEXT_COLOR, bg=PANEL2_BG,
+                                    variable=self.auto_unload_var, font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL2_BG,
                                     activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, selectcolor="#0e1621")
         chk_unload.pack(anchor="w", pady=4)
 
@@ -139,18 +139,18 @@ class SettingsTab(tk.Frame):
         # 3.1 CPU Threads Limit
         r6 = tk.Frame(sec3, bg=PANEL2_BG)
         r6.pack(fill="x", pady=6)
-        tk.Label(r6, text="Giới hạn số Lõi/Luồng CPU sử dụng:", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r6, text="Giới hạn số Lõi/Luồng CPU sử dụng:", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         max_cpus = os.cpu_count() or 8
         self.cpu_threads_var = tk.IntVar(value=min(4, max_cpus))
-        threads_spin = tk.Spinbox(r6, from_=1, to=max_cpus, increment=1, textvariable=self.cpu_threads_var, font=("Segoe UI", 9),
+        threads_spin = tk.Spinbox(r6, from_=1, to=max_cpus, increment=1, textvariable=self.cpu_threads_var, font=(UI_FONT, 9),
                                   bg="#0e1621", fg=TEXT_COLOR, width=8, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
         threads_spin.pack(side="left")
-        tk.Label(r6, text=f"lõi (Tổng số lõi hệ thống: {max_cpus} - Giúp tránh 100% CPU gây đơ máy)", font=("Segoe UI", 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
+        tk.Label(r6, text=f"lõi (Tổng số lõi hệ thống: {max_cpus} - Giúp tránh 100% CPU gây đơ máy)", font=(UI_FONT, 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
 
         # 3.2 Process Priority
         r7 = tk.Frame(sec3, bg=PANEL2_BG)
         r7.pack(fill="x", pady=6)
-        tk.Label(r7, text="Mức ưu tiên tiến trình (OS Priority):", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r7, text="Mức ưu tiên tiến trình (OS Priority):", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.prio_var = tk.StringVar(value="low")
         prio_cb = ttk.Combobox(r7, textvariable=self.prio_var, state="readonly", width=35,
                                values=["low (Thấp hơn - Tránh đơ OS/UI khi CPU full tải)", "normal (Bình thường)"])
@@ -159,29 +159,29 @@ class SettingsTab(tk.Frame):
         # 3.3 GPU VRAM Fraction Limit
         r8 = tk.Frame(sec3, bg=PANEL2_BG)
         r8.pack(fill="x", pady=6)
-        tk.Label(r8, text="Giới hạn % VRAM GPU tối đa:", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r8, text="Giới hạn % VRAM GPU tối đa:", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.max_vram_var = tk.IntVar(value=80)
-        vram_spin = tk.Spinbox(r8, from_=20, to=100, increment=5, textvariable=self.max_vram_var, font=("Segoe UI", 9),
+        vram_spin = tk.Spinbox(r8, from_=20, to=100, increment=5, textvariable=self.max_vram_var, font=(UI_FONT, 9),
                                bg="#0e1621", fg=TEXT_COLOR, width=8, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
         vram_spin.pack(side="left")
-        tk.Label(r8, text="% (Chừa VRAM cho Card màn hình vẽ giao diện OS, tránh đơ màn hình)", font=("Segoe UI", 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
+        tk.Label(r8, text="% (Chừa VRAM cho Card màn hình vẽ giao diện OS, tránh đơ màn hình)", font=(UI_FONT, 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
 
         # 3.4 Forced Garbage Collection Checkbox
         self.force_gc_var = tk.BooleanVar(value=True)
         chk_gc = tk.Checkbutton(sec3, text="Tự động thu gom bộ nhớ RAM / VRAM (Garbage Collection) ngay sau mỗi lần tạo audio xong",
-                                variable=self.force_gc_var, font=("Segoe UI", 9), fg=TEXT_COLOR, bg=PANEL2_BG,
+                                variable=self.force_gc_var, font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL2_BG,
                                 activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, selectcolor="#0e1621")
         chk_gc.pack(anchor="w", pady=4)
 
         # 3.5 Max Batch Workers
         r9 = tk.Frame(sec3, bg=PANEL2_BG)
         r9.pack(fill="x", pady=6)
-        tk.Label(r9, text="Số luồng chạy Batch đồng thời:", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r9, text="Số luồng chạy Batch đồng thời:", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.batch_workers_var = tk.IntVar(value=2)
-        workers_spin = tk.Spinbox(r9, from_=1, to=4, increment=1, textvariable=self.batch_workers_var, font=("Segoe UI", 9),
+        workers_spin = tk.Spinbox(r9, from_=1, to=4, increment=1, textvariable=self.batch_workers_var, font=(UI_FONT, 9),
                                    bg="#0e1621", fg=TEXT_COLOR, width=8, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
         workers_spin.pack(side="left")
-        tk.Label(r9, text="file đồng thời (Mặc định: 2 file đồng thời để tối ưu hiệu năng Batch)", font=("Segoe UI", 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
+        tk.Label(r9, text="file đồng thời (Mặc định: 2 file đồng thời để tối ưu hiệu năng Batch)", font=(UI_FONT, 8), fg=TEXT_DIM_COLOR, bg=PANEL2_BG).pack(side="left", padx=10)
 
         # SECTION 4: 🎨 Cấu hình Giao diện & Trải nghiệm (UI & UX)
         sec4 = self._create_section(scrollable_frame, "🎨 Giao diện & Trải nghiệm")
@@ -189,21 +189,21 @@ class SettingsTab(tk.Frame):
         # 4.1 Desktop Notifications Checkbox
         self.desktop_notif_var = tk.BooleanVar()
         chk_notif = tk.Checkbutton(sec4, text="Hiển thị thông báo khi sinh audio hoàn tất",
-                                   variable=self.desktop_notif_var, font=("Segoe UI", 9), fg=TEXT_COLOR, bg=PANEL2_BG,
+                                   variable=self.desktop_notif_var, font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL2_BG,
                                    activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, selectcolor="#0e1621")
         chk_notif.pack(anchor="w", pady=4)
 
         # 4.2 Confirm Delete History Checkbox
         self.confirm_delete_var = tk.BooleanVar()
         chk_confirm = tk.Checkbutton(sec4, text="Hiển thị hộp thoại cảnh báo xác nhận trước khi xóa mục trong Lịch sử",
-                                     variable=self.confirm_delete_var, font=("Segoe UI", 9), fg=TEXT_COLOR, bg=PANEL2_BG,
+                                     variable=self.confirm_delete_var, font=(UI_FONT, 9), fg=TEXT_COLOR, bg=PANEL2_BG,
                                      activebackground=PANEL2_BG, activeforeground=TEXT_COLOR, selectcolor="#0e1621")
         chk_confirm.pack(anchor="w", pady=4)
 
         # 4.3 Language Dropdown Option
         r_lang = tk.Frame(sec4, bg=PANEL2_BG)
         r_lang.pack(fill="x", pady=6)
-        tk.Label(r_lang, text="Ngôn ngữ mặc định (Language):", font=("Segoe UI", 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
+        tk.Label(r_lang, text="Ngôn ngữ mặc định (Language):", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.language_var = tk.StringVar(value="🇻🇳 Tiếng Việt")
         lang_cb = ttk.Combobox(r_lang, textvariable=self.language_var, state="readonly", width=25,
                                values=list(UI_LANGUAGES.values()))
@@ -213,17 +213,17 @@ class SettingsTab(tk.Frame):
         btn_bar = tk.Frame(self, bg=PANEL_BG)
         btn_bar.pack(fill="x", pady=(10, 0))
 
-        tk.Button(btn_bar, text="💾 Lưu cài đặt", font=("Segoe UI", 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
+        tk.Button(btn_bar, text="💾 Lưu cài đặt", font=(UI_FONT, 10, "bold"), bg=ACCENT_COLOR, fg="#ffffff",
                   bd=0, cursor="hand2", padx=20, pady=8, command=self.save_settings_action).pack(side="left", padx=(0, 10))
 
-        tk.Button(btn_bar, text="🔄 Khôi phục mặc định", font=("Segoe UI", 9), bg="#1f2d40", fg=TEXT_COLOR,
+        tk.Button(btn_bar, text="🔄 Khôi phục mặc định", font=(UI_FONT, 9), bg="#1f2d40", fg=TEXT_COLOR,
                   bd=1, relief="solid", cursor="hand2", padx=14, pady=7, command=self.reset_defaults_action).pack(side="left")
 
     def _create_section(self, parent, title):
         sec_frame = tk.Frame(parent, bg=PANEL2_BG)
         sec_frame.pack(fill="x", pady=(0, 16))
 
-        title_lbl = tk.Label(sec_frame, text=title, font=("Segoe UI", 10, "bold"), fg="#38bdf8", bg=PANEL2_BG, anchor="w")
+        title_lbl = tk.Label(sec_frame, text=title, font=(UI_FONT, 10, "bold"), fg="#38bdf8", bg=PANEL2_BG, anchor="w")
         title_lbl.pack(fill="x", pady=(0, 6))
 
         line = tk.Frame(sec_frame, height=1, bg=BORDER_COLOR)
@@ -253,6 +253,8 @@ class SettingsTab(tk.Frame):
             self.device_var.set("auto (Tự động phát hiện)")
         elif dev == "cuda":
             self.device_var.set("cuda (GPU Nvidia)")
+        elif dev == "mps":
+            self.device_var.set("mps (Apple Silicon)")
         else:
             self.device_var.set("cpu (Vi xử lý CPU)")
 
@@ -285,6 +287,8 @@ class SettingsTab(tk.Frame):
                 dev_code = "auto"
             elif "cuda" in dev_raw:
                 dev_code = "cuda"
+            elif "mps" in dev_raw:
+                dev_code = "mps"
             else:
                 dev_code = "cpu"
             settings_manager.set("device", dev_code)

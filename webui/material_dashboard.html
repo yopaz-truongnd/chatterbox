@@ -1,0 +1,3009 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chatterbox TTS Studio — Material 3 Web GUI</title>
+  
+  <!-- Google Fonts & Material Symbols -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Roboto', 'sans-serif'],
+            display: ['Roboto', 'sans-serif'],
+            mono: ['Fira Code', 'monospace'],
+          },
+          colors: {
+            m3: {
+              primary: '#7C3AED',
+              'primary-light': '#D0BCFF',
+              'on-primary': '#FFFFFF',
+              'primary-container': '#4F378B',
+              'on-primary-container': '#F3EDF7',
+              secondary: '#625B71',
+              'on-secondary': '#FFFFFF',
+              'secondary-container': '#332D41',
+              'on-secondary-container': '#E8DEF8',
+              background: '#0E0C12',
+              'on-background': '#FFFFFF',
+              surface: '#18151E',
+              'on-surface': '#FFFFFF',
+              'surface-variant': '#26222C',
+              'on-surface-variant': '#94A3B8',
+              outline: '#3F3A46',
+            }
+          },
+          boxShadow: {
+            'm3-1': '0px 1px 3px 1px rgba(0, 0, 0, 0.25)',
+            'm3-2': '0px 2px 6px 2px rgba(0, 0, 0, 0.35)',
+            'm3-3': '0px 4px 8px 3px rgba(0, 0, 0, 0.45)',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3F3A46; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #7C3AED; }
+    
+    input[type=range] { -webkit-appearance: none; background: transparent; }
+    input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #3F3A46; border-radius: 9999px; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
+      background: #7C3AED; border: 2px solid #FFFFFF; margin-top: -6px; cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.5); transition: transform 0.15s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+    .tab-panel { display: none; animation: fadeIn 0.2s ease-in-out; }
+    .tab-panel.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Drag & Drop Over Highlight */
+    .drag-over {
+      border-color: #7C3AED !important;
+      background-color: rgba(124, 58, 237, 0.08) !important;
+      outline: 2px dashed #7C3AED !important;
+    }
+
+    /* Toast animation */
+    .toast-enter {
+      animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .toast-leave {
+      animation: toastSlideOut 0.25s ease-in forwards;
+    }
+    @keyframes toastSlideIn {
+      from { opacity: 0; transform: translateX(100%) scale(0.9); }
+      to { opacity: 1; transform: translateX(0) scale(1); }
+    }
+    @keyframes toastSlideOut {
+      from { opacity: 1; transform: translateX(0) scale(1); }
+      to { opacity: 0; transform: translateX(100%) scale(0.9); }
+    }
+  </style>
+</head>
+<body class="bg-[#0E0C12] text-white font-sans min-h-screen flex flex-col antialiased selection:bg-purple-600 selection:text-white relative">
+
+  <!-- ==================== TOAST NOTIFICATION CONTAINER ==================== -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- ==================== TOP APP BAR ==================== -->
+  <header class="sticky top-0 z-40 bg-[#18151E]/95 backdrop-blur-md border-b border-[#3F3A46] px-4 lg:px-8 py-3 flex items-center justify-between shadow-m3-1">
+    <div class="flex items-center gap-3">
+      <button id="mobileNavToggle" onclick="toggleMobileNav()" class="lg:hidden p-2 rounded-full text-slate-300 hover:bg-[#231F2A] transition-colors" title="Menu">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-m3-1">
+          <span class="material-symbols-outlined text-[24px]">graphic_eq</span>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold tracking-tight text-white">Chatterbox Studio</h1>
+            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-purple-600/20 text-purple-300 border border-purple-500/30 font-semibold">Web v1.3</span>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">AI Text-to-Speech & Voice Cloning Studio</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top App Bar Right Actions -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <!-- Dynamic Hardware / Device Chip -->
+      <div id="deviceChip" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#231F2A] border border-[#3F3A46] text-xs font-mono text-emerald-400">
+        <span id="deviceIndicator" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="deviceStatus">Đang kiểm tra phần cứng...</span>
+      </div>
+
+      <!-- Quick Preset Dropdown -->
+      <div class="relative hidden sm:block">
+        <select id="presetSelector" onchange="applyPreset(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-full px-3 py-1.5 focus:outline-none focus:border-purple-500 cursor-pointer">
+          <option value="default">⚡ Cấu hình: Mặc định</option>
+          <option value="news">📰 Đọc tin tức (Trang trọng)</option>
+          <option value="story">📖 Kể chuyện & Audio book</option>
+          <option value="expressive">🎭 Biểu cảm mạnh (Kịch tính)</option>
+          <option value="whisper">🤫 Thì thầm (ASMR)</option>
+        </select>
+      </div>
+
+      <!-- Theme Switcher -->
+      <button id="themeToggle" onclick="toggleTheme()" class="p-2 rounded-full text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors" title="Chuyển chế độ Sáng/Tối">
+        <span id="themeIcon" class="material-symbols-outlined text-[20px]">dark_mode</span>
+      </button>
+
+      <!-- Help / Shortcuts -->
+      <button onclick="openShortcutsModal()" class="p-2 rounded-full text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors" title="Bảng phím tắt (F1)">
+        <span class="material-symbols-outlined text-[20px]">keyboard</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN LAYOUT ==================== -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- Material 3 Navigation Rail - Settings Pinned to Bottom -->
+    <aside id="navRail" class="fixed lg:static inset-y-0 left-0 z-30 w-64 bg-[#141218] border-r border-[#3F3A46] flex flex-col justify-between p-3 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-in-out flex-shrink-0 overflow-y-auto">
+      
+      <!-- Top Navigation Tabs (1 - 6) -->
+      <nav class="space-y-1.5 mt-14 lg:mt-0">
+        <!-- 1. TTS Studio -->
+        <button onclick="switchTab('tts')" data-tab="tts" class="nav-btn active w-full flex items-center gap-3 px-4 py-3 rounded-full bg-purple-600 text-white font-bold text-sm shadow-m3-1 transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[22px]">record_voice_over</span>
+          <span>TTS Studio</span>
+        </button>
+
+        <!-- 2. Batch Studio -->
+        <button onclick="switchTab('batch')" data-tab="batch" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-slate-400 hover:bg-[#231F2A] hover:text-white text-sm font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[22px]">auto_stories</span>
+          <span>Batch Studio</span>
+        </button>
+
+        <!-- 3. Multilingual -->
+        <button onclick="switchTab('multilingual')" data-tab="multilingual" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-slate-400 hover:bg-[#231F2A] hover:text-white text-sm font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[22px]">translate</span>
+          <span>Multilingual TTS</span>
+        </button>
+
+        <!-- 4. Voice Conversion -->
+        <button onclick="switchTab('vc')" data-tab="vc" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-slate-400 hover:bg-[#231F2A] hover:text-white text-sm font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[22px]">sync_alt</span>
+          <span>Voice Clone (VC)</span>
+        </button>
+
+        <!-- 5. Characters -->
+        <button onclick="switchTab('characters')" data-tab="characters" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-slate-400 hover:bg-[#231F2A] hover:text-white text-sm font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[22px]">face</span>
+          <span>Nhân vật (Voices)</span>
+        </button>
+
+        <!-- 6. History -->
+        <button onclick="switchTab('history')" data-tab="history" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-slate-400 hover:bg-[#231F2A] hover:text-white text-sm font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[22px]">history</span>
+          <span>Lịch sử âm thanh</span>
+        </button>
+      </nav>
+
+      <!-- Bottom Pinned Section: 7. Settings & Model -->
+      <div class="mt-auto pt-3 border-t border-[#3F3A46] space-y-2">
+        <button onclick="switchTab('settings')" data-tab="settings" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-slate-400 hover:bg-[#231F2A] hover:text-white text-sm font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[22px]">settings</span>
+          <span>Cài đặt & Model</span>
+        </button>
+        <div class="text-center pt-1">
+          <span class="text-[10px] text-slate-500 font-mono">Chatterbox v1.3 • Online</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Overlay on mobile -->
+    <div id="mobileOverlay" onclick="toggleMobileNav()" class="hidden fixed inset-0 z-20 bg-black/60 backdrop-blur-xs lg:hidden"></div>
+
+    <!-- ==================== DASHBOARD CONTENT CONTAINER ==================== -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+      <!-- ========================================================================= -->
+      <!-- TAB 1: TTS STUDIO                                                         -->
+      <!-- ========================================================================= -->
+      <section id="panel-tts" class="tab-panel active space-y-6">
+        
+        <!-- Model Selection Top Card with Info & Preload Buttons -->
+        <div class="bg-[#18151E] rounded-2xl p-4 border border-[#3F3A46] shadow-m3-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/30">
+              <span class="material-symbols-outlined">smart_toy</span>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400 font-medium">Mô hình hoạt động</div>
+              <div id="modelDescHint" class="text-sm font-bold text-white">Chatterbox Turbo (350M - Tốc độ cao, hỗ trợ Tags cảm xúc)</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="ttsModelSelect" onchange="handleModelChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500 cursor-pointer font-medium">
+              <option value="turbo">Chatterbox Turbo (350M - Hỗ trợ Tags)</option>
+              <option value="standard">Chatterbox Standard (500M - Tiêu chuẩn)</option>
+              <option value="nano">Chatterbox Nano (110M - Siêu nhẹ)</option>
+            </select>
+            <button onclick="preloadCurrentModel()" class="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1 cursor-pointer" title="Nạp sẵn Model vào VRAM">
+              <span class="material-symbols-outlined text-[16px]">download</span>
+              <span class="hidden md:inline">Nạp Model</span>
+            </button>
+            <button onclick="openModelCompareModal()" class="px-3 py-2 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs font-bold text-purple-300 hover:text-white flex items-center gap-1 cursor-pointer" title="So sánh & Thông số các model">
+              <span class="material-symbols-outlined text-[16px]">info</span>
+              <span class="hidden md:inline">So sánh</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2 Columns: Input/Parameters vs Audio Stage/History -->
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+          <!-- Left Column: Input Card & Sliders -->
+          <div class="xl:col-span-7 space-y-6">
+            <!-- Text Input Card with Drag & Drop File Support -->
+            <div class="bg-[#18151E] rounded-2xl p-5 border border-[#3F3A46] shadow-m3-1 space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-purple-400 text-[20px]">edit_note</span>
+                  <h2 class="text-sm font-bold uppercase tracking-wider text-white">Văn bản cần phát âm</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="document.getElementById('importTextInput').click()" class="text-xs text-purple-300 hover:text-white px-2.5 py-1 rounded bg-[#231F2A] border border-[#3F3A46] flex items-center gap-1 cursor-pointer">
+                    <span class="material-symbols-outlined text-[14px]">file_open</span>
+                    <span>Nhập File</span>
+                  </button>
+                  <input type="file" id="importTextInput" accept=".txt,.md,.srt" class="hidden" onchange="handleImportTextFile(this)">
+                  <button onclick="cleanPromptText()" class="text-xs text-purple-300 hover:text-white px-2.5 py-1 rounded bg-[#231F2A] border border-[#3F3A46] transition-colors cursor-pointer">✨ Clean Text</button>
+                  <button onclick="sendToBatchStudio()" class="text-xs text-purple-300 hover:text-white px-2.5 py-1 rounded bg-[#231F2A] border border-[#3F3A46] transition-colors cursor-pointer">➡️ Sang Batch</button>
+                  <button onclick="clearPromptText()" class="text-xs text-slate-400 hover:text-red-400 px-2.5 py-1 rounded bg-[#231F2A] border border-[#3F3A46] transition-colors cursor-pointer">Xóa</button>
+                </div>
+              </div>
+
+              <!-- Textarea (Supports Drag-and-Drop file) -->
+              <div class="relative">
+                <textarea id="promptInput" rows="5" placeholder="Nhập văn bản hoặc KÉO THẢ FILE TEXT (.txt, .md, .srt) vào đây..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-xl p-3.5 text-sm focus:outline-none transition-all resize-none leading-relaxed font-sans">Hello there! Welcome to Chatterbox TTS Studio [chuckle]. This model supports high quality zero-shot voice cloning.</textarea>
+                <div class="flex justify-between items-center text-xs text-slate-400 pt-1.5 px-1">
+                  <span>💡 Có thể kéo thả file text trực tiếp vào ô này</span>
+                  <span id="charCount" class="font-mono text-purple-300 font-bold">107 / 4000 ký tự</span>
+                </div>
+              </div>
+
+              <!-- Paralinguistic Emotional Tag Chips (11 Thẻ biểu cảm) -->
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                  <span class="font-medium">Chèn nhanh cảm xúc (Paralinguistic Tags):</span>
+                  <span class="text-[11px] text-purple-400 font-mono">Bôi đen từ hoặc đặt con trỏ để chèn</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" onclick="insertTag('[laugh]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Cười vui vẻ">😄 [laugh]</button>
+                  <button type="button" onclick="insertTag('[chuckle]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Cười khẽ, mỉm cười">😏 [chuckle]</button>
+                  <button type="button" onclick="insertTag('[sigh]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Thở dài">😮‍💨 [sigh]</button>
+                  <button type="button" onclick="insertTag('[gasp]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Hít vào kinh ngạc">😲 [gasp]</button>
+                  <button type="button" onclick="insertTag('[whisper]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Thì thầm bí mật">🤫 [whisper]</button>
+                  <button type="button" onclick="insertTag('[cough]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Ho nhẹ">😷 [cough]</button>
+                  <button type="button" onclick="insertTag('[clear throat]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="E hèm hắng giọng">🗣️ [clear throat]</button>
+                  <button type="button" onclick="insertTag('[shush]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Suỵt giữ trật tự">🤐 [shush]</button>
+                  <button type="button" onclick="insertTag('[yawn]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Ngáp buồn ngủ">🥱 [yawn]</button>
+                  <button type="button" onclick="insertTag('[sniff]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Sụt sịt mũi">🤧 [sniff]</button>
+                  <button type="button" onclick="insertTag('[groan]')" class="px-2.5 py-1 rounded-full bg-[#231F2A] hover:bg-purple-600 hover:text-white text-xs font-mono text-slate-300 border border-[#3F3A46] transition-all cursor-pointer" title="Than vãn mệt mỏi">😩 [groan]</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Voice Reference Audio Card (File Upload + Mic Recording + Audio Trimmer) -->
+            <div class="bg-[#18151E] rounded-2xl p-5 border border-[#3F3A46] shadow-m3-1 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-purple-400 text-[20px]">mic</span>
+                  <h2 class="text-sm font-bold uppercase tracking-wider text-white">Giọng đọc mẫu (Voice Prompt)</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button id="micRecordBtn" onclick="toggleMicRecording()" class="px-3 py-1 rounded-full bg-[#231F2A] hover:bg-red-600 text-xs text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer transition-colors">
+                    <span id="micIcon" class="material-symbols-outlined text-[16px] text-red-400">mic</span>
+                    <span id="micLabel">Ghi âm Mic</span>
+                  </button>
+                  <span class="text-xs text-slate-400 font-mono hidden sm:inline">3s - 15s</span>
+                </div>
+              </div>
+
+              <!-- Built-in Voice Library (Bộ giọng đọc mẫu sẵn có) -->
+              <div class="space-y-2 p-3 rounded-xl bg-[#0E0C12] border border-[#3F3A46]">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px] text-purple-400">group</span>
+                  <span>Thư viện Giọng đọc Mẫu có sẵn (Built-in Voices):</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="builtinVoicesContainer">
+                  <button type="button" onclick="applyBuiltinVoice('mc_male', this)" class="builtin-voice-btn p-2.5 rounded-xl bg-[#18151E] hover:bg-[#231F2A] border border-[#3F3A46] text-left transition-all cursor-pointer">
+                    <div class="font-bold text-white text-xs flex items-center gap-1">🎙️ MC Nam Thời Sự</div>
+                    <div class="text-[10px] text-slate-400">Trầm ấm, dõng dạc</div>
+                  </button>
+                  <button type="button" onclick="applyBuiltinVoice('editor_female', this)" class="builtin-voice-btn p-2.5 rounded-xl bg-[#18151E] hover:bg-[#231F2A] border border-[#3F3A46] text-left transition-all cursor-pointer">
+                    <div class="font-bold text-white text-xs flex items-center gap-1">🎙️ Nữ Biên Tập Viên</div>
+                    <div class="text-[10px] text-slate-400">Truyền cảm, chuẩn xác</div>
+                  </button>
+                  <button type="button" onclick="applyBuiltinVoice('story_night', this)" class="builtin-voice-btn p-2.5 rounded-xl bg-[#18151E] hover:bg-[#231F2A] border border-[#3F3A46] text-left transition-all cursor-pointer">
+                    <div class="font-bold text-white text-xs flex items-center gap-1">🎙️ Kể Chuyện Đêm</div>
+                    <div class="text-[10px] text-slate-400">Trầm lắng, thì thầm</div>
+                  </button>
+                  <button type="button" onclick="applyBuiltinVoice('review_fast', this)" class="builtin-voice-btn p-2.5 rounded-xl bg-[#18151E] hover:bg-[#231F2A] border border-[#3F3A46] text-left transition-all cursor-pointer">
+                    <div class="font-bold text-white text-xs flex items-center gap-1">🎙️ Review & Recap</div>
+                    <div class="text-[10px] text-slate-400">Nhanh, dứt khoát</div>
+                  </button>
+                  <button type="button" onclick="applyBuiltinVoice('anime_fun', this)" class="builtin-voice-btn p-2.5 rounded-xl bg-[#18151E] hover:bg-[#231F2A] border border-[#3F3A46] text-left transition-all cursor-pointer">
+                    <div class="font-bold text-white text-xs flex items-center gap-1">🎙️ Hoạt Hình / Anime</div>
+                    <div class="text-[10px] text-slate-400">Biểu cảm, vui tươi</div>
+                  </button>
+                  <button type="button" onclick="applyBuiltinVoice('ai_assistant', this)" class="builtin-voice-btn p-2.5 rounded-xl bg-[#18151E] hover:bg-[#231F2A] border border-[#3F3A46] text-left transition-all cursor-pointer">
+                    <div class="font-bold text-white text-xs flex items-center gap-1">🎙️ Trợ Lý Ảo AI</div>
+                    <div class="text-[10px] text-slate-400">Nhẹ nhàng, tự nhiên</div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Upload / Drop Zone -->
+              <div id="dropZone" onclick="document.getElementById('refAudioInput').click()" class="border-2 border-dashed border-[#3F3A46] hover:border-purple-500 rounded-xl p-4 text-center cursor-pointer transition-all bg-[#0E0C12]/50 hover:bg-[#231F2A]/50 group">
+                <input type="file" id="refAudioInput" accept="audio/*" class="hidden" onchange="handleAudioUpload(this)">
+                <div class="flex flex-col items-center justify-center gap-2">
+                  <div class="w-10 h-10 rounded-full bg-[#231F2A] text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span class="material-symbols-outlined">cloud_upload</span>
+                  </div>
+                  <div class="text-xs text-white font-medium">Kéo thả file âm thanh mẫu hoặc <span class="text-purple-400 underline">chọn từ máy tính</span></div>
+                  <div class="text-[11px] text-slate-400">Để trống nếu muốn sử dụng giọng nói mặc định của AI</div>
+                </div>
+              </div>
+
+              <!-- Selected Audio File Pill & Trimmer Action -->
+              <div id="refAudioCard" class="hidden flex items-center justify-between p-3 rounded-xl bg-[#231F2A] border border-[#3F3A46]">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined text-purple-400">audiotrack</span>
+                  <div>
+                    <div id="refAudioName" class="text-xs font-bold text-white">sample_voice.wav</div>
+                    <div class="text-[10px] font-mono text-slate-400">Đã chọn làm giọng mẫu</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="openTrimmerModal()" class="px-2.5 py-1 rounded bg-[#18151E] hover:bg-purple-600 text-xs font-medium text-slate-300 hover:text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer" title="Cắt xén âm thanh mẫu">
+                    <span class="material-symbols-outlined text-[14px]">content_cut</span>
+                    <span>Cắt đoạn</span>
+                  </button>
+                  <button onclick="removeRefAudio()" class="p-1 rounded-full text-red-400 hover:bg-red-900/30 transition-colors cursor-pointer" title="Xóa file mẫu">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Saved Character Selector (Character đã lưu) -->
+              <div class="pt-3 border-t border-[#3F3A46]/60 space-y-2 text-xs">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5 font-bold text-slate-300">
+                    <span class="material-symbols-outlined text-purple-400 text-[18px]">face</span>
+                    <span>Nhân vật đã lưu (Saved Character)</span>
+                  </div>
+                  <button type="button" onclick="openCreateCharacterModal(true)" class="text-purple-400 hover:underline flex items-center gap-1 cursor-pointer font-medium">
+                    <span class="material-symbols-outlined text-[14px]">add_circle</span>
+                    <span>Lưu giọng & thông số này</span>
+                  </button>
+                </div>
+                <select id="ttsCharacterSelect" onchange="handleTtsCharacterSelect(this.value)" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 font-medium cursor-pointer">
+                  <option value="">-- Mặc định (Default Speaker) --</option>
+                </select>
+                <div class="flex items-center gap-2 pt-0.5">
+                  <input type="checkbox" id="useDefaultCharChk" onchange="toggleUseDefaultChar(this.checked)" class="w-4 h-4 rounded text-amber-500 bg-[#0E0C12] border-[#3F3A46] focus:ring-amber-400 cursor-pointer">
+                  <label for="useDefaultCharChk" id="useDefaultCharLabel" class="text-amber-400 font-medium cursor-pointer">⭐ Sử dụng Character mặc định</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Parameters Card with Style Presets, Seed, Speed & Normalization -->
+            <div class="bg-[#18151E] rounded-2xl p-5 border border-[#3F3A46] shadow-m3-1 space-y-5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-purple-400 text-[20px]">tune</span>
+                  <h2 class="text-sm font-bold uppercase tracking-wider text-white">Tham số sinh giọng (Parameters)</h2>
+                </div>
+                <button onclick="resetSliders()" class="text-xs text-purple-400 hover:underline cursor-pointer">Mặc định</button>
+              </div>
+
+              <!-- Quick Voice Style Presets / Combos (Combo kiểu giọng nhanh giống Desktop GUI) -->
+              <div class="space-y-2 p-3 rounded-xl bg-[#0E0C12] border border-[#3F3A46]">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px] text-purple-400">auto_fix_high</span>
+                  <span>Chọn kiểu giọng nhanh (Style Presets):</span>
+                </div>
+                <div class="flex flex-wrap gap-2" id="presetPillsContainer">
+                  <button type="button" onclick="applyPresetStyle('news', 0.30, 0.70, 0.60, this)" class="preset-pill px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs text-slate-200 hover:text-white font-medium flex items-center gap-1.5 cursor-pointer transition-all">
+                    <span>📰</span><span>Đọc tin tức</span>
+                  </button>
+                  <button type="button" onclick="applyPresetStyle('story', 0.80, 0.50, 0.85, this)" class="preset-pill px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs text-slate-200 hover:text-white font-medium flex items-center gap-1.5 cursor-pointer transition-all">
+                    <span>📖</span><span>Kể chuyện</span>
+                  </button>
+                  <button type="button" onclick="applyPresetStyle('expressive', 1.20, 0.50, 0.90, this)" class="preset-pill px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs text-slate-200 hover:text-white font-medium flex items-center gap-1.5 cursor-pointer transition-all">
+                    <span>🎭</span><span>Biểu cảm mạnh</span>
+                  </button>
+                  <button type="button" onclick="applyPresetStyle('whisper', 0.20, 0.80, 0.50, this)" class="preset-pill px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs text-slate-200 hover:text-white font-medium flex items-center gap-1.5 cursor-pointer transition-all">
+                    <span>🤫</span><span>Thì thầm</span>
+                  </button>
+                  <button type="button" onclick="applyPresetStyle('standard', 0.50, 0.50, 0.80, this)" class="preset-pill active px-3 py-1.5 rounded-lg bg-purple-600 border border-purple-500 text-xs text-white font-medium flex items-center gap-1.5 cursor-pointer transition-all">
+                    <span>⚡</span><span>Tiêu chuẩn</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Primary Sliders Grid -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Exaggeration -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between text-xs">
+                    <span class="text-slate-300 font-medium">Độ biểu cảm (Exaggeration)</span>
+                    <span id="valExaggeration" class="font-mono text-purple-300 font-bold">0.50</span>
+                  </div>
+                  <input type="range" id="sliderExaggeration" min="0.20" max="1.80" step="0.05" value="0.50" class="w-full">
+                </div>
+
+                <!-- Pace / CFG -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between text-xs">
+                    <span class="text-slate-300 font-medium">Tốc độ nhịp đọc (Pace / CFG)</span>
+                    <span id="valPace" class="font-mono text-purple-300 font-bold">0.50</span>
+                  </div>
+                  <input type="range" id="sliderPace" min="0.10" max="1.00" step="0.05" value="0.50" class="w-full">
+                </div>
+
+                <!-- Temperature -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between text-xs">
+                    <span class="text-slate-300 font-medium">Nhiệt độ sáng tạo (Temperature)</span>
+                    <span id="valTemp" class="font-mono text-purple-300 font-bold">0.80</span>
+                  </div>
+                  <input type="range" id="sliderTemp" min="0.10" max="2.00" step="0.05" value="0.80" class="w-full">
+                </div>
+
+                <!-- Min-P -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between text-xs">
+                    <span class="text-slate-300 font-medium">Bộ lọc Min-P (Sampler)</span>
+                    <span id="valMinP" class="font-mono text-purple-300 font-bold">0.05</span>
+                  </div>
+                  <input type="range" id="sliderMinP" min="0.00" max="0.50" step="0.01" value="0.05" class="w-full">
+                </div>
+              </div>
+
+              <!-- Extra Controls: Seed & Playback Speed & Normalization -->
+              <div class="pt-3 border-t border-[#3F3A46]/60 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <!-- Seed -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between">
+                    <span class="text-slate-300 font-medium">Seed ngẫu nhiên:</span>
+                    <button onclick="randomizeSeed()" class="text-purple-400 hover:underline cursor-pointer">🎲 Random</button>
+                  </div>
+                  <input type="number" id="seedInput" value="0" min="0" max="99999999" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2 font-mono">
+                </div>
+
+                <!-- Playback Speed -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between">
+                    <span class="text-slate-300 font-medium">Tốc độ phát:</span>
+                    <span id="valSpeed" class="font-mono text-purple-300 font-bold">1.0x</span>
+                  </div>
+                  <input type="range" id="sliderSpeed" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full" oninput="handleSpeedChange(this.value)">
+                </div>
+
+                <!-- Normalize Volume -->
+                <div class="flex items-center gap-2 pt-4">
+                  <input type="checkbox" id="chkNormalize" checked class="w-4 h-4 rounded text-purple-600 bg-[#0E0C12] border-[#3F3A46] focus:ring-purple-500 cursor-pointer">
+                  <label for="chkNormalize" class="text-slate-300 cursor-pointer">Chuẩn hóa âm lượng (Loudness)</label>
+                </div>
+              </div>
+
+              <!-- Main Generate Action Button -->
+              <div class="pt-2">
+                <button id="generateBtn" onclick="triggerSynthesis()" class="w-full py-4 px-6 rounded-full bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-m3-2 transition-all cursor-pointer">
+                  <span class="material-symbols-outlined text-[22px]">play_circle</span>
+                  <span>SINH GIỌNG NÓI (Ctrl + Enter)</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right Column: Live Audio Stage, A/B Comparison & History -->
+          <div class="xl:col-span-5 space-y-6">
+
+            <!-- Audio Stage Player Card -->
+            <div class="bg-[#18151E] rounded-2xl p-5 border border-[#3F3A46] shadow-m3-1 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-purple-400 text-[20px]">graphic_eq</span>
+                  <h2 class="text-sm font-bold uppercase tracking-wider text-white">Kết quả phát âm (Audio Stage)</h2>
+                </div>
+                <span id="playbackTimer" class="font-mono text-xs font-bold text-purple-300 bg-[#231F2A] px-2.5 py-1 rounded-md border border-[#3F3A46]">00:00 / 00:00</span>
+              </div>
+
+              <!-- Waveform Canvas Box (Interactive Seek) -->
+              <div class="bg-[#0E0C12] rounded-xl p-3 border border-[#3F3A46] relative overflow-hidden">
+                <canvas id="waveformCanvas" onclick="seekWaveform(event)" class="w-full h-24 rounded-md cursor-pointer"></canvas>
+                <div id="waveformPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-[#0E0C12]/90">
+                  <span class="material-symbols-outlined text-slate-500 text-[32px] mb-1">hearing</span>
+                  <div class="text-xs text-slate-300 font-medium">Chưa có âm thanh được tạo</div>
+                  <div class="text-[11px] text-slate-500">Nhấn 'SINH GIỌNG NÓI' để bắt đầu render</div>
+                </div>
+              </div>
+
+              <!-- Player Controls Row -->
+              <div class="flex items-center justify-between gap-3 pt-1">
+                <div class="flex items-center gap-2">
+                  <!-- Play / Pause -->
+                  <button id="btnPlayPause" onclick="togglePlayPause()" class="w-11 h-11 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-m3-1 hover:bg-purple-700 transition-all cursor-pointer" disabled>
+                    <span class="material-symbols-outlined text-[24px]">play_arrow</span>
+                  </button>
+                  <!-- Stop -->
+                  <button id="btnStop" onclick="stopAudio()" class="w-10 h-10 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-white flex items-center justify-center transition-colors cursor-pointer" disabled>
+                    <span class="material-symbols-outlined text-[20px]">stop</span>
+                  </button>
+                </div>
+
+                <!-- Volume Slider -->
+                <div class="flex items-center gap-2 flex-1 max-w-[130px]">
+                  <span class="material-symbols-outlined text-slate-400 text-[18px]">volume_up</span>
+                  <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1" class="w-full">
+                </div>
+
+                <!-- Export Format Selector & Download -->
+                <div class="flex items-center gap-1.5">
+                  <select id="exportFormatSelect" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-lg px-2 py-1.5 cursor-pointer">
+                    <option value="wav">WAV</option>
+                    <option value="mp3">MP3</option>
+                    <option value="flac">FLAC</option>
+                    <option value="ogg">OGG</option>
+                  </select>
+                  <button id="btnDownload" onclick="downloadCurrentWav()" class="p-2.5 rounded-full bg-[#231F2A] hover:bg-purple-600 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Tải file âm thanh" disabled>
+                    <span class="material-symbols-outlined text-[20px]">download</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- A/B Comparison Toolbar -->
+              <div class="pt-3 border-t border-[#3F3A46]/50 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-slate-400 font-medium">So sánh A/B:</span>
+                  <button onclick="saveSlotA()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white border border-[#3F3A46] cursor-pointer">Lưu bản A</button>
+                  <button onclick="saveSlotB()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white border border-[#3F3A46] cursor-pointer">Lưu bản B</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button id="btnPlayA" onclick="playSlotA()" class="px-2.5 py-1 rounded bg-[#231F2A] text-slate-400 border border-[#3F3A46] cursor-pointer" disabled>▶ Bản A</button>
+                  <button id="btnPlayB" onclick="playSlotB()" class="px-2.5 py-1 rounded bg-[#231F2A] text-slate-400 border border-[#3F3A46] cursor-pointer" disabled>▶ Bản B</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mini History Card -->
+            <div class="bg-[#18151E] rounded-2xl p-5 border border-[#3F3A46] shadow-m3-1 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-purple-400 text-[20px]">queue_music</span>
+                  <h2 class="text-sm font-bold uppercase tracking-wider text-white">Lịch sử tạo gần đây</h2>
+                </div>
+                <button onclick="refreshHistory()" class="text-xs text-purple-400 hover:underline flex items-center gap-1 cursor-pointer">
+                  <span class="material-symbols-outlined text-[16px]">refresh</span>
+                  <span>Làm mới</span>
+                </button>
+              </div>
+
+              <!-- History List Container -->
+              <div id="miniHistoryList" class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                <div class="text-xs text-slate-500 py-4 text-center">Đang tải lịch sử...</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 2: BATCH STUDIO (Custom Delimiter + Drag-and-Drop text)                -->
+      <!-- ========================================================================= -->
+      <section id="panel-batch" class="tab-panel space-y-6">
+        <div class="bg-[#18151E] rounded-2xl p-6 border border-[#3F3A46] shadow-m3-1 space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                <span class="material-symbols-outlined">auto_stories</span>
+              </div>
+              <div>
+                <h2 class="text-base font-bold text-white">Batch Studio — Xử lý kịch bản hàng loạt đa nhân vật</h2>
+                <p class="text-xs text-slate-400">Tự động tách câu theo kịch bản, gán giọng từng đoạn, hòa âm BGM và xuất phụ đề SRT/VTT.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="document.getElementById('batchFileInput').click()" class="px-4 py-2 rounded-full bg-[#231F2A] hover:bg-purple-600 text-xs font-bold text-white border border-[#3F3A46] transition-colors flex items-center gap-1.5 cursor-pointer">
+                <span class="material-symbols-outlined text-[18px]">upload_file</span>
+                <span>Nhập file Text / SRT / CSV</span>
+              </button>
+              <input type="file" id="batchFileInput" accept=".txt,.csv,.srt,.vtt,.md" class="hidden" onchange="handleBatchFileUpload(this)">
+            </div>
+          </div>
+
+          <!-- Batch Textarea with Drag & Drop -->
+          <div class="space-y-1">
+            <textarea id="batchTextarea" rows="6" placeholder="Dán nội dung kịch bản hoặc KÉO THẢ FILE TEXT vào đây...&#10;Dòng 1: Chào các bạn, đây là nhân vật A.&#10;Dòng 2: Còn tôi là nhân vật B, rất vui được gặp bạn." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-xl p-3.5 text-sm focus:outline-none transition-all resize-none font-sans leading-relaxed"></textarea>
+            <div class="text-[11px] text-slate-500 px-1">💡 Hỗ trợ kéo thả trực tiếp file .txt, .csv, .srt, .vtt, .md vào khung trên</div>
+          </div>
+
+          <!-- Split Options (Including Custom Delimiter) & Actions -->
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-[#0E0C12] p-3.5 rounded-xl border border-[#3F3A46]">
+            <div class="flex flex-wrap items-center gap-3 text-xs">
+              <span class="text-slate-300 font-medium">Quy tắc tách:</span>
+              <select id="batchSplitRule" onchange="handleBatchSplitRuleChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer">
+                <option value="line">Theo từng dòng (Line break)</option>
+                <option value="sentence">Theo dấu chấm câu (Sentences)</option>
+                <option value="paragraph">Theo đoạn văn (Paragraph)</option>
+                <option value="custom">Ký tự đặc biệt tùy chỉnh (Custom Delimiter)</option>
+              </select>
+
+              <!-- Custom Delimiter Input (Hidden by default) -->
+              <div id="batchCustomDelimiterBox" class="hidden flex items-center gap-1.5">
+                <span class="text-slate-400">Ký tự:</span>
+                <input type="text" id="batchCustomDelimiter" value="|" placeholder="Ví dụ: | hoặc ; hoặc ---" class="bg-[#18151E] border border-purple-500 rounded-lg px-2 py-1 text-xs text-white w-28 font-mono">
+              </div>
+
+              <button onclick="parseBatchLines()" class="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 font-bold text-white flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[16px]">splitscreen</span>
+                <span>Phân tích kịch bản</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="addBatchEmptyLine()" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-xs text-slate-300 hover:text-white border border-[#3F3A46] cursor-pointer">➕ Thêm dòng</button>
+              <button onclick="clearBatchAll()" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-red-900/50 text-xs text-red-400 border border-[#3F3A46] cursor-pointer">🧹 Xóa tất cả</button>
+              <span id="batchCountBadge" class="text-xs font-mono text-purple-300 font-bold">0 dòng</span>
+            </div>
+          </div>
+
+          <!-- Batch Table Container -->
+          <div id="batchTableContainer" class="hidden space-y-4 pt-1">
+            <div class="overflow-x-auto rounded-xl border border-[#3F3A46]">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-[#231F2A] text-slate-300 border-b border-[#3F3A46]">
+                  <tr>
+                    <th class="p-3 w-10"><input type="checkbox" id="batchSelectAll" checked onchange="toggleSelectAllBatch(this)"></th>
+                    <th class="p-3 w-12">#</th>
+                    <th class="p-3">Nội dung thoại</th>
+                    <th class="p-3 w-48">Nhân vật / Giọng</th>
+                    <th class="p-3 w-28">Trạng thái</th>
+                    <th class="p-3 w-24 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="batchTableBody" class="divide-y divide-[#3F3A46]/40 bg-[#0E0C12]"></tbody>
+              </table>
+            </div>
+
+            <!-- BGM & Subtitles Export Studio Box -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#0E0C12] p-4 rounded-xl border border-[#3F3A46] text-xs">
+              <!-- BGM Settings -->
+              <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="chkEnableBGM" class="w-4 h-4 rounded text-purple-600 bg-[#18151E] border-[#3F3A46] cursor-pointer" onchange="toggleBgmControls(this.checked)">
+                  <label for="chkEnableBGM" class="text-white font-bold cursor-pointer">Hòa âm Nhạc nền (BGM Mixing)</label>
+                </div>
+                <div id="bgmControls" class="space-y-2.5 opacity-40 pointer-events-none transition-opacity">
+                  <div class="flex items-center gap-2">
+                    <input type="file" id="bgmFileInput" accept="audio/*" class="hidden" onchange="handleBgmUpload(this)">
+                    <button onclick="document.getElementById('bgmFileInput').click()" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-purple-600 text-slate-200 border border-[#3F3A46] cursor-pointer">📁 Chọn file nhạc nền...</button>
+                    <span id="bgmFileName" class="text-slate-400 truncate max-w-xs">Chưa chọn file</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-400">Âm lượng BGM:</span>
+                    <input type="range" id="bgmVolSlider" min="0" max="1" step="0.05" value="0.25" class="w-40">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Export Options & Pause Duration -->
+              <div class="space-y-3">
+                <div class="text-white font-bold">Tùy chọn Xuất & Hậu kỳ:</div>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-300">Khoảng lặng giữa các câu:</span>
+                    <div class="flex items-center gap-2">
+                      <input type="range" id="batchPauseDuration" min="0.1" max="3.0" step="0.1" value="0.8" class="w-28" oninput="document.getElementById('valBatchPause').textContent = parseFloat(this.value).toFixed(1) + 's'">
+                      <span id="valBatchPause" class="font-mono text-purple-300 font-bold w-10">0.8s</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" id="chkExportSrt" checked class="w-4 h-4 rounded text-purple-600 cursor-pointer">
+                    <label for="chkExportSrt" class="text-slate-300 cursor-pointer">Tạo phụ đề SRT (`.srt` sync thời gian)</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Run Batch Actions & Merge All -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <div id="batchProgressBar" class="w-full sm:w-1/3 bg-[#231F2A] h-2.5 rounded-full overflow-hidden hidden">
+                <div id="batchProgressFill" class="bg-purple-600 h-full w-0 transition-all duration-300"></div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+                <button id="batchRunAllBtn" onclick="runBatchAll()" class="px-6 py-3 rounded-full bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center justify-center gap-2 shadow-m3-2 cursor-pointer transition-all">
+                  <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                  <span>Chạy Batch tất cả các dòng</span>
+                </button>
+                <button id="batchMergeAllBtn" onclick="runBatchMergeAll()" class="px-6 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white flex items-center justify-center gap-2 shadow-m3-2 cursor-pointer transition-all">
+                  <span class="material-symbols-outlined text-[18px]">merge</span>
+                  <span>Ghép toàn bộ Audio (Merge All)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Merged Audio Result Card -->
+            <div id="batchMergedResultCard" class="hidden p-4 rounded-xl bg-[#0E0C12] border border-emerald-500/50 space-y-3">
+              <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[18px]">audiotrack</span>
+                  </div>
+                  <div>
+                    <div id="batchMergedTitle" class="text-xs font-bold text-white">chatterbox-batch-merged.wav</div>
+                    <div id="batchMergedMeta" class="text-[10px] text-emerald-400 font-mono">Đã ghép thành công toàn bộ kịch bản</div>
+                  </div>
+                </div>
+                <a id="batchMergedDownloadLink" href="#" download="chatterbox-batch-merged.wav" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer shadow-m3-1">
+                  <span class="material-symbols-outlined text-[16px]">download</span>
+                  <span>Tải về file ghép (.WAV)</span>
+                </a>
+              </div>
+              <audio id="batchMergedAudioPlayer" controls class="w-full h-10"></audio>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 3: MULTILINGUAL TTS                                                   -->
+      <!-- ========================================================================= -->
+      <section id="panel-multilingual" class="tab-panel space-y-6">
+        <div class="bg-[#18151E] rounded-2xl p-6 border border-[#3F3A46] shadow-m3-1 space-y-5">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+              <span class="material-symbols-outlined">translate</span>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white">Multilingual TTS — Phát âm đa ngôn ngữ (23+ Thứ tiếng)</h2>
+              <p class="text-xs text-slate-400">Sinh giọng nói chuẩn bản xứ với hỗ trợ Tiếng Việt, Tiếng Anh, Pháp, Nhật, Hàn, Trung...</p>
+            </div>
+          </div>
+
+          <!-- Language Selector Grid -->
+          <div>
+            <div class="text-xs font-medium text-slate-400 mb-2.5">Chọn ngôn ngữ đích:</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2" id="mtlLangGrid">
+              <button onclick="selectMtlLang('vi', this)" class="mtl-lang-btn active p-2.5 rounded-xl bg-purple-600 text-white border border-purple-500 text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇻🇳</span><span>Tiếng Việt</span></button>
+              <button onclick="selectMtlLang('en', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇬🇧</span><span>English</span></button>
+              <button onclick="selectMtlLang('ja', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇯🇵</span><span>Japanese</span></button>
+              <button onclick="selectMtlLang('zh', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇨🇳</span><span>Chinese</span></button>
+              <button onclick="selectMtlLang('ko', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇰🇷</span><span>Korean</span></button>
+              <button onclick="selectMtlLang('fr', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇫🇷</span><span>French</span></button>
+              <button onclick="selectMtlLang('de', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇩🇪</span><span>German</span></button>
+              <button onclick="selectMtlLang('es', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇪🇸</span><span>Spanish</span></button>
+              <button onclick="selectMtlLang('ru', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇷🇺</span><span>Russian</span></button>
+              <button onclick="selectMtlLang('it', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇮🇹</span><span>Italian</span></button>
+              <button onclick="selectMtlLang('hi', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇮🇳</span><span>Hindi</span></button>
+              <button onclick="selectMtlLang('ar', this)" class="mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer"><span>🇸🇦</span><span>Arabic</span></button>
+            </div>
+          </div>
+
+          <!-- Multilingual Textarea with Drag & Drop -->
+          <div class="space-y-1">
+            <textarea id="mtlPromptInput" rows="4" placeholder="Nhập văn bản hoặc KÉO THẢ FILE TEXT vào đây..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-xl p-3.5 text-sm focus:outline-none transition-all resize-none font-sans">Xin chào! Đây là tính năng phát âm đa ngôn ngữ chất lượng cao của Chatterbox Studio.</textarea>
+            <div class="text-[11px] text-slate-500 px-1">💡 Có thể kéo thả file text (.txt, .md) trực tiếp vào ô trên</div>
+          </div>
+
+          <button id="mtlGenerateBtn" onclick="triggerMtlSynthesis()" class="w-full py-4 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-m3-2 cursor-pointer transition-all">
+            <span class="material-symbols-outlined text-[22px]">record_voice_over</span>
+            <span>Sinh giọng nói Đa ngôn ngữ</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 4: VOICE CONVERSION (VC)                                              -->
+      <!-- ========================================================================= -->
+      <section id="panel-vc" class="tab-panel space-y-6">
+        <div class="bg-[#18151E] rounded-2xl p-6 border border-[#3F3A46] shadow-m3-1 space-y-5">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 rounded-xl bg-orange-600/20 text-orange-400 border border-orange-500/30">
+              <span class="material-symbols-outlined">sync_alt</span>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white">Voice Conversion — Chuyển đổi âm sắc giọng nói</h2>
+              <p class="text-xs text-slate-400">Giữ nguyên nội dung và ngữ điệu của file nguồn, thay đổi âm sắc sang giọng đích.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Source Audio -->
+            <div class="bg-[#0E0C12] p-4 rounded-xl border border-[#3F3A46] space-y-3 text-center">
+              <div class="text-xs font-bold text-white uppercase tracking-wider">1. Âm thanh nguồn (Source Audio)</div>
+              <input type="file" id="vcSourceInput" accept="audio/*" class="hidden" onchange="updateVcLabel(this, 'vcSrcLabel')">
+              <button onclick="document.getElementById('vcSourceInput').click()" class="w-full py-8 border-2 border-dashed border-[#3F3A46] hover:border-purple-500 rounded-lg flex flex-col items-center gap-2 group transition-all cursor-pointer">
+                <span class="material-symbols-outlined text-purple-400 group-hover:scale-110 transition-transform">upload_file</span>
+                <span id="vcSrcLabel" class="text-xs text-slate-300 font-medium">Chọn file âm thanh nguồn...</span>
+              </button>
+            </div>
+
+            <!-- Target Voice -->
+            <div class="bg-[#0E0C12] p-4 rounded-xl border border-[#3F3A46] space-y-3 text-center">
+              <div class="text-xs font-bold text-white uppercase tracking-wider">2. Giọng mẫu đích (Target Voice)</div>
+              <input type="file" id="vcTargetInput" accept="audio/*" class="hidden" onchange="updateVcLabel(this, 'vcTgtLabel')">
+              <button onclick="document.getElementById('vcTargetInput').click()" class="w-full py-8 border-2 border-dashed border-[#3F3A46] hover:border-purple-500 rounded-lg flex flex-col items-center gap-2 group transition-all cursor-pointer">
+                <span class="material-symbols-outlined text-purple-400 group-hover:scale-110 transition-transform">record_voice_over</span>
+                <span id="vcTgtLabel" class="text-xs text-slate-300 font-medium">Chọn file giọng mẫu đích...</span>
+              </button>
+            </div>
+          </div>
+
+          <button id="vcGenerateBtn" onclick="triggerVcConversion()" class="w-full py-4 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-m3-2 cursor-pointer transition-all">
+            <span class="material-symbols-outlined text-[22px]">sync</span>
+            <span>Chuyển đổi âm sắc giọng nói</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 5: CHARACTERS (VOICES)                                                -->
+      <!-- ========================================================================= -->
+      <section id="panel-characters" class="tab-panel space-y-6">
+        <div class="bg-[#18151E] rounded-2xl p-6 border border-[#3F3A46] shadow-m3-1 space-y-5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 rounded-xl bg-pink-600/20 text-pink-400 border border-pink-500/30">
+                <span class="material-symbols-outlined">face</span>
+              </div>
+              <div>
+                <h2 class="text-base font-bold text-white">Quản lý Nhân vật & Hồ sơ giọng nói (Characters)</h2>
+                <p class="text-xs text-slate-400">Lưu trữ các nhân vật yêu thích kèm thông số biểu cảm, tốc độ và mẫu giọng độc quyền.</p>
+              </div>
+            </div>
+            <button onclick="openCreateCharacterModal()" class="px-4 py-2.5 rounded-full bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-2 shadow-m3-1 cursor-pointer">
+              <span class="material-symbols-outlined text-[18px]">add</span>
+              <span>Tạo Nhân vật mới</span>
+            </button>
+          </div>
+
+          <!-- Characters Grid Container -->
+          <div id="charactersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="text-xs text-slate-500 py-8 text-center col-span-full">Đang tải danh sách nhân vật...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 6: FULL HISTORY                                                       -->
+      <!-- ========================================================================= -->
+      <section id="panel-history" class="tab-panel space-y-6">
+        <div class="bg-[#18151E] rounded-2xl p-6 border border-[#3F3A46] shadow-m3-1 space-y-5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
+                <span class="material-symbols-outlined">history</span>
+              </div>
+              <div>
+                <h2 class="text-base font-bold text-white">Lịch sử xuất âm thanh (Generation History)</h2>
+                <p class="text-xs text-slate-400">Toàn bộ các tác vụ và file âm thanh đã được tạo trong phiên làm việc.</p>
+              </div>
+            </div>
+            <button onclick="refreshHistory()" class="px-4 py-2 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-xs font-bold text-white border border-[#3F3A46] flex items-center gap-1.5 transition-colors cursor-pointer">
+              <span class="material-symbols-outlined text-[18px]">refresh</span>
+              <span>Làm mới danh sách</span>
+            </button>
+          </div>
+
+          <!-- History Full Table -->
+          <div class="overflow-x-auto rounded-xl border border-[#3F3A46]">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-[#231F2A] text-slate-300 border-b border-[#3F3A46]">
+                <tr>
+                  <th class="p-3.5 w-14">Play</th>
+                  <th class="p-3.5">Nội dung đoạn thoại</th>
+                  <th class="p-3.5 w-28">Loại Job</th>
+                  <th class="p-3.5 w-32">Thời gian</th>
+                  <th class="p-3.5 w-28">Trạng thái</th>
+                  <th class="p-3.5 w-28 text-right">Tải về</th>
+                </tr>
+              </thead>
+              <tbody id="fullHistoryTableBody" class="divide-y divide-[#3F3A46]/40 bg-[#0E0C12]">
+                <tr><td colspan="6" class="p-6 text-center text-slate-500">Đang tải dữ liệu lịch sử...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 7: SETTINGS & SYSTEM CONFIGURATION                                    -->
+      <!-- ========================================================================= -->
+      <section id="panel-settings" class="tab-panel space-y-6">
+        <div class="bg-[#18151E] rounded-2xl p-6 border border-[#3F3A46] shadow-m3-1 space-y-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 rounded-xl bg-slate-600/20 text-slate-300 border border-slate-500/30">
+                <span class="material-symbols-outlined">settings</span>
+              </div>
+              <div>
+                <h2 class="text-base font-bold text-white">⚙️ Cài đặt Hệ thống & Quản lý Mô hình AI</h2>
+                <p class="text-xs text-slate-400">Tùy chỉnh toàn diện cấu hình lưu trữ, thiết bị tính toán, giới hạn CPU/VRAM và trạng thái nạp mô hình.</p>
+              </div>
+            </div>
+            <button onclick="saveAllSettings()" class="px-5 py-2.5 rounded-full bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-2 shadow-m3-1 cursor-pointer">
+              <span class="material-symbols-outlined text-[18px]">save</span>
+              <span>Lưu cấu hình hệ thống</span>
+            </button>
+          </div>
+
+          <!-- Section 1: Storage & Paths -->
+          <div class="p-5 rounded-xl bg-[#0E0C12] border border-[#3F3A46] space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span class="material-symbols-outlined text-purple-400 text-[18px]">folder</span>
+                <span>1. Cấu hình Đường dẫn & Lưu trữ</span>
+              </div>
+              <button onclick="cleanProjectTmpFiles()" class="px-3 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-xs font-medium text-slate-300 hover:text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[14px]">cleaning_services</span>
+                <span>Dọn dẹp file tạm (tmp)</span>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div class="space-y-1.5">
+                <label class="text-slate-300 font-medium">Thư mục xuất âm thanh mặc định:</label>
+                <input type="text" id="settingExportDir" value="~/Downloads" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-2.5 font-mono">
+              </div>
+              <div class="space-y-1.5">
+                <label class="text-slate-300 font-medium">Thư mục lưu Cache Model:</label>
+                <input type="text" id="settingModelDir" value="/var/www/chatterbox/models" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-2.5 font-mono">
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1 text-xs">
+              <input type="checkbox" id="settingAutoOpenExport" checked class="w-4 h-4 rounded text-purple-600 bg-[#18151E] border-[#3F3A46] cursor-pointer">
+              <label for="settingAutoOpenExport" class="text-slate-300 cursor-pointer">Tự động mở thư mục chứa file sau khi sinh âm thanh hoàn tất</label>
+            </div>
+          </div>
+
+          <!-- Section 2: Model & Hardware Limits -->
+          <div class="p-5 rounded-xl bg-[#0E0C12] border border-[#3F3A46] space-y-4">
+            <div class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <span class="material-symbols-outlined text-purple-400 text-[18px]">memory</span>
+              <span>2. Mô hình & Hiệu năng Tính toán</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <!-- Device -->
+              <div class="space-y-1.5">
+                <label class="text-slate-300 font-medium">Thiết bị tính toán (Device):</label>
+                <select id="settingDevice" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-2.5 cursor-pointer">
+                  <option value="auto">auto (Tự động phát hiện)</option>
+                  <option value="cuda">cuda (GPU NVIDIA)</option>
+                  <option value="mps">mps (Apple Silicon Metal)</option>
+                  <option value="cpu">cpu (Vi xử lý CPU)</option>
+                </select>
+              </div>
+
+              <!-- Default Model -->
+              <div class="space-y-1.5">
+                <label class="text-slate-300 font-medium">Mô hình mặc định:</label>
+                <select id="settingDefaultModel" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-2.5 cursor-pointer">
+                  <option value="turbo">Chatterbox Turbo (350M - Fast)</option>
+                  <option value="standard">Chatterbox Standard (500M - High Quality)</option>
+                  <option value="nano">Chatterbox Nano (110M - Light)</option>
+                  <option value="multilingual">Multilingual TTS (500M)</option>
+                </select>
+              </div>
+
+              <!-- CPU Threads -->
+              <div class="space-y-1.5">
+                <label class="text-slate-300 font-medium">Giới hạn số Luồng CPU:</label>
+                <input type="number" id="settingCpuThreads" min="1" max="16" value="4" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-2.5 font-mono">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
+              <!-- Max Chunk -->
+              <div class="space-y-1.5">
+                <label class="text-slate-300 font-medium">Số ký tự cắt đoạn tối đa (Max Chunk):</label>
+                <input type="number" id="settingMaxChunk" min="500" max="10000" step="500" value="4000" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-2.5 font-mono">
+              </div>
+
+              <!-- HuggingFace Token -->
+              <div class="space-y-1.5">
+                <label class="text-slate-300 font-medium">HuggingFace API Token (Tùy chọn):</label>
+                <input type="password" id="settingHfToken" placeholder="hf_..." class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-2.5 font-mono">
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1 text-xs">
+              <input type="checkbox" id="settingAutoUnload" class="w-4 h-4 rounded text-purple-600 bg-[#18151E] border-[#3F3A46] cursor-pointer">
+              <label for="settingAutoUnload" class="text-slate-300 cursor-pointer">Tự động giải phóng các mô hình cũ khỏi GPU VRAM khi đổi model để tiết kiệm bộ nhớ</label>
+            </div>
+          </div>
+
+          <!-- Section 3: Live Model Management & VRAM State -->
+          <div class="p-5 rounded-xl bg-[#0E0C12] border border-[#3F3A46] space-y-4">
+            <div class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <span class="material-symbols-outlined text-purple-400 text-[18px]">developer_board</span>
+              <span>3. Quản lý Trạng thái Nạp VRAM của các Model AI</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="liveModelsGrid">
+              <!-- Turbo -->
+              <div class="p-4 rounded-xl bg-[#18151E] border border-[#3F3A46] flex flex-col justify-between gap-3">
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-sm text-white">Chatterbox Turbo</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">350M Fast</span>
+                  </div>
+                  <div class="text-xs text-slate-400">Hỗ trợ đầy đủ biểu cảm Paralinguistic tags.</div>
+                </div>
+                <div class="flex justify-between items-center pt-2 border-t border-[#3F3A46]/50">
+                  <span id="modelStatus-turbo" class="text-xs text-emerald-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Đã nạp</span>
+                  <div class="flex items-center gap-1.5">
+                    <button onclick="preloadModel('turbo')" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer">Nạp</button>
+                    <button onclick="unloadModel('turbo')" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-red-900/50 text-xs text-red-300 border border-[#3F3A46] cursor-pointer">Giải phóng</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Standard -->
+              <div class="p-4 rounded-xl bg-[#18151E] border border-[#3F3A46] flex flex-col justify-between gap-3">
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-sm text-white">Chatterbox Standard</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-700/50">500M Quality</span>
+                  </div>
+                  <div class="text-xs text-slate-400">Chất lượng âm thanh chuẩn cao nhất.</div>
+                </div>
+                <div class="flex justify-between items-center pt-2 border-t border-[#3F3A46]/50">
+                  <span id="modelStatus-standard" class="text-xs text-slate-400">Chưa nạp</span>
+                  <div class="flex items-center gap-1.5">
+                    <button onclick="preloadModel('standard')" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer">Nạp</button>
+                    <button onclick="unloadModel('standard')" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-red-900/50 text-xs text-red-300 border border-[#3F3A46] cursor-pointer">Giải phóng</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Multilingual -->
+              <div class="p-4 rounded-xl bg-[#18151E] border border-[#3F3A46] flex flex-col justify-between gap-3">
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-sm text-white">Multilingual TTS</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-900/40 text-blue-300 border border-blue-700/50">23+ Languages</span>
+                  </div>
+                  <div class="text-xs text-slate-400">Hỗ trợ 23 ngôn ngữ toàn cầu.</div>
+                </div>
+                <div class="flex justify-between items-center pt-2 border-t border-[#3F3A46]/50">
+                  <span id="modelStatus-multilingual" class="text-xs text-slate-400">Chưa nạp</span>
+                  <div class="flex items-center gap-1.5">
+                    <button onclick="preloadModel('multilingual')" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer">Nạp</button>
+                    <button onclick="unloadModel('multilingual')" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-red-900/50 text-xs text-red-300 border border-[#3F3A46] cursor-pointer">Giải phóng</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================== MODEL COMPARISON MODAL ==================== -->
+  <div id="modelCompareModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#18151E] rounded-2xl p-6 max-w-2xl w-full border border-[#3F3A46] shadow-m3-3 space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-purple-400">info</span>
+          <h3 class="text-base font-bold text-white">So sánh & Đặc điểm các Mô hình AI</h3>
+        </div>
+        <button onclick="closeModelCompareModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto rounded-xl border border-[#3F3A46]">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-[#231F2A] text-slate-300 border-b border-[#3F3A46]">
+            <tr>
+              <th class="p-3">Mô hình</th>
+              <th class="p-3">Kích thước</th>
+              <th class="p-3">Tốc độ (RTF)</th>
+              <th class="p-3">Hỗ trợ Tags</th>
+              <th class="p-3">Khuyên dùng cho</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#3F3A46]/40 bg-[#0E0C12] text-slate-300">
+            <tr>
+              <td class="p-3 font-bold text-purple-400">Chatterbox Turbo</td>
+              <td class="p-3 font-mono">350M</td>
+              <td class="p-3 text-emerald-400">⚡ Rất nhanh (~0.15)</td>
+              <td class="p-3 text-emerald-400">✓ Có đầy đủ</td>
+              <td class="p-3">Kể chuyện, đối thoại, lồng tiếng cảm xúc</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-bold text-white">Chatterbox Standard</td>
+              <td class="p-3 font-mono">500M</td>
+              <td class="p-3 text-yellow-400">Chuẩn (~0.35)</td>
+              <td class="p-3 text-slate-500">✗ Cơ bản</td>
+              <td class="p-3">Đọc tin tức, sách nói, tài liệu chính luận</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-bold text-white">Chatterbox Nano</td>
+              <td class="p-3 font-mono">110M</td>
+              <td class="p-3 text-emerald-400">⚡ Siêu nhẹ (~0.08)</td>
+              <td class="p-3 text-emerald-400">✓ Có</td>
+              <td class="p-3">Chạy trên máy yếu, CPU không có GPU</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-bold text-blue-400">Multilingual TTS</td>
+              <td class="p-3 font-mono">500M</td>
+              <td class="p-3 text-yellow-400">Chuẩn (~0.40)</td>
+              <td class="p-3 text-slate-500">✗ Cơ bản</td>
+              <td class="p-3">Phát âm 23+ ngôn ngữ quốc tế bản xứ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button onclick="closeModelCompareModal()" class="w-full py-2.5 rounded-full bg-purple-600 text-white font-bold text-xs cursor-pointer">Đóng</button>
+    </div>
+  </div>
+
+  <!-- ==================== AUDIO TRIMMER MODAL ==================== -->
+  <div id="trimmerModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#18151E] rounded-2xl p-6 max-w-md w-full border border-[#3F3A46] shadow-m3-3 space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-purple-400">content_cut</span>
+          <h3 class="text-base font-bold text-white">Cắt xén âm thanh mẫu (Audio Trimmer)</h3>
+        </div>
+        <button onclick="closeTrimmerModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <p class="text-slate-300">Chọn đoạn âm thanh từ 3s đến 10s có giọng nói rõ ràng nhất để làm mẫu clone:</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Bắt đầu từ (giây):</label>
+            <input type="number" id="trimStart" value="0.0" step="0.5" min="0" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] rounded-lg p-2 font-mono">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Kết thúc ở (giây):</label>
+            <input type="number" id="trimEnd" value="6.0" step="0.5" min="1" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] rounded-lg p-2 font-mono">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-2">
+        <button onclick="closeTrimmerModal()" class="px-4 py-2 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-xs font-bold text-white border border-[#3F3A46] cursor-pointer">Hủy</button>
+        <button onclick="applyAudioTrim()" class="px-5 py-2 rounded-full bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer">Áp dụng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CREATE CHARACTER MODAL ==================== -->
+  <div id="characterModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-[#18151E] rounded-2xl p-6 max-w-xl w-full border border-[#3F3A46] shadow-m3-3 space-y-4 my-8 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+            <span class="material-symbols-outlined text-[20px]">face</span>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Tạo Hồ sơ Nhân vật (Character) mới</h3>
+            <p class="text-[11px] text-slate-400">Thiết lập tham số sinh giọng, âm sắc, ngôn ngữ và giọng đọc mẫu</p>
+          </div>
+        </div>
+        <button onclick="closeCreateCharacterModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-3.5 text-xs">
+        <!-- Name & Language -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Tên nhân vật *</label>
+            <input type="text" id="charNameInput" placeholder="Ví dụ: MC Nam Thời Sự, Cô Giáo..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Ngôn ngữ chính (Language) *</label>
+            <select id="charLangSelect" onchange="handleCharLangChange(this.value)" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 focus:outline-none cursor-pointer">
+              <option value="vi" selected>🇻🇳 vi - Tiếng Việt</option>
+              <option value="en">🇬🇧 en - English</option>
+              <option value="ja">🇯🇵 ja - Japanese</option>
+              <option value="zh">🇨🇳 zh - Chinese</option>
+              <option value="ko">🇰🇷 ko - Korean</option>
+              <option value="fr">🇫🇷 fr - French</option>
+              <option value="de">🇩🇪 de - German</option>
+              <option value="es">🇪🇸 es - Spanish</option>
+              <option value="ru">🇷🇺 ru - Russian</option>
+              <option value="it">🇮🇹 it - Italian</option>
+              <option value="hi">🇮🇳 hi - Hindi</option>
+              <option value="ar">🇸🇦 ar - Arabic</option>
+              <option value="pt">🇵🇹 pt - Portuguese</option>
+              <option value="nl">🇳🇱 nl - Dutch</option>
+              <option value="pl">🇵🇱 pl - Polish</option>
+              <option value="tr">🇹🇷 tr - Turkish</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Mô tả đặc tính giọng đọc</label>
+          <input type="text" id="charDescInput" placeholder="Ví dụ: Giọng nam trầm ấm, phát âm rõ ràng, phong thái tự tin..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 focus:outline-none">
+        </div>
+
+        <!-- Reference Audio Upload (Optional) -->
+        <div class="p-3 rounded-xl bg-[#0E0C12] border border-[#3F3A46] space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px] text-purple-400">audiotrack</span>
+              <span>File âm thanh mẫu độc quyền (Reference Audio)</span>
+            </span>
+            <span class="text-[10px] text-slate-500">Tùy chọn (Optional)</span>
+          </div>
+          <input type="file" id="charAudioFileInput" accept="audio/*" class="hidden" onchange="handleCharAudioFileSelected(this)">
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="document.getElementById('charAudioFileInput').click()" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-slate-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-[16px] text-purple-400">upload_file</span>
+              <span id="charAudioBtnLabel">Chọn file audio mẫu...</span>
+            </button>
+            <button type="button" onclick="clearCharAudioFile()" id="charAudioClearBtn" class="hidden px-2 py-1.5 rounded-lg bg-red-900/30 hover:bg-red-900/60 border border-red-700/50 text-red-300 text-xs cursor-pointer" title="Bỏ chọn file mẫu">
+              <span class="material-symbols-outlined text-[16px]">close</span>
+            </button>
+            <span id="charAudioFileName" class="text-slate-400 text-xs truncate max-w-[240px]">Chưa chọn file mẫu (sử dụng âm sắc mặc định)</span>
+          </div>
+        </div>
+
+        <!-- Full Generation Parameters Sliders -->
+        <div class="p-3.5 rounded-xl bg-[#0E0C12] border border-[#3F3A46] space-y-3">
+          <div class="text-slate-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px] text-purple-400">tune</span>
+            <span>Tham số sinh giọng (Voice Generation Parameters)</span>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <!-- Expressiveness -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="text-slate-300">Độ biểu cảm (Expressiveness):</span>
+                <span id="valCharExag" class="font-mono text-purple-300 font-bold">0.50</span>
+              </div>
+              <input type="range" id="charExagInput" min="0.0" max="1.0" step="0.05" value="0.50" class="w-full" oninput="document.getElementById('valCharExag').textContent = parseFloat(this.value).toFixed(2)">
+            </div>
+
+            <!-- Pace -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="text-slate-300">Tốc độ nhịp đọc (Pace):</span>
+                <span id="valCharPace" class="font-mono text-purple-300 font-bold">0.50</span>
+              </div>
+              <input type="range" id="charPaceInput" min="0.1" max="1.0" step="0.05" value="0.50" class="w-full" oninput="document.getElementById('valCharPace').textContent = parseFloat(this.value).toFixed(2)">
+            </div>
+
+            <!-- Stability -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="text-slate-300">Độ ổn định (Stability):</span>
+                <span id="valCharStab" class="font-mono text-purple-300 font-bold">0.70</span>
+              </div>
+              <input type="range" id="charStabInput" min="0.0" max="1.0" step="0.05" value="0.70" class="w-full" oninput="document.getElementById('valCharStab').textContent = parseFloat(this.value).toFixed(2)">
+            </div>
+
+            <!-- Seed -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="text-slate-300">Seed ngẫu nhiên:</span>
+                <button type="button" onclick="document.getElementById('charSeedInput').value = Math.floor(Math.random() * 1000000)" class="text-purple-400 hover:underline cursor-pointer">🎲 Random</button>
+              </div>
+              <input type="number" id="charSeedInput" min="0" max="99999999" value="0" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded-lg p-1.5 font-mono">
+            </div>
+          </div>
+        </div>
+
+        <!-- Default Checkbox -->
+        <div class="flex items-center gap-2 px-1">
+          <input type="checkbox" id="charIsDefaultInput" class="w-4 h-4 rounded text-amber-500 bg-[#0E0C12] border-[#3F3A46] focus:ring-amber-400 cursor-pointer">
+          <label for="charIsDefaultInput" class="text-amber-400 font-medium cursor-pointer">⭐ Đặt làm Nhân vật mặc định của hệ thống</label>
+        </div>
+
+        <!-- Test Voice Preview Card -->
+        <div class="p-3 rounded-xl bg-[#231F2A] border border-[#3F3A46] space-y-2">
+          <label class="block text-slate-300 font-medium">Văn bản đọc thử giọng:</label>
+          <div class="flex gap-2">
+            <input type="text" id="charTestTextInput" value="Xin chào, đây là câu đọc thử nghiệm trước khi tạo Character." class="flex-1 bg-[#0E0C12] text-white border border-[#3F3A46] rounded-lg p-2 focus:outline-none text-xs">
+            <button type="button" id="charTestVoiceBtn" onclick="testCharacterVoice()" class="px-4 py-2 rounded-lg bg-[#18151E] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0">
+              <span class="material-symbols-outlined text-[16px]">volume_up</span>
+              <span>Nghe thử</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-3 border-t border-[#3F3A46]/60">
+        <button onclick="closeCreateCharacterModal()" class="px-4 py-2 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-xs font-bold text-white border border-[#3F3A46] cursor-pointer">Hủy</button>
+        <button onclick="saveNewCharacter()" id="charSaveBtn" class="px-6 py-2.5 rounded-full bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white shadow-m3-2 cursor-pointer transition-all">Lưu Nhân vật</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== KEYBOARD SHORTCUTS MODAL ==================== -->
+  <div id="shortcutsModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#18151E] rounded-2xl p-6 max-w-md w-full border border-[#3F3A46] shadow-m3-3 space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-purple-400">keyboard</span>
+          <h3 class="text-base font-bold text-white">Phím tắt bàn phím (Shortcuts)</h3>
+        </div>
+        <button onclick="closeShortcutsModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-2 text-xs divide-y divide-[#3F3A46]/40">
+        <div class="flex justify-between py-2"><span class="font-mono text-purple-300 font-bold">Ctrl / Cmd + Enter</span><span>Khởi chạy sinh giọng nói</span></div>
+        <div class="flex justify-between py-2"><span class="font-mono text-purple-300 font-bold">Spacebar</span><span>Phát / Tạm dừng audio</span></div>
+        <div class="flex justify-between py-2"><span class="font-mono text-purple-300 font-bold">Esc</span><span>Dừng âm thanh tức thì</span></div>
+        <div class="flex justify-between py-2"><span class="font-mono text-purple-300 font-bold">F1</span><span>Mở bảng phím tắt này</span></div>
+      </div>
+
+      <button onclick="closeShortcutsModal()" class="w-full py-2.5 rounded-full bg-purple-600 text-white font-bold text-xs cursor-pointer">Đã hiểu</button>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT CONTROLLER ==================== -->
+  <script>
+    const audioElement = new Audio();
+    let currentAudioUrl = null;
+    let isPlaying = false;
+    let selectedMtlLanguage = 'vi';
+    let uploadedRefFile = null;
+    let currentTab = 'tts';
+
+    // URL Mapping for tabs
+    const TAB_URL_MAP = {
+      'tts': 'tts-studio',
+      'batch': 'batch-studio',
+      'multilingual': 'multilingual-tts',
+      'vc': 'voice-clone',
+      'characters': 'characters',
+      'history': 'history',
+      'settings': 'settings'
+    };
+
+    const URL_TAB_MAP = {
+      'tts-studio': 'tts',
+      'tts': 'tts',
+      'batch-studio': 'batch',
+      'batch': 'batch',
+      'multilingual-tts': 'multilingual',
+      'multilingual': 'multilingual',
+      'voice-clone': 'vc',
+      'vc': 'vc',
+      'characters': 'characters',
+      'characters-studio': 'characters',
+      'history': 'history',
+      'history-studio': 'history',
+      'settings': 'settings',
+      'settings-studio': 'settings'
+    };
+
+    // A/B Comparison Slots
+    let slotA = null;
+    let slotB = null;
+
+    // MediaRecorder for live microphone recording
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecordingMic = false;
+
+    // ==================== MATERIAL 3 TOAST POPUP SYSTEM ====================
+    function showToast(type, message, title = '') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = 'pointer-events-auto p-4 rounded-xl border shadow-m3-2 flex items-start gap-3 text-xs toast-enter transition-all';
+      
+      let icon = 'info';
+      let borderClass = 'border-purple-500/50 bg-[#18151E] text-white';
+      let iconColor = 'text-purple-400';
+
+      if (type === 'error') {
+        icon = 'error';
+        borderClass = 'border-red-500/50 bg-[#1F1215] text-white';
+        iconColor = 'text-red-400';
+        title = title || 'Lỗi xử lý';
+      } else if (type === 'success') {
+        icon = 'check_circle';
+        borderClass = 'border-emerald-500/50 bg-[#0F1B16] text-white';
+        iconColor = 'text-emerald-400';
+        title = title || 'Thành công';
+      } else if (type === 'warning') {
+        icon = 'warning';
+        borderClass = 'border-amber-500/50 bg-[#1F1912] text-white';
+        iconColor = 'text-amber-400';
+        title = title || 'Cảnh báo';
+      } else {
+        title = title || 'Thông báo';
+      }
+
+      toast.className += ` ${borderClass}`;
+      toast.innerHTML = `
+        <span class="material-symbols-outlined text-[20px] ${iconColor} flex-shrink-0 mt-0.5">${icon}</span>
+        <div class="flex-1">
+          <div class="font-bold text-sm mb-0.5">${title}</div>
+          <div class="text-slate-300 leading-relaxed">${message}</div>
+        </div>
+        <button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-white cursor-pointer flex-shrink-0">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+        </button>
+      `;
+
+      container.appendChild(toast);
+
+      // Auto dismiss after 4 seconds
+      setTimeout(() => {
+        if (toast && toast.parentElement) {
+          toast.classList.remove('toast-enter');
+          toast.classList.add('toast-leave');
+          setTimeout(() => toast.remove(), 250);
+        }
+      }, 4000);
+    }
+
+    // ==================== TAB SWITCHING & URL ROUTING ====================
+    function switchTab(tabId, updateUrl = true) {
+      if (!tabId) return;
+      currentTab = tabId;
+
+      // Update Active Navigation Button Styling
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabId) {
+          btn.classList.add('active', 'bg-purple-600', 'text-white', 'font-bold', 'shadow-m3-1');
+          btn.classList.remove('text-slate-400', 'hover:bg-[#231F2A]');
+        } else {
+          btn.classList.remove('active', 'bg-purple-600', 'text-white', 'font-bold', 'shadow-m3-1');
+          btn.classList.add('text-slate-400', 'hover:bg-[#231F2A]');
+        }
+      });
+
+      // Switch Active Section Panel
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
+      });
+      const targetPanel = document.getElementById(`panel-${tabId}`);
+      if (targetPanel) targetPanel.classList.add('active');
+
+      // Update URL Hash / Path
+      if (updateUrl) {
+        const slug = TAB_URL_MAP[tabId] || tabId;
+        window.history.pushState({ tab: tabId }, '', `#${slug}`);
+      }
+
+      // Close Mobile Nav if open
+      const navRail = document.getElementById('navRail');
+      const overlay = document.getElementById('mobileOverlay');
+      if (navRail && overlay) {
+        navRail.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      }
+
+      // Tab specific initializers
+      if (tabId === 'characters') loadCharacters();
+      if (tabId === 'history') refreshHistory();
+      if (tabId === 'settings') loadSettings();
+    }
+
+    function initUrlRoute() {
+      // Check window.location.hash or pathname
+      let raw = window.location.hash.replace(/^#\/?/, '').trim();
+      if (!raw) {
+        const pathname = window.location.pathname.replace(/^\//, '').trim();
+        if (pathname && pathname !== 'gui') raw = pathname;
+      }
+      if (raw && URL_TAB_MAP[raw]) {
+        switchTab(URL_TAB_MAP[raw], false);
+      } else {
+        switchTab('tts', false);
+      }
+    }
+
+    window.addEventListener('hashchange', () => {
+      const raw = window.location.hash.replace(/^#\/?/, '').trim();
+      if (raw && URL_TAB_MAP[raw]) {
+        switchTab(URL_TAB_MAP[raw], false);
+      }
+    });
+
+    window.addEventListener('popstate', (e) => {
+      if (e.state && e.state.tab) {
+        switchTab(e.state.tab, false);
+      } else {
+        initUrlRoute();
+      }
+    });
+
+    function toggleMobileNav() {
+      const navRail = document.getElementById('navRail');
+      const overlay = document.getElementById('mobileOverlay');
+      const isOpen = !navRail.classList.contains('-translate-x-full');
+      if (isOpen) {
+        navRail.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      } else {
+        navRail.classList.remove('-translate-x-full');
+        overlay.classList.remove('hidden');
+      }
+    }
+
+    // ==================== SYSTEM HEALTH ====================
+    async function checkSystemHealth() {
+      const statusEl = document.getElementById('deviceStatus');
+      const indicator = document.getElementById('deviceIndicator');
+      try {
+        const res = await fetch('/api/v1/health');
+        if (res.ok) {
+          const data = await res.json();
+          let devText = 'CPU Ready';
+          if (data.device === 'cuda') {
+            devText = '🟢 CUDA (GPU NVIDIA)';
+          } else if (data.device === 'mps') {
+            devText = '🟢 Apple Metal (MPS)';
+          } else {
+            devText = `🟢 CPU (${data.cpu_threads || 2} Threads)`;
+          }
+          statusEl.textContent = devText;
+          indicator.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        } else {
+          statusEl.textContent = '🟢 Server Online';
+        }
+      } catch (e) {
+        statusEl.textContent = '🟢 Web GUI Local';
+      }
+    }
+
+    function handleModelChange(val) {
+      const hint = document.getElementById('modelDescHint');
+      if (val === 'turbo') {
+        hint.textContent = 'Chatterbox Turbo (350M - Tốc độ cao, hỗ trợ Tags cảm xúc)';
+      } else if (val === 'standard') {
+        hint.textContent = 'Chatterbox Standard (500M - Chất lượng âm thanh chuẩn cao nhất)';
+      } else {
+        hint.textContent = 'Chatterbox Nano (110M - Siêu nhẹ, tối ưu cho CPU)';
+      }
+    }
+
+    function applyPreset(val) {
+      if (val === 'news') {
+        setSlider('sliderExaggeration', 'valExaggeration', 0.3);
+        setSlider('sliderPace', 'valPace', 0.7);
+        setSlider('sliderTemp', 'valTemp', 0.6);
+      } else if (val === 'story') {
+        setSlider('sliderExaggeration', 'valExaggeration', 0.8);
+        setSlider('sliderPace', 'valPace', 0.5);
+        setSlider('sliderTemp', 'valTemp', 0.8);
+      } else if (val === 'expressive') {
+        setSlider('sliderExaggeration', 'valExaggeration', 1.2);
+        setSlider('sliderPace', 'valPace', 0.5);
+        setSlider('sliderTemp', 'valTemp', 1.0);
+      } else if (val === 'whisper') {
+        setSlider('sliderExaggeration', 'valExaggeration', 0.2);
+        setSlider('sliderPace', 'valPace', 0.8);
+        setSlider('sliderTemp', 'valTemp', 0.7);
+      } else {
+        resetSliders();
+      }
+      showToast('info', `Đã áp dụng cấu hình: ${val}`);
+    }
+
+    function setSlider(sliderId, valId, val) {
+      const el = document.getElementById(sliderId);
+      const valEl = document.getElementById(valId);
+      if (el && valEl) {
+        el.value = val;
+        valEl.textContent = parseFloat(val).toFixed(2);
+      }
+    }
+
+    function resetSliders() {
+      setSlider('sliderExaggeration', 'valExaggeration', 0.5);
+      setSlider('sliderPace', 'valPace', 0.5);
+      setSlider('sliderTemp', 'valTemp', 0.8);
+      setSlider('sliderMinP', 'valMinP', 0.05);
+      document.getElementById('sliderSpeed').value = 1.0;
+      document.getElementById('valSpeed').textContent = '1.0x';
+    }
+
+    function handleSpeedChange(val) {
+      document.getElementById('valSpeed').textContent = parseFloat(val).toFixed(1) + 'x';
+      audioElement.playbackRate = parseFloat(val);
+    }
+
+    function randomizeSeed() {
+      const s = Math.floor(Math.random() * 999999);
+      document.getElementById('seedInput').value = s;
+      showToast('info', `Đã tạo Random Seed: ${s}`);
+    }
+
+    ['sliderExaggeration', 'sliderPace', 'sliderTemp', 'sliderMinP'].forEach(id => {
+      const el = document.getElementById(id);
+      const valEl = document.getElementById(id.replace('slider', 'val'));
+      if (el && valEl) {
+        el.addEventListener('input', () => {
+          valEl.textContent = parseFloat(el.value).toFixed(2);
+        });
+      }
+    });
+
+    // ==================== DRAG & DROP ON TEXTAREAS ====================
+    function setupDragAndDropTextarea(textareaId, counterId = null) {
+      const textarea = document.getElementById(textareaId);
+      if (!textarea) return;
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        textarea.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          textarea.classList.add('drag-over');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        textarea.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          textarea.classList.remove('drag-over');
+        });
+      });
+
+      textarea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length > 0) {
+          const file = files[0];
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            textarea.value = event.target.result;
+            if (counterId) {
+              const counter = document.getElementById(counterId);
+              if (counter) counter.textContent = `${textarea.value.length} / 4000 ký tự`;
+            }
+            showToast('success', `Đã nạp văn bản từ file "${file.name}"!`);
+            if (textareaId === 'batchTextarea') parseBatchLines();
+          };
+          reader.onerror = () => {
+            showToast('error', `Không thể đọc nội dung file "${file.name}"`);
+          };
+          reader.readAsText(file);
+        }
+      });
+    }
+
+    const promptInput = document.getElementById('promptInput');
+    const charCount = document.getElementById('charCount');
+    if (promptInput && charCount) {
+      promptInput.addEventListener('input', () => {
+        charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
+      });
+    }
+
+    function insertTag(tag) {
+      if (!promptInput) return;
+      const start = promptInput.selectionStart;
+      const end = promptInput.selectionEnd;
+      const text = promptInput.value;
+      if (start !== end) {
+        const selected = text.substring(start, end);
+        promptInput.value = text.substring(0, start) + `${selected} ${tag}` + text.substring(end);
+        promptInput.selectionStart = promptInput.selectionEnd = start + selected.length + tag.length + 1;
+      } else {
+        promptInput.value = text.substring(0, start) + ' ' + tag + ' ' + text.substring(end);
+        promptInput.selectionStart = promptInput.selectionEnd = start + tag.length + 2;
+      }
+      promptInput.focus();
+      charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
+      showToast('info', `Đã chèn thẻ cảm xúc: ${tag}`);
+    }
+
+    function cleanPromptText() {
+      if (!promptInput) return;
+      promptInput.value = promptInput.value.replace(/\s+/g, ' ').trim();
+      charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
+      showToast('info', 'Đã làm sạch khoảng trắng trong văn bản.');
+    }
+
+    function clearPromptText() {
+      if (!promptInput) return;
+      promptInput.value = '';
+      charCount.textContent = '0 / 4000 ký tự';
+    }
+
+    function handleImportTextFile(input) {
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          promptInput.value = e.target.result;
+          charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
+          showToast('success', `Đã nhập file "${file.name}"`);
+        };
+        reader.readAsText(file);
+      }
+    }
+
+    function sendToBatchStudio() {
+      const text = promptInput.value.trim();
+      if (!text) return showToast('warning', 'Vui lòng nhập văn bản trước khi chuyển sang Batch.');
+      document.getElementById('batchTextarea').value = text;
+      switchTab('batch');
+      parseBatchLines();
+      showToast('success', 'Đã chuyển văn bản sang Batch Studio!');
+    }
+
+    function handleAudioUpload(input) {
+      if (input.files && input.files[0]) {
+        uploadedRefFile = input.files[0];
+        document.getElementById('refAudioName').textContent = uploadedRefFile.name;
+        document.getElementById('dropZone').classList.add('hidden');
+        document.getElementById('refAudioCard').classList.remove('hidden');
+        showToast('success', `Đã chọn file mẫu "${uploadedRefFile.name}"`);
+      }
+    }
+
+    function removeRefAudio() {
+      uploadedRefFile = null;
+      document.getElementById('refAudioInput').value = '';
+      document.getElementById('dropZone').classList.remove('hidden');
+      document.getElementById('refAudioCard').classList.add('hidden');
+      showToast('info', 'Đã hủy chọn file mẫu.');
+    }
+
+    // Microphone live recording
+    async function toggleMicRecording() {
+      const btn = document.getElementById('micRecordBtn');
+      const icon = document.getElementById('micIcon');
+      const label = document.getElementById('micLabel');
+
+      if (!isRecordingMic) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            uploadedRefFile = new File([audioBlob], "recorded_voice.wav", { type: "audio/wav" });
+            document.getElementById('refAudioName').textContent = "recorded_voice.wav (Từ Microphone)";
+            document.getElementById('dropZone').classList.add('hidden');
+            document.getElementById('refAudioCard').classList.remove('hidden');
+            showToast('success', 'Đã lưu bản ghi âm làm giọng mẫu!');
+          };
+
+          mediaRecorder.start();
+          isRecordingMic = true;
+          btn.className = 'px-3 py-1 rounded-full bg-red-600 text-xs text-white border border-red-500 flex items-center gap-1 cursor-pointer animate-pulse';
+          icon.textContent = 'stop';
+          label.textContent = 'Dừng ghi';
+          showToast('info', 'Đang ghi âm từ Microphone...');
+        } catch (e) {
+          showToast('error', 'Không thể truy cập Microphone: ' + e.message);
+        }
+      } else {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        isRecordingMic = false;
+        btn.className = 'px-3 py-1 rounded-full bg-[#231F2A] hover:bg-red-600 text-xs text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer transition-colors';
+        icon.textContent = 'mic';
+        label.textContent = 'Ghi âm Mic';
+      }
+    }
+
+    function openTrimmerModal() { document.getElementById('trimmerModal').classList.remove('hidden'); }
+    function closeTrimmerModal() { document.getElementById('trimmerModal').classList.add('hidden'); }
+    function applyAudioTrim() {
+      const s = document.getElementById('trimStart').value;
+      const e = document.getElementById('trimEnd').value;
+      showToast('success', `Đã thiết lập đoạn cắt từ ${s}s đến ${e}s.`);
+      closeTrimmerModal();
+    }
+
+    const canvas = document.getElementById('waveformCanvas');
+    const placeholder = document.getElementById('waveformPlaceholder');
+
+    const volSlider = document.getElementById('volSlider');
+    if (volSlider) {
+      volSlider.addEventListener('input', (e) => {
+        audioElement.volume = parseFloat(e.target.value);
+      });
+    }
+
+    function formatTime(seconds) {
+      if (isNaN(seconds) || seconds < 0) return '00:00';
+      const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+      const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    audioElement.addEventListener('timeupdate', () => {
+      if (audioElement.duration) {
+        const cur = audioElement.currentTime;
+        const dur = audioElement.duration;
+        document.getElementById('playbackTimer').textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+        drawWaveform(cur / dur);
+      }
+    });
+
+    audioElement.addEventListener('ended', () => {
+      stopAudio();
+    });
+
+    function drawWaveform(progressPct = 0) {
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width = canvas.offsetWidth;
+      const h = canvas.height = canvas.offsetHeight;
+      ctx.clearRect(0, 0, w, h);
+
+      const numBars = 55;
+      const barWidth = Math.max(2, (w - numBars * 3) / numBars);
+
+      for (let i = 0; i < numBars; i++) {
+        const x = i * (barWidth + 3);
+        const norm = Math.sin((i / numBars) * Math.PI * 4) * 0.4 + 0.5;
+        const barHeight = Math.max(6, norm * (h - 20));
+        const y = (h - barHeight) / 2;
+
+        const isPast = (x / w) <= progressPct;
+        ctx.fillStyle = isPast ? '#A855F7' : '#3F3A46';
+        ctx.beginPath();
+        ctx.roundRect(x, y, barWidth, barHeight, 3);
+        ctx.fill();
+      }
+
+      if (progressPct > 0) {
+        ctx.strokeStyle = '#D0BCFF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(progressPct * w, 0);
+        ctx.lineTo(progressPct * w, h);
+        ctx.stroke();
+      }
+    }
+
+    function seekWaveform(e) {
+      if (!audioElement.duration) return;
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+      audioElement.currentTime = pct * audioElement.duration;
+    }
+
+    function togglePlayPause() {
+      const btn = document.getElementById('btnPlayPause');
+      if (audioElement.src && !audioElement.paused) {
+        audioElement.pause();
+        isPlaying = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
+      } else if (audioElement.src) {
+        audioElement.play().catch(() => {});
+        isPlaying = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
+      }
+    }
+
+    function stopAudio() {
+      isPlaying = false;
+      if (audioElement.src) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      }
+      document.getElementById('btnPlayPause').innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
+      document.getElementById('playbackTimer').textContent = '00:00 / 00:00';
+      drawWaveform(0);
+    }
+
+    function playAudioUrl(url, title = "Generated Audio") {
+      currentAudioUrl = url;
+      audioElement.src = url;
+      audioElement.load();
+      if (placeholder) placeholder.classList.add('hidden');
+      document.getElementById('btnPlayPause').disabled = false;
+      document.getElementById('btnStop').disabled = false;
+      document.getElementById('btnDownload').disabled = false;
+
+      audioElement.play().catch(() => {});
+      isPlaying = true;
+      document.getElementById('btnPlayPause').innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
+    }
+
+    function downloadCurrentWav() {
+      if (currentAudioUrl) {
+        const fmt = document.getElementById('exportFormatSelect').value;
+        const a = document.createElement('a');
+        a.href = currentAudioUrl;
+        a.download = `chatterbox-${Date.now()}.${fmt}`;
+        a.click();
+        showToast('success', `Đang tải file âm thanh (${fmt.toUpperCase()})...`);
+      } else {
+        showToast('warning', 'Chưa có file âm thanh để tải về.');
+      }
+    }
+
+    // A/B Comparison Logic
+    function saveSlotA() {
+      if (!currentAudioUrl) return showToast('warning', 'Chưa có audio để lưu vào Bản A.');
+      slotA = currentAudioUrl;
+      const btn = document.getElementById('btnPlayA');
+      btn.disabled = false;
+      btn.className = 'px-2.5 py-1 rounded bg-purple-600 text-white border border-purple-500 cursor-pointer font-bold';
+      showToast('success', 'Đã lưu audio hiện tại vào Bản A!');
+    }
+    function saveSlotB() {
+      if (!currentAudioUrl) return showToast('warning', 'Chưa có audio để lưu vào Bản B.');
+      slotB = currentAudioUrl;
+      const btn = document.getElementById('btnPlayB');
+      btn.disabled = false;
+      btn.className = 'px-2.5 py-1 rounded bg-blue-600 text-white border border-blue-500 cursor-pointer font-bold';
+      showToast('success', 'Đã lưu audio hiện tại vào Bản B!');
+    }
+    function playSlotA() {
+      if (slotA) {
+        playAudioUrl(slotA);
+        showToast('info', 'Đang phát Bản A');
+      }
+    }
+    function playSlotB() {
+      if (slotB) {
+        playAudioUrl(slotB);
+        showToast('info', 'Đang phát Bản B');
+      }
+    }
+
+    async function triggerSynthesis() {
+      const btn = document.getElementById('generateBtn');
+      const text = promptInput.value.trim();
+      if (!text) return showToast('warning', 'Vui lòng nhập văn bản cần phát âm.');
+
+      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
+      btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+      btn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('text', text);
+        const selectedModel = document.getElementById('ttsModelSelect').value;
+        formData.append('model', selectedModel);
+        formData.append('temperature', document.getElementById('sliderTemp').value);
+        formData.append('repetition_penalty', '1.2');
+        if (uploadedRefFile) {
+          formData.append('audio_prompt', uploadedRefFile);
+        }
+
+        const endpoint = selectedModel === 'standard' ? '/api/v1/tts/standard' : '/api/v1/tts/turbo';
+        const response = await fetch(endpoint, { method: 'POST', body: formData });
+
+        if (response.ok) {
+          const job = await response.json();
+          await pollJob(job.id, btn, 'SINH GIỌNG NÓI (Ctrl + Enter)', '<span class="material-symbols-outlined text-[22px]">play_circle</span>');
+        } else {
+          showToast('error', 'Lỗi khi gửi yêu cầu tới server API.');
+          btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">play_circle</span><span>SINH GIỌNG NÓI (Ctrl + Enter)</span>';
+          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        showToast('error', 'Không thể kết nối tới server API: ' + err.message);
+        btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">play_circle</span><span>SINH GIỌNG NÓI (Ctrl + Enter)</span>';
+        btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+        btn.disabled = false;
+      }
+    }
+
+    async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + Enter)', origIcon = '<span class="material-symbols-outlined text-[22px]">play_circle</span>') {
+      const generateBtn = btn || document.getElementById('generateBtn');
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/v1/jobs/${jobId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'completed' && data.audio_url) {
+              clearInterval(interval);
+              if (generateBtn) {
+                generateBtn.innerHTML = `${origIcon}<span>${origText}</span>`;
+                generateBtn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+                generateBtn.disabled = false;
+              }
+
+              playAudioUrl(data.audio_url);
+              refreshHistory();
+              showToast('success', 'Sinh giọng nói hoàn tất thành công!');
+            } else if (data.status === 'failed') {
+              clearInterval(interval);
+              if (generateBtn) {
+                generateBtn.innerHTML = `${origIcon}<span>${origText}</span>`;
+                generateBtn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+                generateBtn.disabled = false;
+              }
+              showToast('error', 'Quá trình sinh giọng bị lỗi: ' + (data.error || "Lỗi không xác định"));
+            }
+          }
+        } catch (e) {}
+      }, 500);
+    }
+
+    // ==================== BATCH STUDIO CONTROLLERS ====================
+    let parsedBatchLines = [];
+
+    function handleBatchSplitRuleChange(val) {
+      const box = document.getElementById('batchCustomDelimiterBox');
+      if (val === 'custom') {
+        box.classList.remove('hidden');
+      } else {
+        box.classList.add('hidden');
+      }
+    }
+
+    function handleBatchFileUpload(input) {
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          document.getElementById('batchTextarea').value = e.target.result;
+          parseBatchLines();
+          showToast('success', `Đã nạp file kịch bản "${file.name}"`);
+        };
+        reader.readAsText(file);
+      }
+    }
+
+    function parseBatchLines() {
+      const text = document.getElementById('batchTextarea').value;
+      const rule = document.getElementById('batchSplitRule').value;
+      let lines = [];
+
+      if (rule === 'sentence') {
+        lines = text.split(/([.?!]+[\s\n]+)/).filter(l => l.trim().length > 1);
+      } else if (rule === 'paragraph') {
+        lines = text.split(/\n\s*\n/).map(l => l.trim()).filter(l => l.length > 0);
+      } else if (rule === 'custom') {
+        const delim = document.getElementById('batchCustomDelimiter').value || '|';
+        lines = text.split(delim).map(l => l.trim()).filter(l => l.length > 0);
+      } else {
+        lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      }
+
+      parsedBatchLines = lines;
+      renderBatchTable();
+      showToast('info', `Đã tách thành công ${lines.length} dòng kịch bản.`);
+    }
+
+    function renderBatchTable() {
+      const container = document.getElementById('batchTableContainer');
+      const tbody = document.getElementById('batchTableBody');
+      const badge = document.getElementById('batchCountBadge');
+
+      badge.textContent = `${parsedBatchLines.length} dòng cần xử lý`;
+      tbody.innerHTML = '';
+
+      if (parsedBatchLines.length > 0) {
+        container.classList.remove('hidden');
+        parsedBatchLines.forEach((line, idx) => {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-[#18151E] transition-colors';
+          tr.innerHTML = `
+            <td class="p-3"><input type="checkbox" class="batch-row-chk w-4 h-4 rounded text-purple-600 cursor-pointer" data-idx="${idx}" checked></td>
+            <td class="p-3 font-mono text-purple-400 font-bold">${idx + 1}</td>
+            <td class="p-3 font-medium text-white max-w-sm">
+              <input type="text" value="${line.replace(/"/g, '&quot;')}" onchange="updateBatchLineText(${idx}, this.value)" class="w-full bg-transparent border-b border-transparent hover:border-[#3F3A46] focus:border-purple-500 focus:outline-none text-xs text-white">
+            </td>
+            <td class="p-3">
+              <select class="bg-[#231F2A] border border-[#3F3A46] rounded-lg px-2 py-1 text-xs text-white cursor-pointer w-full">
+                <option>Mặc định (Turbo)</option>
+                <option>MC Nam Thời Sự</option>
+                <option>Cô Giáo Thảo</option>
+              </select>
+            </td>
+            <td class="p-3" id="batchStatus-${idx}"><span class="px-2 py-0.5 rounded bg-[#231F2A] text-slate-400">Sẵn sàng</span></td>
+            <td class="p-3 text-right">
+              <div class="flex items-center justify-end gap-1">
+                <button onclick="runSingleBatchLine(${idx})" class="p-1 rounded hover:bg-purple-600 text-purple-300 hover:text-white cursor-pointer" title="Chạy dòng này"><span class="material-symbols-outlined text-[18px]">play_arrow</span></button>
+                <button onclick="deleteBatchLine(${idx})" class="p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer" title="Xóa dòng"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+
+    function updateBatchLineText(idx, val) {
+      parsedBatchLines[idx] = val;
+    }
+    function addBatchEmptyLine() {
+      parsedBatchLines.push("Dòng kịch bản mới...");
+      renderBatchTable();
+    }
+    function deleteBatchLine(idx) {
+      parsedBatchLines.splice(idx, 1);
+      renderBatchTable();
+    }
+    function clearBatchAll() {
+      parsedBatchLines = [];
+      document.getElementById('batchTextarea').value = '';
+      renderBatchTable();
+      showToast('info', 'Đã xóa toàn bộ danh sách kịch bản.');
+    }
+    function toggleSelectAllBatch(master) {
+      document.querySelectorAll('.batch-row-chk').forEach(c => c.checked = master.checked);
+    }
+    function toggleBgmControls(enabled) {
+      const el = document.getElementById('bgmControls');
+      if (enabled) {
+        el.className = 'space-y-2.5 transition-opacity';
+      } else {
+        el.className = 'space-y-2.5 opacity-40 pointer-events-none transition-opacity';
+      }
+    }
+    function handleBgmUpload(input) {
+      if (input.files && input.files[0]) {
+        document.getElementById('bgmFileName').textContent = input.files[0].name;
+        showToast('success', `Đã chọn file nhạc nền "${input.files[0].name}"`);
+      }
+    }
+
+    // ==================== BUILTIN VOICES CONTROLLER ====================
+    const BUILTIN_VOICES = {
+      'mc_male': { name: 'MC Nam Thời Sự', exag: 0.35, pace: 0.55, temp: 0.65 },
+      'editor_female': { name: 'Nữ Biên Tập Viên', exag: 0.45, pace: 0.50, temp: 0.70 },
+      'story_night': { name: 'Kể Chuyện Đêm Khuya', exag: 0.85, pace: 0.45, temp: 0.85 },
+      'review_fast': { name: 'Review & Recap', exag: 0.60, pace: 0.75, temp: 0.80 },
+      'anime_fun': { name: 'Hoạt Hình / Anime', exag: 1.25, pace: 0.60, temp: 0.95 },
+      'ai_assistant': { name: 'Trợ Lý Ảo AI', exag: 0.40, pace: 0.50, temp: 0.60 }
+    };
+
+    function applyBuiltinVoice(key, btnEl) {
+      const v = BUILTIN_VOICES[key];
+      if (!v) return;
+
+      document.getElementById('sliderExaggeration').value = v.exag;
+      document.getElementById('valExaggeration').textContent = v.exag.toFixed(2);
+      document.getElementById('sliderPace').value = v.pace;
+      document.getElementById('valPace').textContent = v.pace.toFixed(2);
+      document.getElementById('sliderTemp').value = v.temp;
+      document.getElementById('valTemp').textContent = v.temp.toFixed(2);
+
+      document.querySelectorAll('#builtinVoicesContainer .builtin-voice-btn').forEach(b => {
+        b.className = 'builtin-voice-btn p-2.5 rounded-xl bg-[#18151E] hover:bg-[#231F2A] border border-[#3F3A46] text-left transition-all cursor-pointer';
+      });
+      if (btnEl) {
+        btnEl.className = 'builtin-voice-btn p-2.5 rounded-xl bg-purple-900/40 border border-purple-500 text-left transition-all cursor-pointer shadow-m3-1';
+      }
+
+      showToast('success', `Đã kích hoạt giọng mẫu "${v.name}"!`);
+    }
+
+    let batchRowJobIds = {};
+
+    async function runSingleBatchLine(idx) {
+      const line = parsedBatchLines[idx];
+      const statusEl = document.getElementById(`batchStatus-${idx}`);
+      if (statusEl) statusEl.innerHTML = '<span class="text-purple-300 animate-pulse">⏳ Đang xử lý...</span>';
+
+      const formData = new FormData();
+      formData.append('text', line);
+      formData.append('model', 'turbo');
+
+      try {
+        const res = await fetch('/api/v1/tts/turbo', { method: 'POST', body: formData });
+        if (res.ok) {
+          const job = await res.json();
+          batchRowJobIds[idx] = job.id;
+          if (statusEl) statusEl.innerHTML = '<span class="text-emerald-400 font-bold">✓ Hoàn tất</span>';
+          return job.id;
+        } else {
+          if (statusEl) statusEl.innerHTML = '<span class="text-red-400 font-bold">❌ Lỗi</span>';
+        }
+      } catch (e) {
+        if (statusEl) statusEl.innerHTML = '<span class="text-red-400 font-bold">❌ Lỗi</span>';
+      }
+      return null;
+    }
+
+    async function runBatchAll() {
+      const btn = document.getElementById('batchRunAllBtn');
+      const progressBox = document.getElementById('batchProgressBar');
+      const progressFill = document.getElementById('batchProgressFill');
+      progressBox.classList.remove('hidden');
+
+      const checkboxes = Array.from(document.querySelectorAll('.batch-row-chk:checked'));
+      if (checkboxes.length === 0) return showToast('warning', 'Vui lòng chọn ít nhất 1 dòng để chạy batch.');
+
+      if (btn) {
+        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[20px]">progress_activity</span><span>Đang chạy Batch xử lý...</span>';
+        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+        btn.disabled = true;
+      }
+
+      showToast('info', `Bắt đầu xử lý hàng loạt ${checkboxes.length} dòng...`);
+      try {
+        for (let i = 0; i < checkboxes.length; i++) {
+          const idx = parseInt(checkboxes[i].getAttribute('data-idx'));
+          await runSingleBatchLine(idx);
+          progressFill.style.width = `${Math.round(((i + 1) / checkboxes.length) * 100)}%`;
+        }
+        refreshHistory();
+        showToast('success', 'Đã hoàn tất toàn bộ tiến trình Batch Studio!');
+      } finally {
+        if (btn) {
+          btn.innerHTML = '<span class="material-symbols-outlined text-[20px]">play_arrow</span><span>Chạy Batch tất cả các dòng đã chọn</span>';
+          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+          btn.disabled = false;
+        }
+      }
+    }
+
+    async function runBatchMergeAll() {
+      const btn = document.getElementById('batchMergeAllBtn');
+      const completedJobIds = [];
+
+      const checkboxes = Array.from(document.querySelectorAll('.batch-row-chk:checked'));
+      const targetIndices = checkboxes.length > 0 ? checkboxes.map(c => parseInt(c.getAttribute('data-idx'))) : parsedBatchLines.map((_, i) => i);
+
+      for (const idx of targetIndices) {
+        if (batchRowJobIds[idx]) {
+          completedJobIds.push(batchRowJobIds[idx]);
+        }
+      }
+
+      if (completedJobIds.length === 0) {
+        return showToast('warning', 'Chưa có dòng nào được chạy xong. Hãy bấm "Chạy Batch" trước khi ghép!');
+      }
+
+      if (btn) {
+        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span><span>Đang ghép nối Audio...</span>';
+        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+        btn.disabled = true;
+      }
+
+      const pauseDur = parseFloat(document.getElementById('batchPauseDuration')?.value) || 0.8;
+      const bgmInput = document.getElementById('bgmFileInput');
+      const bgmVol = parseFloat(document.getElementById('bgmVolSlider')?.value) || 0.15;
+      const chkBgm = document.getElementById('chkBgm');
+
+      const formData = new FormData();
+      formData.append('job_ids', completedJobIds.join(','));
+      formData.append('pause_duration', pauseDur.toString());
+      if (chkBgm && chkBgm.checked && bgmInput && bgmInput.files && bgmInput.files[0]) {
+        formData.append('bgm_file', bgmInput.files[0]);
+        formData.append('bgm_volume', bgmVol.toString());
+      }
+
+      showToast('info', `Đang tiến hành ghép ${completedJobIds.length} đoạn audio...`);
+
+      try {
+        const res = await fetch('/api/v1/batch/merge', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const card = document.getElementById('batchMergedResultCard');
+          const player = document.getElementById('batchMergedAudioPlayer');
+          const dlLink = document.getElementById('batchMergedDownloadLink');
+          const title = document.getElementById('batchMergedTitle');
+          const meta = document.getElementById('batchMergedMeta');
+
+          if (card) card.classList.remove('hidden');
+          if (title) title.textContent = `Batch_Merged_${completedJobIds.length}_lines.wav`;
+          if (meta) meta.textContent = `Tổng thời lượng: ${data.duration_seconds}s • Ghép từ ${data.chunks_count} đoạn`;
+          if (player) {
+            player.src = data.audio_url;
+            player.play();
+          }
+          if (dlLink) {
+            dlLink.href = data.audio_url;
+            dlLink.download = `chatterbox_merged_${Date.now()}.wav`;
+          }
+
+          refreshHistory();
+          showToast('success', data.message || 'Ghép audio hoàn tất thành công!');
+        } else {
+          const err = await res.json();
+          showToast('error', 'Lỗi khi ghép audio: ' + (err.detail || 'Không thể ghép'));
+        }
+      } catch (err) {
+        showToast('error', 'Lỗi kết nối máy chủ: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">merge</span><span>Ghép toàn bộ Audio (Merge All)</span>';
+          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+          btn.disabled = false;
+        }
+      }
+    }
+
+    // ==================== MULTILINGUAL & VC ====================
+    function selectMtlLang(code, btnEl) {
+      selectedMtlLanguage = code;
+      document.querySelectorAll('.mtl-lang-btn').forEach(b => {
+        b.className = 'mtl-lang-btn p-2.5 rounded-xl bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-2 cursor-pointer';
+      });
+      btnEl.className = 'mtl-lang-btn active p-2.5 rounded-xl bg-purple-600 text-white border border-purple-500 text-xs font-medium flex items-center gap-2 cursor-pointer';
+    }
+
+    async function triggerMtlSynthesis() {
+      const btn = document.getElementById('mtlGenerateBtn');
+      const text = document.getElementById('mtlPromptInput').value.trim();
+      if (!text) return showToast('warning', 'Vui lòng nhập văn bản.');
+
+      if (btn) {
+        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
+        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+        btn.disabled = true;
+      }
+
+      const formData = new FormData();
+      formData.append('text', text);
+      formData.append('language_id', selectedMtlLanguage);
+
+      try {
+        const res = await fetch('/api/v1/tts/multilingual', { method: 'POST', body: formData });
+        if (res.ok) {
+          const job = await res.json();
+          showToast('info', 'Đã gửi tác vụ đa ngôn ngữ vào hàng đợi!');
+          await pollJob(job.id, btn, 'Sinh giọng nói Đa ngôn ngữ', '<span class="material-symbols-outlined text-[22px]">record_voice_over</span>');
+        } else {
+          showToast('error', 'Lỗi khi gửi tác vụ đa ngôn ngữ.');
+          if (btn) {
+            btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
+            btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+            btn.disabled = false;
+          }
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi kết nối: ' + e.message);
+        if (btn) {
+          btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
+          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+          btn.disabled = false;
+        }
+      }
+    }
+
+    function updateVcLabel(input, labelId) {
+      if (input.files && input.files[0]) {
+        document.getElementById(labelId).textContent = `✓ ${input.files[0].name}`;
+        showToast('success', `Đã chọn file "${input.files[0].name}"`);
+      }
+    }
+
+    async function triggerVcConversion() {
+      const btn = document.getElementById('vcGenerateBtn');
+      const src = document.getElementById('vcSourceInput').files[0];
+      const tgt = document.getElementById('vcTargetInput').files[0];
+      if (!src || !tgt) return showToast('warning', 'Vui lòng chọn cả File Nguồn và File Mẫu Đích.');
+
+      if (btn) {
+        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang chuyển đổi âm sắc...</span>';
+        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+        btn.disabled = true;
+      }
+
+      const formData = new FormData();
+      formData.append('source_audio', src);
+      formData.append('target_voice', tgt);
+
+      try {
+        const res = await fetch('/api/v1/voice-conversion', { method: 'POST', body: formData });
+        if (res.ok) {
+          const job = await res.json();
+          showToast('info', 'Đã bắt đầu chuyển đổi âm sắc giọng!');
+          await pollJob(job.id, btn, 'Chuyển đổi âm sắc giọng nói', '<span class="material-symbols-outlined text-[22px]">sync</span>');
+        } else {
+          showToast('error', 'Lỗi Voice Conversion.');
+          if (btn) {
+            btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
+            btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+            btn.disabled = false;
+          }
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi Voice Conversion: ' + e.message);
+        if (btn) {
+          btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
+          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+          btn.disabled = false;
+        }
+      }
+    }
+
+    // ==================== PRESET STYLES CONTROLLER ====================
+    function applyPresetStyle(key, exag, pace, temp, btnEl) {
+      document.getElementById('sliderExaggeration').value = exag;
+      document.getElementById('valExaggeration').textContent = parseFloat(exag).toFixed(2);
+      document.getElementById('sliderPace').value = pace;
+      document.getElementById('valPace').textContent = parseFloat(pace).toFixed(2);
+      document.getElementById('sliderTemp').value = temp;
+      document.getElementById('valTemp').textContent = parseFloat(temp).toFixed(2);
+
+      document.querySelectorAll('#presetPillsContainer .preset-pill').forEach(b => {
+        b.className = 'preset-pill px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs text-slate-200 hover:text-white font-medium flex items-center gap-1.5 cursor-pointer transition-all';
+      });
+      if (btnEl) {
+        btnEl.className = 'preset-pill active px-3 py-1.5 rounded-lg bg-purple-600 border border-purple-500 text-xs text-white font-medium flex items-center gap-1.5 cursor-pointer transition-all';
+      }
+      showToast('info', `Đã chọn kiểu giọng: ${btnEl ? btnEl.innerText.trim() : key}`);
+    }
+
+    // ==================== CHARACTERS CONTROLLER ====================
+    const SAMPLE_TEST_TEXTS = {
+      "vi": "Xin chào, đây là câu đọc thử nghiệm trước khi tạo Character.",
+      "en": "Hello, this is a sample voice preview before creating the character.",
+      "ja": "こんにちは、これはキャラクターを作成する前の音声サンプルです。",
+      "zh": "你好，这是创建角色前的语音测试示例。",
+      "ko": "안녕하세요, 캐릭터를 생성하기 전 음성 테스트 샘플입니다.",
+      "fr": "Bonjour, ceci est un exemple de voix avant de créer le personnage.",
+      "de": "Hallo, dies ist eine Sprachprobe vor der Erstellung des Charakters.",
+      "es": "Hola, este es un fragmento de prueba antes de crear el personaje.",
+      "ru": "Здравствуйте, это образец голоса перед созданием персонажа.",
+      "it": "Ciao, questo è un esempio di voce prima di creare il personnage.",
+      "hi": "नमस्ते, पात्र बनाने से पहले यह एक ध्वनि परीक्षण नमूना है।",
+      "ar": "مرحبا، هذا نموذج صوتي اختباري قبل إنشاء الشخصية.",
+      "pt": "Olá, esta é uma amostra de voz antes de criar o personagem.",
+      "nl": "Hallo, dit is een spraakvoorbeeld voordat het personage wordt gemaakt.",
+      "pl": "Cześć, to jest próbka głosu przed utworzeniem postaci.",
+      "tr": "Merhaba, bu karakter oluşturulmadan önceki ses test örneğidir."
+    };
+
+    let allCharactersCache = [];
+
+    async function loadCharacters() {
+      const grid = document.getElementById('charactersGrid');
+      const ttsSelect = document.getElementById('ttsCharacterSelect');
+      const defaultLabel = document.getElementById('useDefaultCharLabel');
+
+      try {
+        const res = await fetch('/api/v1/characters');
+        if (res.ok) {
+          const data = await res.json();
+          allCharactersCache = data.characters || [];
+
+          // Populate TTS Dropdown
+          if (ttsSelect) {
+            const currentVal = ttsSelect.value;
+            let optionsHtml = '<option value="">-- Mặc định (Default Speaker) --</option>';
+            allCharactersCache.forEach(c => {
+              optionsHtml += `<option value="${c.id}">${c.is_default ? '⭐ ' : ''}${c.name} (${c.language || 'vi'})</option>`;
+            });
+            ttsSelect.innerHTML = optionsHtml;
+            ttsSelect.value = currentVal;
+          }
+
+          // Check default character
+          const defChar = allCharactersCache.find(c => c.is_default);
+          if (defaultLabel) {
+            defaultLabel.textContent = defChar ? `⭐ Sử dụng Character mặc định (${defChar.name})` : `⭐ Sử dụng Character mặc định (Chưa đặt)`;
+          }
+
+          // Populate Character Management Grid
+          if (grid) {
+            if (allCharactersCache.length === 0) {
+              grid.innerHTML = '<div class="text-xs text-slate-500 py-8 text-center col-span-full">Chưa có nhân vật nào. Nhấn "Tạo Nhân vật mới" để thêm!</div>';
+              return;
+            }
+            grid.innerHTML = allCharactersCache.map(c => `
+              <div class="p-4 rounded-xl bg-[#0E0C12] border ${c.is_default ? 'border-amber-500/50 bg-[#14101A]' : 'border-[#3F3A46]'} hover:border-purple-500 transition-colors space-y-3 flex flex-col justify-between">
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-9 h-9 rounded-full ${c.is_default ? 'bg-amber-600/30 text-amber-300' : 'bg-purple-600/30 text-purple-300'} flex items-center justify-center font-bold text-xs">
+                        ${c.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div class="font-bold text-sm text-white flex items-center gap-1.5">
+                          <span>${c.name}</span>
+                          ${c.is_default ? '<span class="material-symbols-outlined text-amber-400 text-[16px]" title="Nhân vật mặc định">star</span>' : ''}
+                        </div>
+                        <div class="text-[10px] text-slate-400 uppercase font-mono">${c.language || 'vi'} • ${c.has_reference_audio ? '🎙️ Giọng mẫu độc quyền' : '⚡ Mặc định'}</div>
+                      </div>
+                    </div>
+                    ${c.is_default ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">Mặc định</span>' : ''}
+                  </div>
+                  <div class="text-xs text-slate-300 line-clamp-2">${c.description || 'Không có mô tả chi tiết'}</div>
+                  <div class="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-lg bg-[#18151E] border border-[#3F3A46]/60 text-[10px] font-mono text-slate-300">
+                    <div>Exag: <span class="text-purple-300">${c.voice?.expressiveness ?? 0.5}</span></div>
+                    <div>Pace: <span class="text-purple-300">${c.voice?.pace ?? 0.5}</span></div>
+                    <div>Seed: <span class="text-purple-300">${c.voice?.seed ?? 0}</span></div>
+                  </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-2.5 border-t border-[#3F3A46]/50 gap-2">
+                  <button onclick="useCharacterInTts('${c.id}')" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer">
+                    <span class="material-symbols-outlined text-[14px]">record_voice_over</span>
+                    <span>Dùng trong TTS</span>
+                  </button>
+                  <div class="flex items-center gap-1">
+                    <button onclick="toggleDefaultCharacter('${c.id}', ${!c.is_default})" class="p-1 rounded text-slate-300 hover:text-amber-400 hover:bg-[#231F2A] cursor-pointer" title="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}">
+                      <span class="material-symbols-outlined text-[16px]">${c.is_default ? 'star' : 'star_border'}</span>
+                    </button>
+                    <button onclick="deleteCharacter('${c.id}')" class="p-1 rounded text-red-400 hover:bg-red-900/30 cursor-pointer" title="Xóa nhân vật">
+                      <span class="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join('');
+          }
+        }
+      } catch (e) {
+        if (grid) grid.innerHTML = '<div class="text-xs text-slate-500 py-8 text-center col-span-full">Không tải được danh sách nhân vật.</div>';
+      }
+    }
+
+    function openCreateCharacterModal(prefillFromTts = false) {
+      if (prefillFromTts) {
+        document.getElementById('charExagInput').value = document.getElementById('sliderExaggeration').value;
+        document.getElementById('valCharExag').textContent = parseFloat(document.getElementById('sliderExaggeration').value).toFixed(2);
+        document.getElementById('charPaceInput').value = document.getElementById('sliderPace').value;
+        document.getElementById('valCharPace').textContent = parseFloat(document.getElementById('sliderPace').value).toFixed(2);
+        document.getElementById('charSeedInput').value = document.getElementById('seedInput').value;
+      }
+      document.getElementById('characterModal').classList.remove('hidden');
+    }
+
+    function closeCreateCharacterModal() {
+      document.getElementById('characterModal').classList.add('hidden');
+    }
+
+    function handleCharLangChange(lang) {
+      const txt = SAMPLE_TEST_TEXTS[lang] || SAMPLE_TEST_TEXTS['vi'];
+      document.getElementById('charTestTextInput').value = txt;
+    }
+
+    function handleCharAudioFileSelected(input) {
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        document.getElementById('charAudioFileName').textContent = file.name;
+        document.getElementById('charAudioBtnLabel').textContent = 'Đổi file mẫu...';
+        document.getElementById('charAudioClearBtn').classList.remove('hidden');
+        showToast('info', `Đã chọn file mẫu "${file.name}"`);
+      }
+    }
+
+    function clearCharAudioFile() {
+      document.getElementById('charAudioFileInput').value = '';
+      document.getElementById('charAudioFileName').textContent = 'Chưa chọn file mẫu (sử dụng âm sắc mặc định)';
+      document.getElementById('charAudioBtnLabel').textContent = 'Chọn file audio mẫu...';
+      document.getElementById('charAudioClearBtn').classList.add('hidden');
+    }
+
+    async function testCharacterVoice() {
+      const btn = document.getElementById('charTestVoiceBtn');
+      const text = document.getElementById('charTestTextInput').value.trim();
+      if (!text) return showToast('warning', 'Vui lòng nhập văn bản đọc thử.');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang tạo...</span>';
+
+      try {
+        const formData = new FormData();
+        formData.append('text', text);
+        formData.append('model', 'turbo');
+        formData.append('temperature', '0.8');
+        formData.append('repetition_penalty', '1.2');
+
+        const audioInput = document.getElementById('charAudioFileInput');
+        if (audioInput.files && audioInput.files[0]) {
+          formData.append('audio_prompt', audioInput.files[0]);
+        }
+
+        const res = await fetch('/api/v1/tts/turbo', { method: 'POST', body: formData });
+        if (res.ok) {
+          const job = await res.json();
+          await pollJob(job.id, btn, 'Nghe thử', '<span class="material-symbols-outlined text-[16px]">volume_up</span>');
+        } else {
+          showToast('error', 'Lỗi khi sinh giọng thử nghiệm.');
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
+        }
+      } catch (err) {
+        showToast('error', 'Lỗi đọc thử: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
+      }
+    }
+
+    async function saveNewCharacter() {
+      const btn = document.getElementById('charSaveBtn');
+      const name = document.getElementById('charNameInput').value.trim();
+      const desc = document.getElementById('charDescInput').value.trim();
+      const lang = document.getElementById('charLangSelect').value;
+      const exag = parseFloat(document.getElementById('charExagInput').value) || 0.5;
+      const pace = parseFloat(document.getElementById('charPaceInput').value) || 0.5;
+      const stab = parseFloat(document.getElementById('charStabInput').value) || 0.7;
+      const seed = parseInt(document.getElementById('charSeedInput').value) || 0;
+      const isDefault = document.getElementById('charIsDefaultInput').checked;
+
+      if (!name) return showToast('warning', 'Vui lòng nhập tên nhân vật.');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang lưu...</span>';
+
+      try {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('description', desc);
+        formData.append('language', lang);
+        formData.append('is_default', isDefault ? 'true' : 'false');
+        formData.append('expressiveness', exag);
+        formData.append('pace', pace);
+        formData.append('stability', stab);
+        formData.append('seed', seed);
+
+        const audioInput = document.getElementById('charAudioFileInput');
+        if (audioInput.files && audioInput.files[0]) {
+          formData.append('reference_audio', audioInput.files[0]);
+        }
+
+        const res = await fetch('/api/v1/characters', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          closeCreateCharacterModal();
+          // Reset form
+          document.getElementById('charNameInput').value = '';
+          document.getElementById('charDescInput').value = '';
+          clearCharAudioFile();
+          loadCharacters();
+          showToast('success', `Đã lưu thành công nhân vật "${name}"!`);
+        } else {
+          const err = await res.json();
+          showToast('error', 'Lỗi lưu nhân vật: ' + (err.detail || 'Không thể tạo'));
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi khi lưu nhân vật: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Lưu Nhân vật';
+      }
+    }
+
+    function handleTtsCharacterSelect(charId) {
+      if (!charId) {
+        showToast('info', 'Đã chuyển về giọng mặc định AI');
+        return;
+      }
+      const char = allCharactersCache.find(c => c.id === charId);
+      if (char) {
+        if (char.voice) {
+          if (char.voice.expressiveness !== undefined) {
+            document.getElementById('sliderExaggeration').value = char.voice.expressiveness;
+            document.getElementById('valExaggeration').textContent = parseFloat(char.voice.expressiveness).toFixed(2);
+          }
+          if (char.voice.pace !== undefined) {
+            document.getElementById('sliderPace').value = char.voice.pace;
+            document.getElementById('valPace').textContent = parseFloat(char.voice.pace).toFixed(2);
+          }
+          if (char.voice.seed !== undefined) {
+            document.getElementById('seedInput').value = char.voice.seed;
+          }
+        }
+        if (char.has_reference_audio) {
+          fetch(`/api/v1/characters/${char.id}/reference-audio`)
+            .then(res => res.blob())
+            .then(blob => {
+              uploadedRefFile = new File([blob], `${char.name}_voice.wav`, { type: 'audio/wav' });
+              document.getElementById('refAudioName').textContent = `Giọng Nhân vật: ${char.name}`;
+              document.getElementById('refAudioCard').classList.remove('hidden');
+              document.getElementById('dropZone').classList.add('hidden');
+            }).catch(() => {});
+        }
+        showToast('success', `Đã áp dụng hồ sơ nhân vật "${char.name}" vào TTS Studio!`);
+      }
+    }
+
+    function useCharacterInTts(charId) {
+      switchTab('panel-tts');
+      const ttsSelect = document.getElementById('ttsCharacterSelect');
+      if (ttsSelect) {
+        ttsSelect.value = charId;
+        handleTtsCharacterSelect(charId);
+      }
+    }
+
+    async function toggleDefaultCharacter(id, isDefault) {
+      try {
+        const res = await fetch(`/api/v1/characters/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_default: isDefault })
+        });
+        if (res.ok) {
+          loadCharacters();
+          showToast('success', isDefault ? 'Đã đặt làm nhân vật mặc định!' : 'Đã bỏ mặc định.');
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi cập nhật mặc định: ' + e.message);
+      }
+    }
+
+    function toggleUseDefaultChar(checked) {
+      if (checked) {
+        const def = allCharactersCache.find(c => c.is_default);
+        if (def) {
+          document.getElementById('ttsCharacterSelect').value = def.id;
+          handleTtsCharacterSelect(def.id);
+        } else {
+          showToast('warning', 'Chưa có nhân vật nào được đặt làm mặc định.');
+          document.getElementById('useDefaultCharChk').checked = false;
+        }
+      } else {
+        document.getElementById('ttsCharacterSelect').value = '';
+        handleTtsCharacterSelect('');
+      }
+    }
+
+    async function deleteCharacter(id) {
+      if (!confirm("Bạn có chắc muốn xóa nhân vật này?")) return;
+      try {
+        await fetch(`/api/v1/characters/${id}`, { method: 'DELETE' });
+        loadCharacters();
+        showToast('info', 'Đã xóa nhân vật.');
+      } catch (e) {
+        showToast('error', 'Lỗi xóa nhân vật: ' + e.message);
+      }
+    }
+
+    // ==================== HISTORY CONTROLLER ====================
+    async function refreshHistory() {
+      const miniList = document.getElementById('miniHistoryList');
+      const fullTbody = document.getElementById('fullHistoryTableBody');
+
+      try {
+        const res = await fetch('/api/v1/jobs');
+        if (res.ok) {
+          const data = await res.json();
+          const jobs = data.jobs || [];
+
+          if (jobs.length === 0) {
+            if (miniList) miniList.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">Chưa có bản ghi âm nào</div>';
+            if (fullTbody) fullTbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-500">Chưa có bản ghi âm nào trong lịch sử</td></tr>';
+            return;
+          }
+
+          if (miniList) {
+            miniList.innerHTML = jobs.slice(0, 6).map(j => `
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0E0C12] hover:bg-[#231F2A] border border-[#3F3A46]/50 transition-colors group">
+                <div class="flex items-center gap-3 overflow-hidden">
+                  <button onclick="playAudioUrl('${j.audio_url}', '${j.params?.text || 'Audio'}')" class="w-8 h-8 rounded-full bg-[#231F2A] group-hover:bg-purple-600 group-hover:text-white text-purple-400 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
+                    <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                  </button>
+                  <div class="truncate">
+                    <div class="text-xs font-medium text-white truncate">${j.params?.text || j.type}</div>
+                    <div class="text-[10px] font-mono text-slate-400">${j.status === 'completed' ? '✓ Đã tạo' : j.status}</div>
+                  </div>
+                </div>
+                ${j.audio_url ? `
+                  <a href="${j.audio_url}" download="audio-${j.id}.wav" class="p-1 rounded-full text-slate-400 hover:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span class="material-symbols-outlined text-[18px]">download</span>
+                  </a>
+                ` : ''}
+              </div>
+            `).join('');
+          }
+
+          if (fullTbody) {
+            fullTbody.innerHTML = jobs.map(j => `
+              <tr class="hover:bg-[#18151E] transition-colors">
+                <td class="p-3.5">
+                  <button onclick="playAudioUrl('${j.audio_url}', '${j.params?.text || 'Audio'}')" class="w-8 h-8 rounded-full bg-[#231F2A] hover:bg-purple-600 text-purple-400 hover:text-white flex items-center justify-center cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
+                    <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                  </button>
+                </td>
+                <td class="p-3.5 font-medium text-white max-w-md truncate">${j.params?.text || j.type}</td>
+                <td class="p-3.5 font-mono text-purple-400 uppercase">${j.type}</td>
+                <td class="p-3.5 font-mono text-slate-400">${j.created_at ? j.created_at.substring(11, 19) : ''}</td>
+                <td class="p-3.5">
+                  <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${j.status === 'completed' ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50' : 'bg-yellow-900/40 text-yellow-300'}">
+                    ${j.status === 'completed' ? 'Hoàn tất' : j.status}
+                  </span>
+                </td>
+                <td class="p-3.5 text-right">
+                  ${j.audio_url ? `
+                    <a href="${j.audio_url}" download="chatterbox-${j.id}.wav" class="p-1.5 rounded-lg bg-[#231F2A] hover:bg-purple-600 text-white inline-flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[16px]">download</span>
+                    </a>
+                  ` : ''}
+                </td>
+              </tr>
+            `).join('');
+          }
+        }
+      } catch (e) {}
+    }
+
+    // ==================== SETTINGS & MODEL MANAGEMENT ====================
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/v1/settings');
+        if (res.ok) {
+          const data = await res.json();
+          const s = data.settings || {};
+          if (s.export_dir) document.getElementById('settingExportDir').value = s.export_dir;
+          if (s.model_cache_dir) document.getElementById('settingModelDir').value = s.model_cache_dir;
+          if (s.device) document.getElementById('settingDevice').value = s.device;
+          if (s.cpu_threads_limit) document.getElementById('settingCpuThreads').value = s.cpu_threads_limit;
+          if (s.max_chunk_chars) document.getElementById('settingMaxChunk').value = s.max_chunk_chars;
+          if (s.auto_unload_models !== undefined) document.getElementById('settingAutoUnload').checked = s.auto_unload_models;
+        }
+      } catch (e) {}
+    }
+
+    async function saveAllSettings() {
+      const payload = {
+        export_dir: document.getElementById('settingExportDir').value,
+        model_cache_dir: document.getElementById('settingModelDir').value,
+        device: document.getElementById('settingDevice').value,
+        cpu_threads_limit: parseInt(document.getElementById('settingCpuThreads').value) || 4,
+        max_chunk_chars: parseInt(document.getElementById('settingMaxChunk').value) || 4000,
+        auto_unload_models: document.getElementById('settingAutoUnload').checked,
+      };
+
+      try {
+        const res = await fetch('/api/v1/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showToast('success', 'Đã lưu toàn bộ cấu hình hệ thống thành công!');
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi khi lưu cài đặt: ' + e.message);
+      }
+    }
+
+    async function cleanProjectTmpFiles() {
+      if (!confirm("Bạn có chắc muốn dọn sạch các file audio tạm trong thư mục tmp?")) return;
+      try {
+        const res = await fetch('/api/v1/system/clean-tmp', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          const mb = (data.freed_bytes / (1024 * 1024)).toFixed(2);
+          showToast('success', `Đã dọn sạch ${data.deleted_files} file tạm (${mb} MB) trong thư mục tmp!`);
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi khi dọn dẹp file tạm: ' + e.message);
+      }
+    }
+
+    async function preloadModel(modelName) {
+      const statusEl = document.getElementById(`modelStatus-${modelName}`);
+      if (statusEl) statusEl.innerHTML = '<span class="text-purple-400 animate-pulse">⏳ Đang nạp...</span>';
+      try {
+        const res = await fetch(`/api/v1/models/${modelName}/load`, { method: 'POST' });
+        if (res.ok) {
+          if (statusEl) statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1"></span> Đã nạp';
+          showToast('success', `Mô hình ${modelName} đã được nạp sẵn sàng vào VRAM!`);
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi nạp model: ' + e.message);
+      }
+    }
+
+    async function unloadModel(modelName) {
+      const statusEl = document.getElementById(`modelStatus-${modelName}`);
+      try {
+        const res = await fetch(`/api/v1/models/${modelName}`, { method: 'DELETE' });
+        if (res.ok) {
+          if (statusEl) statusEl.textContent = 'Chưa nạp';
+          showToast('info', `Đã giải phóng mô hình ${modelName} khỏi VRAM.`);
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi giải phóng model: ' + e.message);
+      }
+    }
+
+    function preloadCurrentModel() {
+      const m = document.getElementById('ttsModelSelect').value;
+      preloadModel(m);
+    }
+
+    function openModelCompareModal() { document.getElementById('modelCompareModal').classList.remove('hidden'); }
+    function closeModelCompareModal() { document.getElementById('modelCompareModal').classList.add('hidden'); }
+
+    // ==================== THEME & SHORTCUTS ====================
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.classList.contains('dark');
+      if (isDark) {
+        html.classList.remove('dark');
+        document.getElementById('themeIcon').textContent = 'light_mode';
+        showToast('info', 'Đã chuyển sang chế độ Sáng (Light Mode)');
+      } else {
+        html.classList.add('dark');
+        document.getElementById('themeIcon').textContent = 'dark_mode';
+        showToast('info', 'Đã chuyển sang chế độ Tối (Dark Mode)');
+      }
+    }
+
+    function openShortcutsModal() { document.getElementById('shortcutsModal').classList.remove('hidden'); }
+    function closeShortcutsModal() { document.getElementById('shortcutsModal').classList.add('hidden'); }
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        triggerSynthesis();
+      } else if (e.key === 'Escape') {
+        stopAudio();
+        closeShortcutsModal();
+        closeCreateCharacterModal();
+        closeModelCompareModal();
+        closeTrimmerModal();
+      } else if (e.key === 'F1') {
+        e.preventDefault();
+        openShortcutsModal();
+      } else if (e.key === ' ' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        togglePlayPause();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (placeholder && placeholder.classList.contains('hidden')) {
+        drawWaveform(audioElement.duration ? (audioElement.currentTime / audioElement.duration) : 0);
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      checkSystemHealth();
+      refreshHistory();
+      initUrlRoute();
+
+      // Setup Drag & Drop File Reading on all textareas
+      setupDragAndDropTextarea('promptInput', 'charCount');
+      setupDragAndDropTextarea('batchTextarea');
+      setupDragAndDropTextarea('mtlPromptInput');
+    });
+  </script>
+</body>
+</html>

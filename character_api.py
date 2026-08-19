@@ -280,24 +280,86 @@ def apply_character_update(character_id: str, changes: dict) -> dict:
 
 
 @router.post("", status_code=201)
-def create_character(payload: CharacterCreate) -> dict:
+async def create_character(
+    request: Request,
+    reference_audio: Annotated[UploadFile | None, File()] = None,
+    name: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    language: Annotated[str | None, Form()] = None,
+    tags: Annotated[str | None, Form()] = None,
+    notes: Annotated[str | None, Form()] = None,
+    is_default: Annotated[bool | None, Form()] = None,
+    expressiveness: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
+    pace: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
+    stability: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
+    seed: Annotated[int | None, Form(ge=0)] = None,
+) -> dict:
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            payload = CharacterCreate(**body)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        character_id = f"char_{uuid.uuid4().hex}"
+        timestamp = now_iso()
+        character = {
+            "id": character_id,
+            "name": payload.name.strip(),
+            "description": payload.description,
+            "language": payload.language.lower().strip(),
+            "tags": normalized_tags(payload.tags),
+            "notes": payload.notes,
+            "voice": payload.voice.model_dump(),
+            "is_default": payload.is_default,
+            "reference_audio_path": None,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+        with characters_lock:
+            if payload.is_default:
+                for c in characters.values():
+                    c["is_default"] = False
+            characters[character_id] = character
+        save_characters()
+        return public_character(character)
+
+    # Form / Multipart
+    if not name or not name.strip():
+        raise HTTPException(status_code=422, detail="Tên nhân vật là bắt buộc")
     character_id = f"char_{uuid.uuid4().hex}"
     timestamp = now_iso()
+
+    tags_list = []
+    if tags:
+        tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+
+    ref_path = None
+    if reference_audio is not None and reference_audio.filename:
+        ref_path = await save_reference_audio(reference_audio, character_id)
+
     character = {
         "id": character_id,
-        "name": payload.name.strip(),
-        "description": payload.description,
-        "language": payload.language.lower().strip(),
-        "tags": normalized_tags(payload.tags),
-        "notes": payload.notes,
-        "voice": payload.voice.model_dump(),
-        "is_default": payload.is_default,
-        "reference_audio_path": None,
+        "name": name.strip(),
+        "description": description or "",
+        "language": (language or "en").lower().strip(),
+        "tags": normalized_tags(tags_list),
+        "notes": notes or "",
+        "voice": {
+            "expressiveness": expressiveness if expressiveness is not None else 0.5,
+            "pace": pace if pace is not None else 0.5,
+            "stability": stability if stability is not None else 0.7,
+            "seed": seed if seed is not None else 0,
+        },
+        "is_default": bool(is_default),
+        "reference_audio_path": ref_path,
         "created_at": timestamp,
         "updated_at": timestamp,
     }
     with characters_lock:
-        if payload.is_default:
+        if character["is_default"]:
             for c in characters.values():
                 c["is_default"] = False
         characters[character_id] = character

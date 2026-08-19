@@ -14,6 +14,7 @@ import time
 from utils.logger import logger, set_active_progress_callback
 from config.constants import MAX_CHUNK_CHARS
 from config.settings import settings_manager
+from utils.platform_tools import clear_accelerator_cache, select_device
 
 def set_seed(seed: int):
     torch.manual_seed(seed)
@@ -78,8 +79,7 @@ def cleanup_memory():
     """Dọn dẹp bộ nhớ RAM và GPU VRAM sau khi hoàn thành công việc"""
     if settings_manager.get("force_gc_after_gen", True):
         gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        clear_accelerator_cache()
 
 # Khởi tạo pygame mixer cho phát âm thanh
 try:
@@ -88,15 +88,11 @@ except Exception:
     pygame.mixer.init()
 
 class ChatterboxEngine:
-    def __init__(self, device="cpu"):
+    def __init__(self, device="auto"):
         # Lấy cấu hình device từ settings nếu có
         saved_device = settings_manager.get("device", "auto")
-        if saved_device == "cuda" and torch.cuda.is_available():
-            self.device = "cuda"
-        elif saved_device == "cpu":
-            self.device = "cpu"
-        else:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        preference = saved_device if saved_device != "auto" else device
+        self.device = select_device(preference)
 
         # Áp dụng giới hạn phần cứng chống treo máy
         apply_hardware_limits()
@@ -116,8 +112,7 @@ class ChatterboxEngine:
             if settings_manager.get("auto_unload_models", False) and self.active_model_name != model_name:
                 logger.info("Giải phóng các model cũ khỏi VRAM...")
                 self.loaded_models.clear()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                clear_accelerator_cache()
 
             if model_name in self.loaded_models:
                 self.current_model = self.loaded_models[model_name]
