@@ -56,7 +56,8 @@ class TtsTab(tk.Frame):
         sel_row = tk.Frame(model_card, bg=PANEL2_BG)
         sel_row.pack(fill="x", padx=14, pady=(0, 2))
 
-        self.tts_model_var = tk.StringVar(value="Chatterbox Standard (500M)")
+        from core.chatterbox_engine import get_effective_default_model
+        self.tts_model_var = tk.StringVar(value=get_effective_default_model())
         model_cb = ttk.Combobox(sel_row, textvariable=self.tts_model_var, state="readonly", width=42)
         model_cb["values"] = [
             "Chatterbox Standard (500M)",

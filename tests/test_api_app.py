@@ -267,6 +267,56 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(self.client.get(f"/api/v1/jobs/{completed['id']}").status_code, 404)
 
+    def test_clean_temp_dir_rejects_409_when_jobs_active(self):
+        # Mock an active running job in job_manager
+        with patch.object(api_app.job_manager, "_active_procs", {"job_123": None}):
+            response = self.client.post("/api/v1/system/clean-tmp")
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("đang có 1 tác vụ", response.json()["detail"])
+
+    def test_clean_temp_dir_succeeds_when_idle(self):
+        response = self.client.post("/api/v1/system/clean-tmp")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+
+    def test_batch_tts_endpoint_processes_multiple_lines_and_generates_srt(self):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 2400), 24000)):
+            lines = [
+                {"idx": 0, "text": "Dòng thứ nhất kịch bản."},
+                {"idx": 1, "text": "Dòng thứ hai đối thoại."},
+            ]
+            response = self.client.post(
+                "/api/v1/tts/batch",
+                json={
+                    "lines": lines,
+                    "model": "nano",
+                    "pause_duration": 0.5,
+                    "export_srt": True,
+                },
+            )
+            self.assertEqual(response.status_code, 202)
+            job_id = response.json()["id"]
+            completed = self.wait_for_job(job_id, timeout=6)
+            self.assertEqual(completed["status"], "completed")
+            self.assertIsNotNone(completed["audio_url"])
+            self.assertIsNotNone(completed["srt_url"])
+            self.assertEqual(len(completed["lines_results"]), 2)
+
+            # Test line audio download
+            line0_res = self.client.get(f"/api/v1/jobs/{job_id}/lines/0")
+            self.assertEqual(line0_res.status_code, 200)
+            self.assertEqual(line0_res.headers["content-type"], "audio/wav")
+
+            # Test SRT download
+            srt_res = self.client.get(f"/api/v1/jobs/{job_id}/srt")
+            self.assertEqual(srt_res.status_code, 200)
+            self.assertIn("Dòng thứ nhất kịch bản.", srt_res.text)
+            self.assertIn("-->", srt_res.text)
+
+    def test_batch_endpoint_rejects_empty_lines(self):
+        response = self.client.post("/api/v1/tts/batch", json={"lines": []})
+        self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

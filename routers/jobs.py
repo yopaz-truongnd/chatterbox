@@ -76,6 +76,104 @@ def download_audio(job_id: str) -> FileResponse:
     return FileResponse(output_path, media_type="audio/wav", filename=f"chatterbox-{job_id}.wav")
 
 
+@router.get("/api/v1/jobs/{job_id}/lines/{line_idx}")
+def download_line_audio(job_id: str, line_idx: int) -> FileResponse:
+    from api_app import API_DATA_DIR, job_manager
+    if not job_manager:
+        raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
+    line_path = API_DATA_DIR / "chunks" / job_id / f"line_{line_idx:04d}.wav"
+    if not line_path.exists():
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy file audio cho dòng {line_idx}")
+    return FileResponse(line_path, media_type="audio/wav", filename=f"chatterbox-{job_id}-line-{line_idx}.wav")
+
+
+@router.get("/api/v1/jobs/{job_id}/srt")
+def download_job_srt(job_id: str) -> FileResponse:
+    from api_app import API_DATA_DIR, job_manager
+    if not job_manager:
+        raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Không tìm thấy job")
+    srt_path = API_DATA_DIR / "outputs" / f"{job_id}.srt"
+    if not srt_path.exists():
+        raise HTTPException(status_code=404, detail="Không tìm thấy phụ đề SRT cho tác vụ này")
+    return FileResponse(srt_path, media_type="text/plain", filename=f"chatterbox-{job_id}.srt")
+
+
+@router.get("/api/v1/jobs/{job_id}/zip")
+@router.get("/api/v1/jobs/{job_id}/export.zip")
+def download_job_zip(job_id: str) -> FileResponse:
+    import json
+    import os
+    import zipfile
+    from api_app import API_DATA_DIR, job_manager
+
+    if not job_manager:
+        raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Không tìm thấy job")
+    if job.status != "completed":
+        raise HTTPException(status_code=409, detail=f"Job chưa hoàn tất: {job.status}")
+
+    zip_path = API_DATA_DIR / "outputs" / f"{job_id}.zip"
+    srt_path = Path(job.output_path).with_suffix(".srt") if job.output_path else (API_DATA_DIR / "outputs" / f"{job_id}.srt")
+    if not srt_path.exists():
+        srt_path = API_DATA_DIR / "outputs" / f"{job_id}.srt"
+    chunks_dir = API_DATA_DIR / "chunks" / job_id
+
+    # 1. Check if existing ZIP is up to date with all source artifacts
+    sources: list[Path] = []
+    if job.output_path and Path(job.output_path).exists():
+        sources.append(Path(job.output_path))
+    if srt_path.exists():
+        sources.append(srt_path)
+    if chunks_dir.exists():
+        sources.extend(list(chunks_dir.glob("line_*.wav")))
+    meta_path = API_DATA_DIR / "outputs" / f"{job_id}.json"
+    if meta_path.exists():
+        sources.append(meta_path)
+
+    latest_source_mtime = max((s.stat().st_mtime for s in sources), default=0.0)
+    if zip_path.exists() and zip_path.stat().st_size > 0 and zip_path.stat().st_mtime >= latest_source_mtime:
+        return FileResponse(zip_path, media_type="application/zip", filename=f"chatterbox-{job_id}-package.zip")
+
+    # 2. Build ZIP atomically using temporary file to prevent corruption under concurrent requests
+    tmp_zip = zip_path.with_suffix(f".tmp_{uuid.uuid4().hex[:8]}")
+    try:
+        with zipfile.ZipFile(tmp_zip, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            if job.output_path and Path(job.output_path).exists():
+                zf.write(job.output_path, arcname="merged.wav")
+
+            if srt_path.exists():
+                zf.write(srt_path, arcname="subtitles.srt")
+
+            if chunks_dir.exists():
+                for line_file in sorted(chunks_dir.glob("line_*.wav")):
+                    zf.write(line_file, arcname=f"lines/{line_file.name}")
+
+            manifest = {
+                "id": job.id,
+                "type": job.type,
+                "status": job.status,
+                "duration_seconds": job.duration_seconds,
+                "created_at": job.created_at,
+                "completed_at": job.completed_at,
+                "params": job.params,
+                "benchmark": job.benchmark,
+            }
+            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+
+        os.replace(tmp_zip, zip_path)
+    except Exception:
+        tmp_zip.unlink(missing_ok=True)
+        raise
+
+    return FileResponse(zip_path, media_type="application/zip", filename=f"chatterbox-{job_id}-package.zip")
+
+
+
 @router.post("/api/v1/audio/merge", tags=["audio"])
 @router.post("/api/v1/batch/merge", tags=["audio"])
 async def merge_audio_jobs(

@@ -103,17 +103,13 @@ class SettingsTab(tk.Frame):
         device_cb.pack(side="left")
 
         # 2.2 Default Startup Model
+        from config.settings import MODEL_TO_LABEL, LABEL_TO_MODEL
         r4 = tk.Frame(sec2, bg=PANEL2_BG)
         r4.pack(fill="x", pady=6)
         tk.Label(r4, text="Mô hình mặc định khi nạp:", font=(UI_FONT, 9, "bold"), fg=TEXT_COLOR, bg=PANEL2_BG, width=28, anchor="w").pack(side="left")
         self.startup_model_var = tk.StringVar()
-        models_cb = ttk.Combobox(r4, textvariable=self.startup_model_var, state="readonly", width=35,
-                                 values=[
-                                     "Chatterbox Standard (500M)",
-                                     "Chatterbox Turbo (350M - Fast)",
-                                     "Chatterbox Nano (110M - Light/CPU)",
-                                     "Multilingual V3 (500M)"
-                                 ])
+        models_cb = ttk.Combobox(r4, textvariable=self.startup_model_var, state="readonly", width=38,
+                                 values=list(MODEL_TO_LABEL.values()))
         models_cb.pack(side="left")
 
         # 2.3 Max Chunk Characters
@@ -258,12 +254,14 @@ class SettingsTab(tk.Frame):
         else:
             self.device_var.set("cpu (Vi xử lý CPU)")
 
-        self.startup_model_var.set(settings_manager.get("default_startup_model"))
+        from config.settings import MODEL_TO_LABEL, LABEL_TO_MODEL
+        raw_model = settings_manager.get("default_model", "auto")
+        self.startup_model_var.set(MODEL_TO_LABEL.get(raw_model, MODEL_TO_LABEL["auto"]))
         self.max_chunk_var.set(settings_manager.get("max_chunk_chars"))
         self.auto_unload_var.set(settings_manager.get("auto_unload_models"))
 
         # Hardware limits
-        self.cpu_threads_var.set(settings_manager.get("cpu_threads_limit"))
+        self.cpu_threads_var.set(settings_manager.get("cpu_threads"))
         prio = settings_manager.get("process_priority", "low")
         self.prio_var.set("low (Thấp hơn - Tránh đơ OS/UI khi CPU full tải)" if prio == "low" else "normal (Bình thường)")
         self.max_vram_var.set(settings_manager.get("max_vram_fraction"))
@@ -293,12 +291,14 @@ class SettingsTab(tk.Frame):
                 dev_code = "cpu"
             settings_manager.set("device", dev_code)
 
-            settings_manager.set("default_startup_model", self.startup_model_var.get())
+            from config.settings import LABEL_TO_MODEL
+            model_label = self.startup_model_var.get()
+            settings_manager.set("default_model", LABEL_TO_MODEL.get(model_label, "auto"))
             settings_manager.set("max_chunk_chars", self.max_chunk_var.get())
             settings_manager.set("auto_unload_models", self.auto_unload_var.get())
 
             # Hardware limits
-            settings_manager.set("cpu_threads_limit", self.cpu_threads_var.get())
+            settings_manager.set("cpu_threads", self.cpu_threads_var.get())
             settings_manager.set("process_priority", "low" if "low" in self.prio_var.get() else "normal")
             settings_manager.set("max_vram_fraction", self.max_vram_var.get())
             settings_manager.set("force_gc_after_gen", self.force_gc_var.get())
@@ -315,7 +315,7 @@ class SettingsTab(tk.Frame):
             apply_hardware_limits()
 
             self.main_window.set_status("✓ Đã lưu cài đặt dự án thành công!", progress=100)
-            messagebox.showinfo("Lưu Cài Đặt", "Các cài đặt đã được lưu thành công vào config/settings.json!")
+            messagebox.showinfo("Lưu Cài Đặt", "Các cài đặt đã được lưu thành công!")
         except Exception as e:
             logger.error("Lỗi lưu cài đặt: %s", e)
             messagebox.showerror("Lỗi Lưu Cài Đặt", str(e))

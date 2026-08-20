@@ -8,7 +8,7 @@ Tài liệu ghi nhớ tóm tắt các bước thiết lập môi trường Pytho
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install -e .
+pip install -e ".[all]"      # hoặc: pip install -e ".[api]"
 ./run_chatterbox_api.sh
 ```
 
@@ -16,11 +16,11 @@ pip install -e .
 
 1. Cài đặt Python 3.11 (tích hợp sẵn "Add Python to PATH").
 2. Tạo venv và cài đặt:
-   ```cmd
+   ```powershell
    python -m venv venv
    venv\Scripts\activate
    pip install --upgrade pip
-   pip install -e .
+   pip install -e ".[all]"    # hoặc: pip install -e ".[api]"
    ```
 3. Khởi chạy bằng cách nhấp đúp file **`Run_Chatterbox_API.bat`** hoặc PowerShell **`.\run_chatterbox_api.ps1`**.
 

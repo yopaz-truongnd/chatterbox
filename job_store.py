@@ -8,10 +8,10 @@ import threading
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 JobStatus = Literal["queued", "processing", "completed", "failed", "cancelled"]
-JobType = Literal["tts", "turbo", "nano", "multilingual", "voice-conversion", "long-text"]
+JobType = Literal["tts", "turbo", "nano", "multilingual", "voice-conversion", "long-text", "batch"]
 JobPhase = Literal[
     "queued",
     "loading_model",
@@ -45,9 +45,75 @@ class AudioJob:
         data = asdict(self)
         data.pop("input_paths", None)
         data.pop("output_path", None)
-        data["params"] = {key: value for key, value in self.params.items() if not key.endswith("_path")}
+        data["params"] = _sanitize_public_payload(self.params)
         data["audio_url"] = f"/api/v1/jobs/{self.id}/audio" if self.status == "completed" else None
-        return data
+        if self.type in ("batch", "long-text") or "lines" in self.params:
+            if self.benchmark and "lines_results" in self.benchmark:
+                data["lines_results"] = [
+                    {
+                        **_sanitize_public_payload(r),
+                        "audio_url": (f"/api/v1/jobs/{self.id}/lines/{r['idx']}" if r.get("status") == "completed" else None),
+                    }
+                    for r in self.benchmark["lines_results"]
+                ]
+            elif "lines_results" in self.params:
+                data["lines_results"] = _sanitize_public_payload(self.params["lines_results"])
+            data["srt_url"] = f"/api/v1/jobs/{self.id}/srt" if self.status == "completed" else None
+            data["zip_url"] = f"/api/v1/jobs/{self.id}/zip" if self.status == "completed" else None
+        if data.get("benchmark"):
+            data["benchmark"] = _sanitize_public_payload(data["benchmark"])
+        return _sanitize_public_payload(data)
+
+
+def _sanitize_public_payload(obj: Any) -> Any:
+    """Recursively strip internal filesystem paths and sensitive server directories."""
+    if isinstance(obj, dict):
+        cleaned = {}
+        for k, v in obj.items():
+            if k.endswith("_path") or k in ("path", "chunks_dir", "meta_path", "config_file"):
+                continue
+            cleaned[k] = _sanitize_public_payload(v)
+        return cleaned
+    elif isinstance(obj, list):
+        return [_sanitize_public_payload(item) for item in obj]
+    return obj
+
+
+def delete_job_artifacts(data_dir: Path, job_id: str, output_path: str | None = None) -> int:
+    """Safely delete all generated artifacts for a job (wav, srt, zip, json metadata, chunks, configs)."""
+    import shutil
+    deleted_bytes = 0
+    paths_to_delete: list[Path] = [
+        data_dir / "outputs" / f"{job_id}.wav",
+        data_dir / "outputs" / f"{job_id}.srt",
+        data_dir / "outputs" / f"{job_id}.zip",
+        data_dir / "outputs" / f"{job_id}.json",
+        data_dir / "configs" / f"{job_id}.json",
+    ]
+    if output_path:
+        p = Path(output_path)
+        if p not in paths_to_delete:
+            paths_to_delete.append(p)
+
+    for p in paths_to_delete:
+        if p.exists() and p.is_file():
+            try:
+                deleted_bytes += p.stat().st_size
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    chunks_dir = data_dir / "chunks" / job_id
+    if chunks_dir.exists() and chunks_dir.is_dir():
+        try:
+            for child in chunks_dir.rglob("*"):
+                if child.is_file():
+                    deleted_bytes += child.stat().st_size
+            shutil.rmtree(chunks_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+    return deleted_bytes
 
 
 class JobStore:
@@ -58,7 +124,7 @@ class JobStore:
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -90,12 +156,22 @@ class JobStore:
         with self._lock, self._get_conn() as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO jobs (
+                INSERT INTO jobs (
                     id, type, status, phase, progress_percent,
-                    params_json, input_paths_json, created_at,
-                    started_at, completed_at, error, output_path,
-                    duration_seconds, benchmark_json
+                    params_json, input_paths_json, created_at, started_at,
+                    completed_at, error, output_path, duration_seconds, benchmark_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    status=excluded.status,
+                    phase=excluded.phase,
+                    progress_percent=excluded.progress_percent,
+                    params_json=excluded.params_json,
+                    started_at=excluded.started_at,
+                    completed_at=excluded.completed_at,
+                    error=excluded.error,
+                    output_path=excluded.output_path,
+                    duration_seconds=excluded.duration_seconds,
+                    benchmark_json=excluded.benchmark_json
                 """,
                 (
                     job.id,
@@ -143,11 +219,12 @@ class JobStore:
             conn.commit()
             return cursor.rowcount > 0
 
-    def cleanup_expired(self, retention_days: int = 3) -> tuple[int, int]:
-        """Delete jobs and audio files older than retention_days."""
+    def cleanup_expired(self, retention_days: int = 3, data_dir: Path | None = None) -> tuple[int, int]:
+        """Delete jobs and all associated audio/subtitle/chunk/archive files older than retention_days."""
         cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
         deleted_count = 0
         deleted_bytes = 0
+        target_data_dir = data_dir or self.db_path.parent
 
         with self._lock, self._get_conn() as conn:
             rows = conn.execute(
@@ -156,15 +233,10 @@ class JobStore:
             ).fetchall()
 
             for row in rows:
-                if row["output_path"]:
-                    p = Path(row["output_path"])
-                    if p.exists():
-                        try:
-                            deleted_bytes += p.stat().st_size
-                            p.unlink(missing_ok=True)
-                        except Exception:
-                            pass
-                conn.execute("DELETE FROM jobs WHERE id = ?", (row["id"],))
+                jid = row["id"]
+                out_p = row["output_path"]
+                deleted_bytes += delete_job_artifacts(target_data_dir, jid, out_p)
+                conn.execute("DELETE FROM jobs WHERE id = ?", (jid,))
                 deleted_count += 1
 
             conn.commit()

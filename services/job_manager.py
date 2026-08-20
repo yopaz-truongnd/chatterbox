@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from job_store import AudioJob, JobPhase, JobStatus, JobStore, JobType
+from job_store import AudioJob, JobPhase, JobStatus, JobStore, JobType, delete_job_artifacts
 from services.audio import load_and_resample_audio, merge_speech_segments, mix_background_music, save_audio_wav
 from services.inference import execute_model_inference, run_isolated_subprocess
 from utils.platform_tools import clear_accelerator_cache
@@ -53,6 +53,7 @@ class JobManager:
         self.data_dir.joinpath("inputs").mkdir(parents=True, exist_ok=True)
         self.data_dir.joinpath("outputs").mkdir(parents=True, exist_ok=True)
         self.data_dir.joinpath("chunks").mkdir(parents=True, exist_ok=True)
+        self.data_dir.joinpath("configs").mkdir(parents=True, exist_ok=True)
 
         # 1. Recover uncompleted jobs left from previous server crash/restart
         past_jobs = self.store.list_jobs(limit=200)
@@ -90,6 +91,9 @@ class JobManager:
                     except Exception:
                         pass
             self._active_procs.clear()
+
+        if self._worker_thread and self._worker_thread.is_alive():
+            self._worker_thread.join(timeout=2.0)
 
     def submit_job(self, job_type: JobType, params: dict, input_paths: list[str]) -> AudioJob:
         """Create and queue a new audio job in a deadlock-free manner."""
@@ -167,7 +171,7 @@ class JobManager:
             self.store.save(job)
 
     def delete_job(self, job_id: str) -> bool:
-        """Delete job records and files safely."""
+        """Delete job records and all associated artifacts safely."""
         # 1. Cancel if active
         self.cancel_job(job_id)
 
@@ -178,9 +182,7 @@ class JobManager:
                 output_path = job.output_path
             self.store.delete(job_id)
 
-        if output_path:
-            Path(output_path).unlink(missing_ok=True)
-
+        delete_job_artifacts(self.data_dir, job_id, output_path)
         return True
 
     def _update_job_status(self, job_id: str, **changes: Any) -> None:
@@ -222,14 +224,15 @@ class JobManager:
 
         self._update_job_status(job_id, status="processing", phase="loading_model", progress_percent=5, started_at=now_iso())
         output_path = self.data_dir / "outputs" / f"{job.id}.wav"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Check in-process test mode
         in_process = (os.getenv("CHATTERBOX_IN_PROCESS", "0") == "1")
 
         try:
-            if job.type == "long-text":
+            if job.type in ("long-text", "batch"):
                 with self._execution_lock:
-                    success, err_msg = self._run_long_text(job, output_path, in_process)
+                    success, err_msg = self._run_batch_job(job, output_path, in_process)
             elif in_process:
                 with self._execution_lock:
                     wav, sr = execute_model_inference(job.type, job.params, self.device)
@@ -250,6 +253,7 @@ class JobManager:
                         data_dir=self.data_dir,
                         timeout_seconds=self.timeout_seconds,
                         progress_callback=lambda ph, pct, msg: self._update_job_status(job.id, phase=ph, progress_percent=pct),
+                        line_progress_callback=lambda lp: self._handle_line_progress(job.id, lp),
                         benchmark_callback=lambda bm: self._update_job_status(job.id, benchmark=bm, duration_seconds=bm.get("audio_duration_seconds")),
                         register_proc_callback=self._register_proc,
                         unregister_proc_callback=self._unregister_proc,
@@ -278,117 +282,272 @@ class JobManager:
                     error=err_msg or "Lỗi không xác định",
                 )
         except Exception as exc:
+            logger.error(f"[JobManager] Error executing {job_id}: {exc}", exc_info=True)
             self._update_job_status(job_id, status="failed", phase="failed", completed_at=now_iso(), error=str(exc))
         finally:
             for input_path in job.input_paths:
                 Path(input_path).unlink(missing_ok=True)
             clear_accelerator_cache()
 
-    def _run_long_text(self, job: AudioJob, output_path: Path, in_process: bool) -> tuple[bool, str | None]:
-        """Split text, synthesize chunks sequentially, and merge into single WAV."""
+    def _handle_line_progress(self, job_id: str, line_data: dict) -> None:
+        with self._jobs_lock:
+            job = self._jobs.get(job_id)
+            if job:
+                if job.benchmark is None:
+                    job.benchmark = {}
+                if "lines_results" not in job.benchmark:
+                    job.benchmark["lines_results"] = []
+                idx = line_data.get("line_idx")
+                status = line_data.get("line_status") or line_data.get("status", "completed")
+                dur = line_data.get("line_duration") or line_data.get("duration_seconds", 0.0)
+                err = line_data.get("error")
+
+                found = False
+                for r in job.benchmark["lines_results"]:
+                    if r.get("idx") == idx:
+                        r["status"] = status
+                        r["duration_seconds"] = dur
+                        if err is not None:
+                            r["error"] = err
+                        found = True
+                        break
+                if not found:
+                    entry = {
+                        "idx": idx,
+                        "status": status,
+                        "duration_seconds": dur,
+                    }
+                    if err is not None:
+                        entry["error"] = err
+                    job.benchmark["lines_results"].append(entry)
+                self.store.save(job)
+
+    def _run_batch_job(self, job: AudioJob, output_path: Path, in_process: bool) -> tuple[bool, str | None]:
+        """Execute all lines in a batch or long-text job loading the model ONCE."""
         params = job.params
-        text = params.get("text", "")
-        min_chars = int(params.get("min_chars", 200))
-        max_chars = int(params.get("max_chars", 500))
-        pause_duration = float(params.get("pause_duration", 0.6))
         sub_model = params.get("model", "nano")
+        pause_duration = float(params.get("pause_duration", 0.8))
+        bgm_path = params.get("bgm_audio_path")
+        bgm_vol = float(params.get("bgm_volume", 0.15))
+        export_srt = bool(params.get("export_srt", True))
+        chunks_dir = self.data_dir / "chunks" / job.id
+        chunks_dir.mkdir(parents=True, exist_ok=True)
 
-        from utils.text_cleaner import split_text_preserving_content
-        chunks = split_text_preserving_content(text, min_chars, max_chars)
-        total_chunks = len(chunks)
-        if total_chunks == 0:
-            return False, "Văn bản rỗng sau khi phân tách"
+        if job.type == "long-text":
+            from utils.text_cleaner import split_text_preserving_content
+            text = params.get("text", "")
+            min_chars = int(params.get("min_chars", 200))
+            max_chars = int(params.get("max_chars", 500))
+            raw_chunks = split_text_preserving_content(text, min_chars, max_chars)
+            lines = [{"idx": i, "text": c["text"], **params} for i, c in enumerate(raw_chunks)]
+        else:
+            lines = params.get("lines", [])
 
-        temp_dir = self.data_dir / "chunks" / job.id
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        chunk_wav_paths: list[Path] = []
-        t0_start = time.time()
+        total_lines = len(lines)
+        if total_lines == 0:
+            return False, "Kịch bản rỗng sau khi xử lý (0 dòng)"
 
-        try:
-            for i, chunk in enumerate(chunks):
-                refreshed = self.get_job(job.id)
-                if refreshed and refreshed.status == "cancelled":
-                    return False, "Người dùng đã hủy tác vụ"
+        pause_durations_list = [float(item.get("pause_duration", pause_duration)) for item in lines]
+        normalize_loudness_flag = bool(params.get("normalize_loudness", True))
+        crossfade_ms_val = int(params.get("crossfade_ms", 30))
+        bgm_ducking_flag = bool(params.get("bgm_ducking", True))
+        stop_on_error = bool(params.get("stop_on_error", False))
+        keep_original_timeline = bool(params.get("keep_original_timeline", False))
 
-                pct = int((i / total_chunks) * 80)
-                self._update_job_status(job.id, phase="generating_tokens", progress_percent=pct)
+        batch_params = {
+            **params,
+            "lines": lines,
+            "model": sub_model,
+            "chunks_dir": str(chunks_dir),
+            "merge": True,
+            "pause_duration": pause_duration,
+            "pause_durations": pause_durations_list,
+            "bgm_audio_path": bgm_path,
+            "bgm_volume": bgm_vol,
+            "export_srt": export_srt,
+            "normalize_loudness": normalize_loudness_flag,
+            "crossfade_ms": crossfade_ms_val,
+            "bgm_ducking": bgm_ducking_flag,
+            "stop_on_error": stop_on_error,
+            "keep_original_timeline": keep_original_timeline,
+        }
 
-                chunk_out = temp_dir / f"chunk_{i:04d}.wav"
-                chunk_params = {**params, "text": chunk["text"]}
+        if in_process:
+            successful_segments: list[tuple[Path, float, int]] = []
+            lines_results = []
+            t0_start = time.time()
 
-                if in_process:
-                    wav, sr = execute_model_inference(sub_model, chunk_params, self.device)
-                    save_audio_wav(chunk_out, wav, sr)
-                else:
-                    ok, err, _ = run_isolated_subprocess(
-                        job_id=f"{job.id}_{i}",
-                        job_type=sub_model,
-                        params=chunk_params,
-                        output_path=chunk_out,
-                        device=self.device,
-                        cpu_threads=self.cpu_threads,
-                        project_dir=self.project_dir,
-                        data_dir=self.data_dir,
-                        timeout_seconds=self.timeout_seconds,
-                        register_proc_callback=self._register_proc,
-                        unregister_proc_callback=self._unregister_proc,
+            for i, line_item in enumerate(lines):
+                line_idx = line_item.get("idx", i)
+                line_out = chunks_dir / f"line_{line_idx:04d}.wav"
+                line_pause = float(line_item.get("pause_duration", pause_duration))
+                t0_line = time.time()
+                try:
+                    wav, sr = execute_model_inference(sub_model, line_item, self.device)
+                    save_audio_wav(line_out, wav, sr)
+                    dur = round(wav.shape[-1] / sr, 3)
+                    successful_segments.append((line_out, line_pause, line_idx))
+                    lines_results.append({
+                        "idx": line_idx,
+                        "status": "completed",
+                        "audio_path": str(line_out),
+                        "duration_seconds": dur,
+                        "inference_seconds": round(time.time() - t0_line, 3),
+                        "text": line_item.get("text", ""),
+                        "pause_duration": line_pause,
+                        "original_start_seconds": line_item.get("start_seconds"),
+                        "original_end_seconds": line_item.get("end_seconds"),
+                    })
+                except Exception as exc:
+                    lines_results.append({
+                        "idx": line_idx,
+                        "status": "failed",
+                        "audio_path": None,
+                        "duration_seconds": 0.0,
+                        "inference_seconds": round(time.time() - t0_line, 3),
+                        "text": line_item.get("text", ""),
+                        "pause_duration": line_pause,
+                        "error": str(exc),
+                        "original_start_seconds": line_item.get("start_seconds"),
+                        "original_end_seconds": line_item.get("end_seconds"),
+                    })
+                    if stop_on_error:
+                        break
+
+            total_dur = 0.0
+            if successful_segments:
+                tensors = []
+                successful_pauses = []
+                target_sr = 24000
+                for p, p_pause, _ in successful_segments:
+                    w, _ = load_and_resample_audio(p, target_sr)
+                    if w is not None:
+                        tensors.append(w)
+                        successful_pauses.append(p_pause)
+
+                if tensors:
+                    merged_speech = merge_speech_segments(
+                        tensors,
+                        pause_duration=pause_duration,
+                        pause_durations=successful_pauses,
+                        target_sr=target_sr,
+                        normalize=normalize_loudness_flag,
+                        crossfade_ms=crossfade_ms_val,
                     )
-                    if not ok or not chunk_out.exists():
-                        return False, f"Lỗi ở đoạn {i+1}/{total_chunks}: {err}"
+                    if bgm_path and Path(bgm_path).exists():
+                        merged_speech, _ = mix_background_music(
+                            merged_speech,
+                            bgm_path,
+                            bgm_volume=bgm_vol,
+                            target_sr=target_sr,
+                            ducking=bgm_ducking_flag,
+                        )
 
-                chunk_wav_paths.append(chunk_out)
+                    save_audio_wav(output_path, merged_speech, target_sr)
+                    total_dur = round(merged_speech.shape[-1] / target_sr, 3)
 
-            # Merge all chunks
-            self._update_job_status(job.id, phase="merging_audio", progress_percent=85)
-            tensors = []
-            target_sr = 24000
-            for p in chunk_wav_paths:
-                w, err = load_and_resample_audio(p, target_sr)
-                if w is not None:
-                    tensors.append(w)
+            current_time = 0.0
+            srt_lines = []
+            slot_warnings = []
 
-            merged_speech = merge_speech_segments(tensors, pause_duration=pause_duration, target_sr=target_sr)
+            def fmt_srt(t: float) -> str:
+                t = max(0.0, t)
+                hrs = int(t // 3600)
+                mins = int((t % 3600) // 60)
+                secs = int(t % 60)
+                ms = int((t - int(t)) * 1000)
+                return f"{hrs:02d}:{mins:02d}:{secs:02d},{ms:03d}"
 
-            # Optional BGM mixing with explicit warning capture
-            bgm_path = params.get("bgm_audio_path")
-            bgm_vol = float(params.get("bgm_volume", 0.15))
-            warning_msg = None
-            if bgm_path and Path(bgm_path).exists():
-                merged_speech, warning_msg = mix_background_music(merged_speech, bgm_path, bgm_vol, target_sr)
-                if warning_msg:
-                    logger.warning(f"[Long-Text] {warning_msg}")
+            for idx, item in enumerate(lines_results):
+                if item.get("status") == "failed":
+                    item["start_seconds"] = 0.0
+                    item["end_seconds"] = 0.0
+                    continue
 
-            save_audio_wav(output_path, merged_speech, target_sr)
+                p_len = item.get("pause_duration", pause_duration)
+
+                if keep_original_timeline and item.get("original_start_seconds") is not None and item.get("original_end_seconds") is not None:
+                    # Strict original timeline: keep timestamps strictly as imported
+                    start_s = float(item["original_start_seconds"])
+                    end_s = float(item["original_end_seconds"])
+                    slot_dur = max(0.01, end_s - start_s)
+                    actual_dur = float(item["duration_seconds"])
+                    if actual_dur > slot_dur:
+                        slot_warnings.append(
+                            f"Dòng {item['idx']+1}: Audio sinh ra ({actual_dur}s) dài hơn thời lượng timeline gốc ({slot_dur}s)"
+                        )
+                    item["start_seconds"] = round(start_s, 3)
+                    item["end_seconds"] = round(end_s, 3)
+                else:
+                    start_s = current_time
+                    end_s = start_s + item["duration_seconds"]
+                    current_time = end_s + p_len
+
+                    item["start_seconds"] = round(start_s, 3)
+                    item["end_seconds"] = round(end_s, 3)
+
+                if export_srt:
+                    srt_lines.append(f"{idx+1}\n{fmt_srt(start_s)} --> {fmt_srt(end_s)}\n{item['text']}\n")
+
+            if export_srt and srt_lines:
+                with open(output_path.with_suffix(".srt"), "w", encoding="utf-8") as f:
+                    f.write("\n".join(srt_lines))
 
             total_time = round(time.time() - t0_start, 3)
-            audio_dur = round(merged_speech.shape[-1] / target_sr, 3)
-            rtf = round(total_time / max(0.01, audio_dur), 3)
+            rtf = round(total_time / max(0.01, total_dur), 3) if total_dur > 0 else 0.0
+            ftr = round(total_dur / max(0.01, total_time), 2) if total_time > 0 else 0.0
 
             benchmark_data = {
                 "device": self.device,
                 "model_type": sub_model,
-                "total_chunks": total_chunks,
-                "inference_seconds": total_time,
-                "audio_duration_seconds": audio_dur,
+                "total_lines": total_lines,
+                "completed_lines": len([r for r in lines_results if r.get("status") == "completed"]),
+                "failed_lines": len([r for r in lines_results if r.get("status") == "failed"]),
+                "total_seconds": total_time,
+                "audio_duration_seconds": total_dur,
                 "realtime_factor": rtf,
-                "faster_than_realtime": round(audio_dur / max(0.01, total_time), 2),
+                "faster_than_realtime": ftr,
+                "slot_warnings": slot_warnings,
+                "lines_results": lines_results,
             }
-            if warning_msg:
-                benchmark_data["warning"] = warning_msg
+            has_failures = any(r.get("status") == "failed" for r in lines_results)
+            if has_failures and len(chunk_wav_paths) == 0:
+                self._update_job_status(
+                    job.id,
+                    benchmark=benchmark_data,
+                    duration_seconds=0.0,
+                    progress_percent=100,
+                    phase="failed",
+                    status="failed",
+                    error="Toàn bộ các dòng trong kịch bản đều thất bại",
+                )
+                return False, "Toàn bộ các dòng trong kịch bản đều thất bại"
 
             self._update_job_status(
                 job.id,
                 benchmark=benchmark_data,
-                duration_seconds=audio_dur,
+                duration_seconds=total_dur,
                 progress_percent=100,
                 phase="completed",
+                output_path=str(output_path) if output_path.exists() else None,
             )
             return True, None
-        finally:
-            if temp_dir.exists():
-                for f in temp_dir.glob("*.wav"):
-                    f.unlink(missing_ok=True)
-                try:
-                    temp_dir.rmdir()
-                except Exception:
-                    pass
+
+        else:
+            ok, err, bm = run_isolated_subprocess(
+                job_id=job.id,
+                job_type="batch",
+                params=batch_params,
+                output_path=output_path,
+                device=self.device,
+                cpu_threads=self.cpu_threads,
+                project_dir=self.project_dir,
+                data_dir=self.data_dir,
+                timeout_seconds=self.timeout_seconds,
+                progress_callback=lambda ph, pct, msg: self._update_job_status(job.id, phase=ph, progress_percent=pct),
+                line_progress_callback=lambda lp: self._handle_line_progress(job.id, lp),
+                benchmark_callback=lambda bm_data: self._update_job_status(job.id, benchmark=bm_data, duration_seconds=bm_data.get("audio_duration_seconds")),
+                register_proc_callback=self._register_proc,
+                unregister_proc_callback=self._unregister_proc,
+            )
+            return ok, err

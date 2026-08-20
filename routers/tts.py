@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
 import character_api
@@ -132,9 +133,11 @@ def split_text(request: SplitTextRequest) -> dict:
 
 @router.post("/api/v1/tts", status_code=status.HTTP_202_ACCEPTED)
 @router.post("/api/v1/tts/turbo", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/api/v1/tts/nano", status_code=status.HTTP_202_ACCEPTED)
 async def create_turbo_job(
+    request: Request,
     text: Annotated[str, Form(min_length=1, max_length=4000)],
-    model: Annotated[Literal["turbo", "nano"] | None, Form()] = None,
+    model: Annotated[Literal["turbo", "nano", "auto"] | None, Form()] = None,
     quality_preset: Annotated[Literal["fast", "balanced", "expressive"] | None, Form()] = None,
     audio_prompt: Annotated[UploadFile | None, File()] = None,
     character_id: Annotated[str | None, Form()] = None,
@@ -146,7 +149,16 @@ async def create_turbo_job(
 ) -> dict:
     from api_app import RECOMMENDED_MODEL, job_manager
 
-    selected_model = model or (QUALITY_PRESETS[quality_preset]["model"] if quality_preset else RECOMMENDED_MODEL)
+    req_path = request.url.path
+    if req_path.endswith("/nano"):
+        selected_model = "nano"
+    elif req_path.endswith("/turbo"):
+        selected_model = "turbo"
+    elif model and model in ("nano", "turbo"):
+        selected_model = model
+    else:
+        selected_model = QUALITY_PRESETS[quality_preset]["model"] if quality_preset else RECOMMENDED_MODEL
+
     if quality_preset and quality_preset in QUALITY_PRESETS:
         preset_cfg = QUALITY_PRESETS[quality_preset]
         temperature = temperature or preset_cfg["temperature"]
@@ -167,6 +179,7 @@ async def create_turbo_job(
     }
     job = job_manager.submit_job(selected_model, params, input_paths)
     return job.public_dict()
+
 
 
 @router.post("/api/v1/tts/standard", status_code=status.HTTP_202_ACCEPTED)
@@ -286,6 +299,166 @@ async def create_long_text_job(
     }
     job = job_manager.submit_job("long-text", params, input_paths)
     return job.public_dict()
+
+
+@router.post("/api/v1/tts/batch", status_code=status.HTTP_202_ACCEPTED)
+async def create_batch_job(
+    request: Request,
+    lines_json: Annotated[str | None, Form()] = None,
+    model: Annotated[Literal["turbo", "nano", "standard", "multilingual", "auto"] | None, Form()] = None,
+    quality_preset: Annotated[Literal["fast", "balanced", "expressive"] | None, Form()] = None,
+    pause_duration: Annotated[float, Form(ge=0.0, le=5.0)] = 0.8,
+    bgm_file: Annotated[UploadFile | None, File()] = None,
+    bgm_volume: Annotated[float, Form(ge=0.0, le=1.0)] = 0.15,
+    export_srt: Annotated[bool, Form()] = True,
+    normalize_loudness: Annotated[bool, Form()] = True,
+    crossfade_ms: Annotated[int, Form(ge=0, le=500)] = 30,
+    bgm_ducking: Annotated[bool, Form()] = True,
+    parent_batch_id: Annotated[str | None, Form()] = None,
+    stop_on_error: Annotated[bool, Form()] = False,
+    keep_original_timeline: Annotated[bool, Form()] = False,
+) -> dict:
+    from api_app import RECOMMENDED_MODEL, job_manager
+
+    content_type = request.headers.get("content-type", "")
+    lines = []
+    retry_of_indices = None
+
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            lines = body.get("lines", [])
+            model = model or body.get("model")
+            pause_duration = float(body.get("pause_duration", pause_duration))
+            bgm_volume = float(body.get("bgm_volume", bgm_volume))
+            export_srt = bool(body.get("export_srt", export_srt))
+            normalize_loudness = bool(body.get("normalize_loudness", normalize_loudness))
+            crossfade_ms = int(body.get("crossfade_ms", crossfade_ms))
+            bgm_ducking = bool(body.get("bgm_ducking", bgm_ducking))
+            parent_batch_id = parent_batch_id or body.get("parent_batch_id")
+            retry_of_indices = body.get("retry_of_indices")
+            stop_on_error = bool(body.get("stop_on_error", stop_on_error))
+            keep_original_timeline = bool(body.get("keep_original_timeline", keep_original_timeline))
+        except Exception:
+            pass
+    elif lines_json:
+        try:
+            lines = json.loads(lines_json)
+        except Exception:
+            pass
+
+    if not lines:
+        raise HTTPException(status_code=422, detail="Danh sách lines không được để trống")
+
+    # Validate Character IDs strictly before job submission: non-existent character ID must return 422
+    invalid_char_ids: list[str] = []
+    for item in lines:
+        if isinstance(item, dict) and item.get("character_id"):
+            cid = str(item["character_id"]).strip()
+            if cid:
+                try:
+                    character_api.get_character(cid)
+                except HTTPException as he:
+                    if he.status_code == 404:
+                        invalid_char_ids.append(cid)
+                except Exception:
+                    invalid_char_ids.append(cid)
+
+    if invalid_char_ids:
+        missing_unique = sorted(set(invalid_char_ids))
+        raise HTTPException(
+            status_code=422,
+            detail=f"Các Character ID sau không tồn tại trong hệ thống: {', '.join(missing_unique)}",
+        )
+
+    if model == "auto" or not model:
+        selected_model = QUALITY_PRESETS[quality_preset]["model"] if quality_preset else RECOMMENDED_MODEL
+    else:
+        selected_model = model
+
+    job_id = uuid.uuid4().hex
+    input_paths = []
+
+    bgm_path = None
+    if bgm_file is not None and bgm_file.filename:
+        bgm_path = await save_upload(bgm_file, job_id, "bgm")
+        input_paths.append(bgm_path)
+
+    cleaned_lines = []
+    for idx, item in enumerate(lines):
+        if isinstance(item, str):
+            text = item.strip()
+            char_id = None
+            extra = {}
+        else:
+            text = item.get("text", "").strip()
+            char_id = item.get("character_id")
+            extra = {k: v for k, v in item.items() if k not in ("text", "character_id")}
+
+        if text:
+            # Resolve character voice profile and prompt if character_id is provided
+            prompt_path = None
+            v_profile = None
+            if char_id:
+                try:
+                    prompt_path, v_profile = character_api.resolve_character_voice(char_id)
+                except HTTPException as he:
+                    if he.status_code == 410:
+                        # Character exists but reference audio missing on disk: proceed with default voice and voice profile
+                        char_obj = character_api.get_character(char_id)
+                        v_profile = dict(char_obj.get("voice", {}))
+                        prompt_path = None
+                    else:
+                        raise he
+                except Exception:
+                    prompt_path, v_profile = None, None
+
+            line_entry = {
+                "idx": extra.get("idx", idx),
+                "text": text,
+                "character_id": char_id,
+                "audio_prompt_path": prompt_path or extra.get("audio_prompt_path"),
+                "pause_duration": float(extra.get("pause_duration", pause_duration)),
+                "temperature": effective_temperature(extra.get("temperature"), v_profile, 0.6),
+                "seed": effective_value(extra.get("seed"), v_profile, "seed", 0),
+                "exaggeration": effective_value(extra.get("exaggeration"), v_profile, "expressiveness", 0.5),
+                "cfg_weight": effective_value(extra.get("cfg_weight"), v_profile, "pace", 0.5),
+                "top_k": extra.get("top_k", 1000),
+                "top_p": extra.get("top_p", 0.95),
+                "repetition_penalty": extra.get("repetition_penalty", 1.2),
+            }
+            if "start_seconds" in extra:
+                line_entry["start_seconds"] = extra["start_seconds"]
+            if "end_seconds" in extra:
+                line_entry["end_seconds"] = extra["end_seconds"]
+            if "speaker" in extra:
+                line_entry["speaker"] = extra["speaker"]
+            cleaned_lines.append(line_entry)
+
+    if not cleaned_lines:
+        raise HTTPException(status_code=422, detail="Không có dòng văn bản hợp lệ trong batch")
+
+    params = {
+        "lines": cleaned_lines,
+        "model": selected_model,
+        "pause_duration": pause_duration,
+        "bgm_audio_path": bgm_path,
+        "bgm_volume": bgm_volume,
+        "export_srt": export_srt,
+        "normalize_loudness": normalize_loudness,
+        "crossfade_ms": crossfade_ms,
+        "bgm_ducking": bgm_ducking,
+        "stop_on_error": stop_on_error,
+        "keep_original_timeline": keep_original_timeline,
+    }
+    if parent_batch_id:
+        params["parent_batch_id"] = parent_batch_id
+    if retry_of_indices:
+        params["retry_of_indices"] = retry_of_indices
+
+    job = job_manager.submit_job("batch", params, input_paths)
+    return job.public_dict()
+
 
 
 @router.post("/api/v1/voice-conversion", status_code=status.HTTP_202_ACCEPTED, tags=["vc"])

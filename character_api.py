@@ -76,6 +76,7 @@ def now_iso() -> str:
 
 def migrate_legacy_characters(target_data_dir: Path) -> None:
     """One-time migration of legacy characters from <project>/data to the platform data directory."""
+    from utils.logger import logger
     legacy_dir = PROJECT_DIR / "data"
     legacy_file = legacy_dir / "characters.json"
     legacy_chars_dir = legacy_dir / "characters"
@@ -90,8 +91,14 @@ def migrate_legacy_characters(target_data_dir: Path) -> None:
         shutil.copy2(legacy_file, target_file)
         if legacy_chars_dir.exists():
             shutil.copytree(legacy_chars_dir, target_chars_dir, dirs_exist_ok=True)
-    except Exception:
-        pass
+        logger.info("Đã di chuyển dữ liệu Character từ %s sang %s", legacy_dir, target_data_dir)
+    except Exception as exc:
+        logger.warning(
+            "Không thể di chuyển dữ liệu Character từ '%s' sang '%s': %s",
+            legacy_dir,
+            target_data_dir,
+            exc,
+        )
 
 
 def configure_storage(data_dir: Path) -> None:

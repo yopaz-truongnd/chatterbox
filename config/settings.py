@@ -1,18 +1,18 @@
 """Settings Manager - Quản lý cài đặt dự án Chatterbox TTS Studio (Desktop & API).
 
-Định nghĩa schema cấu hình thống nhất và cơ chế migration tương thích ngược.
+Định nghĩa schema cấu hình thống nhất, mapping nhãn model và lưu trữ đa nền tảng.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 from utils.logger import logger
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-SETTINGS_FILE = PROJECT_DIR / "config/settings.json"
 
 cpu_count = os.cpu_count() or 4
 default_cpu_threads = max(1, min(4, cpu_count - 2 if cpu_count > 2 else cpu_count))
@@ -47,24 +47,62 @@ DEFAULT_SETTINGS = {
     "max_batch_workers": 2,
 }
 
-# Legacy Model Name Mapping
-LEGACY_MODEL_MAP = {
+# Bidirectional Model Mapping for Desktop UI
+MODEL_TO_LABEL = {
+    "auto": "✨ Tự động theo cấu hình máy (Auto)",
+    "nano": "⚡ Chatterbox Nano (110M - Light/CPU)",
+    "turbo": "🚀 Chatterbox Turbo (350M - Fast)",
+    "standard": "🎙️ Chatterbox Standard (500M)",
+    "multilingual": "🌐 Multilingual V3 (500M)",
+}
+
+LABEL_TO_MODEL = {label: model for model, label in MODEL_TO_LABEL.items()}
+LABEL_TO_MODEL.update({
     "Chatterbox Standard (500M)": "standard",
-    "Chatterbox Turbo (350M)": "turbo",
-    "Chatterbox Nano (110M)": "nano",
-    "Chatterbox Multilingual": "multilingual",
+    "Chatterbox Turbo (350M - Fast)": "turbo",
+    "Chatterbox Nano (110M - Light/CPU)": "nano",
+    "Multilingual V3 (500M)": "multilingual",
+    "Multilingual TTS": "multilingual",
     "standard": "standard",
     "turbo": "turbo",
     "nano": "nano",
     "multilingual": "multilingual",
     "auto": "auto",
-}
+})
 
 LEGACY_KEY_ALIASES = {
     "device_preference": "device",
     "default_startup_model": "default_model",
     "cpu_threads_limit": "cpu_threads",
 }
+
+
+def get_default_settings_file() -> Path:
+    """Get the platform-safe settings file location with auto-migration."""
+    env_path = os.getenv("CHATTERBOX_SETTINGS_FILE")
+    if env_path:
+        return Path(env_path)
+
+    try:
+        from utils.platform_tools import get_default_data_dir
+        platform_data_dir = get_default_data_dir()
+    except Exception:
+        platform_data_dir = PROJECT_DIR / "data"
+
+    platform_settings_file = platform_data_dir / "settings.json"
+    legacy_settings_file = PROJECT_DIR / "config" / "settings.json"
+
+    # One-time migration from legacy repo config/settings.json
+    if not platform_settings_file.exists() and legacy_settings_file.exists():
+        try:
+            platform_data_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy_settings_file, platform_settings_file)
+            logger.info("Đã di chuyển cài đặt từ %s sang %s", legacy_settings_file, platform_settings_file)
+        except Exception as exc:
+            logger.warning("Không thể di chuyển cài đặt sang %s: %s", platform_settings_file, exc)
+            return legacy_settings_file
+
+    return platform_settings_file
 
 
 def migrate_settings(raw_dict: dict) -> dict:
@@ -79,20 +117,19 @@ def migrate_settings(raw_dict: dict) -> dict:
     # 2. Legacy model names to canonical strings
     if "default_model" in migrated and isinstance(migrated["default_model"], str):
         val = migrated["default_model"]
-        if val in LEGACY_MODEL_MAP:
-            migrated["default_model"] = LEGACY_MODEL_MAP[val]
+        migrated["default_model"] = LABEL_TO_MODEL.get(val, val)
 
     if "default_startup_model" in migrated and isinstance(migrated["default_startup_model"], str):
         val = migrated.pop("default_startup_model")
         if "default_model" not in migrated:
-            migrated["default_model"] = LEGACY_MODEL_MAP.get(val, "auto")
+            migrated["default_model"] = LABEL_TO_MODEL.get(val, "auto")
 
     return migrated
 
 
 class SettingsManager:
-    def __init__(self, filepath: Path | str = SETTINGS_FILE):
-        self.filepath = Path(filepath)
+    def __init__(self, filepath: Path | str | None = None):
+        self.filepath = Path(filepath) if filepath is not None else get_default_settings_file()
         self.settings = DEFAULT_SETTINGS.copy()
         self.load()
 
@@ -128,6 +165,8 @@ class SettingsManager:
 
     def set(self, key: str, value) -> None:
         canonical_key = LEGACY_KEY_ALIASES.get(key, key)
+        if canonical_key == "default_model" and isinstance(value, str):
+            value = LABEL_TO_MODEL.get(value, value)
         self.settings[canonical_key] = value
 
     def __getitem__(self, key: str):

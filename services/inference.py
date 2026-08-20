@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import queue
@@ -10,7 +11,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -33,20 +34,62 @@ def set_inference_seed(seed: int, device: str) -> None:
     np.random.seed(seed)
 
 
-def execute_model_inference(job_type: str, params: dict, device: str) -> tuple[torch.Tensor, int]:
-    """Single canonical model inference implementation used by both isolated runner and test harnesses.
-    
-    Guarantees that default parameter values and generation logic never drift.
-    """
+def load_model(job_type: str, device: str) -> tuple[Any, int]:
+    """Load model once and return (model_instance, sample_rate)."""
+    if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1":
+        class DummyModel:
+            def __init__(self):
+                self.sr = 24000
+                self.conds = {"voice": "default"}
+                self.default_conds = {"voice": "default"}
+
+            def generate(self, *args, **kwargs):
+                return torch.zeros(1, 24000)
+
+        return DummyModel(), 24000
+
+    if job_type == "tts":
+        model = ChatterboxTTS.from_pretrained(device)
+    elif job_type in {"turbo", "nano"}:
+        is_nano = (job_type == "nano")
+        model = ChatterboxTurboTTS.from_pretrained(device, nano=is_nano)
+    elif job_type == "multilingual":
+        model = ChatterboxMultilingualTTS.from_pretrained(device)
+    elif job_type == "voice-conversion":
+        model = ChatterboxVC.from_pretrained(device)
+    else:
+        raise ValueError(f"Loại mô hình không hợp lệ: {job_type}")
+
+    if hasattr(model, "conds") and getattr(model, "conds", None) is not None:
+        try:
+            model.default_conds = copy.deepcopy(model.conds)
+        except Exception:
+            model.default_conds = model.conds
+
+    return model, model.sr
+
+
+def generate_with_model(model: Any, job_type: str, params: dict, device: str) -> torch.Tensor:
+    """Generate audio waveform tensor using an already-loaded model instance."""
+    if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1":
+        return torch.zeros(1, 24000)
+
     seed = int(params.get("seed", 0))
     set_inference_seed(seed, device)
 
+    # Restore default conditionals if current line does not specify an audio prompt path
+    audio_prompt_path = params.get("audio_prompt_path")
+    if not audio_prompt_path and hasattr(model, "default_conds") and getattr(model, "default_conds", None) is not None:
+        try:
+            model.conds = copy.deepcopy(model.default_conds)
+        except Exception:
+            model.conds = model.default_conds
+
     with torch.inference_mode():
         if job_type == "tts":
-            model = ChatterboxTTS.from_pretrained(device)
             wav = model.generate(
                 params["text"],
-                audio_prompt_path=params.get("audio_prompt_path"),
+                audio_prompt_path=audio_prompt_path,
                 exaggeration=float(params.get("exaggeration", 0.5)),
                 temperature=float(params.get("temperature", 0.8)),
                 cfg_weight=float(params.get("cfg_weight", 0.5)),
@@ -54,25 +97,20 @@ def execute_model_inference(job_type: str, params: dict, device: str) -> tuple[t
                 top_p=float(params.get("top_p", 1.0)),
                 repetition_penalty=float(params.get("repetition_penalty", 1.2)),
             )
-            sr = model.sr
         elif job_type in {"turbo", "nano"}:
-            is_nano = (job_type == "nano")
-            model = ChatterboxTurboTTS.from_pretrained(device, nano=is_nano)
             wav = model.generate(
                 params["text"],
-                audio_prompt_path=params.get("audio_prompt_path"),
+                audio_prompt_path=audio_prompt_path,
                 temperature=float(params.get("temperature", 0.6)),
                 top_k=int(params.get("top_k", 1000)),
                 top_p=float(params.get("top_p", 0.95)),
                 repetition_penalty=float(params.get("repetition_penalty", 1.2)),
             )
-            sr = model.sr
         elif job_type == "multilingual":
-            model = ChatterboxMultilingualTTS.from_pretrained(device)
             wav = model.generate(
                 params["text"],
                 language_id=params.get("language_id", "vi"),
-                audio_prompt_path=params.get("audio_prompt_path"),
+                audio_prompt_path=audio_prompt_path,
                 exaggeration=float(params.get("exaggeration", 0.5)),
                 temperature=float(params.get("temperature", 0.8)),
                 cfg_weight=float(params.get("cfg_weight", 0.5)),
@@ -80,18 +118,24 @@ def execute_model_inference(job_type: str, params: dict, device: str) -> tuple[t
                 top_p=float(params.get("top_p", 1.0)),
                 repetition_penalty=float(params.get("repetition_penalty", 1.2)),
             )
-            sr = model.sr
         elif job_type == "voice-conversion":
-            model = ChatterboxVC.from_pretrained(device)
             wav = model.generate(
                 params["source_audio_path"],
                 target_voice_path=params.get("target_voice_path"),
             )
-            sr = model.sr
         else:
             raise ValueError(f"Loại mô hình không hợp lệ: {job_type}")
+    return wav.cpu()
 
-    return wav.cpu(), sr
+
+def execute_model_inference(job_type: str, params: dict, device: str) -> tuple[torch.Tensor, int]:
+    """Single canonical model inference implementation used by both isolated runner and test harnesses.
+
+    Guarantees that default parameter values and generation logic never drift.
+    """
+    model, sr = load_model(job_type, device)
+    wav = generate_with_model(model, job_type, params, device)
+    return wav, sr
 
 
 def run_isolated_subprocess(
@@ -105,19 +149,25 @@ def run_isolated_subprocess(
     data_dir: Path,
     timeout_seconds: int = 240,
     progress_callback: Callable[[str, int, str], None] | None = None,
+    line_progress_callback: Callable[[dict], None] | None = None,
     benchmark_callback: Callable[[dict], None] | None = None,
     register_proc_callback: Callable[[str, subprocess.Popen], None] | None = None,
     unregister_proc_callback: Callable[[str], None] | None = None,
 ) -> tuple[bool, str | None, dict | None]:
-    """Execute inference inside an isolated subprocess with deadline enforcement and non-blocking stream reading.
-    
+    """Execute inference inside an isolated subprocess with inactivity deadline enforcement and non-blocking stream reading.
+
     Guarantees:
-      - Main process cannot freeze if child process hangs without closing stdout.
+      - Saves config to file to avoid command-line length limits on Windows.
       - Uses os.pathsep for cross-platform PYTHONPATH on Windows and macOS.
+      - Enforces inactivity timeout reset on each progress tick + hard timeout ceiling.
       - Cleanly intercepts OOM, crashes, and timeouts.
     """
+    configs_dir = data_dir / "configs"
+    configs_dir.mkdir(parents=True, exist_ok=True)
+    config_file = configs_dir / f"{job_id}.json"
+
     meta_path = data_dir / "outputs" / f"{job_id}.json"
-    config = {
+    config: dict[str, Any] = {
         "type": job_type,
         "params": params,
         "output_path": str(output_path),
@@ -125,14 +175,37 @@ def run_isolated_subprocess(
         "device": device,
         "cpu_threads": cpu_threads,
     }
-    config_json = json.dumps(config)
+
+    # Pass all batch & post-processing settings to config top-level
+    for key in (
+        "lines",
+        "model",
+        "chunks_dir",
+        "merge",
+        "pause_duration",
+        "pause_durations",
+        "bgm_audio_path",
+        "bgm_volume",
+        "export_srt",
+        "normalize_loudness",
+        "crossfade_ms",
+        "bgm_ducking",
+        "stop_on_error",
+        "keep_original_timeline",
+    ):
+        if key in params:
+            config[key] = params[key]
+
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
     runner_script = project_dir / "inference_runner.py"
 
     cmd = [
         sys.executable,
         str(runner_script),
         "--config",
-        config_json,
+        str(config_file),
     ]
 
     # Cross-platform environment with os.pathsep
@@ -181,14 +254,33 @@ def run_isolated_subprocess(
     t_err.start()
 
     benchmark_data = None
-    deadline = time.monotonic() + timeout_seconds
+    inactivity_timeout = float(timeout_seconds)
+    hard_timeout = float(os.getenv("CHATTERBOX_MAX_JOB_TIMEOUT", "21600"))  # 6 hours
+    start_time = time.monotonic()
+    last_activity = time.monotonic()
     timed_out = False
+    timeout_reason = ""
 
     try:
         while True:
-            # Check timeout deadline
-            if time.monotonic() > deadline:
+            now = time.monotonic()
+            # Check hard maximum job timeout
+            if (now - start_time) > hard_timeout:
                 timed_out = True
+                timeout_reason = f"Vượt quá tổng thời gian xử lý tối đa cho phép ({int(hard_timeout)}s)."
+                try:
+                    proc.terminate()
+                    time.sleep(1.0)
+                    if proc.poll() is None:
+                        proc.kill()
+                except Exception:
+                    pass
+                break
+
+            # Check inactivity timeout (no new progress for inactivity_timeout seconds)
+            if (now - last_activity) > inactivity_timeout:
+                timed_out = True
+                timeout_reason = f"Quá thời gian chờ phản hồi (Inactivity timeout {int(inactivity_timeout)}s không có tiến trình mới)."
                 try:
                     proc.terminate()
                     time.sleep(1.0)
@@ -203,6 +295,8 @@ def run_isolated_subprocess(
                 line = stdout_queue.get(timeout=0.1)
                 if line is None:
                     break
+                # Progress or output arrived - reset inactivity timer
+                last_activity = time.monotonic()
                 line_str = line.strip()
                 if line_str.startswith("PROGRESS:"):
                     try:
@@ -213,6 +307,13 @@ def run_isolated_subprocess(
                                 int(pdata.get("percent", 0)),
                                 pdata.get("message", ""),
                             )
+                    except Exception:
+                        pass
+                elif line_str.startswith("LINE_PROGRESS:"):
+                    try:
+                        lpdata = json.loads(line_str[14:])
+                        if line_progress_callback:
+                            line_progress_callback(lpdata)
                     except Exception:
                         pass
                 elif line_str.startswith("BENCHMARK:"):
@@ -234,9 +335,13 @@ def run_isolated_subprocess(
     finally:
         if unregister_proc_callback:
             unregister_proc_callback(job_id)
+        try:
+            config_file.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     if timed_out:
-        return False, f"Quá thời gian xử lý cho phép (Timeout {timeout_seconds}s).", None
+        return False, timeout_reason or f"Quá thời gian xử lý cho phép (Timeout {timeout_seconds}s).", None
 
     rc = proc.returncode
     if rc == 0 and output_path.exists():

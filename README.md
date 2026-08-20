@@ -13,24 +13,31 @@ Chatterbox TTS Studio là giải pháp tổng hợp giọng nói (Text-to-Speech
 
 ### 🍎 macOS & 🐧 Linux:
 ```bash
-# Cài đặt môi trường (chỉ lần đầu)
+# 1. Cài đặt môi trường (chỉ lần đầu)
 python3 -m venv venv
 source venv/bin/activate
-pip install -e .
+pip install --upgrade pip
 
-# Khởi chạy Web Studio & REST API Server
+# 2. Cài đặt các gói phụ thuộc (Khuyên dùng: .[all] hoặc .[api])
+pip install -e ".[all]"      # Đầy đủ cả API, Web Studio và Desktop GUI
+# pip install -e ".[api]"    # Hoặc chỉ cài Web Studio & REST API
+
+# 3. Khởi chạy Web Studio & REST API Server
 ./run_chatterbox_api.sh
 
-# Chạy kiểm thử tự động (37 unit tests)
+# 4. Chạy kiểm thử tự động (37 unit tests)
 ./run_chatterbox_api.sh --test
 ```
 
 ### 🪟 Windows 10/11:
-* **Cách 1:** Nhấp đúp chuột vào file **[`Run_Chatterbox_API.bat`](Run_Chatterbox_API.bat)**.
-* **Cách 2:** Khởi chạy bằng PowerShell:
 ```powershell
-.\run_chatterbox_api.ps1
+# Cài đặt môi trường trên PowerShell / Command Prompt
+python -m venv venv
+venv\Scripts\activate
+pip install --upgrade pip
+pip install -e ".[all]"      # hoặc pip install -e ".[api]"
 ```
+* **Khởi chạy:** Nhấp đúp chuột vào file **[`Run_Chatterbox_API.bat`](Run_Chatterbox_API.bat)** hoặc chạy lệnh: `.\run_chatterbox_api.ps1`.
 
 Sau khi khởi chạy, truy cập trình duyệt:
 * 🎨 **Web GUI Studio:** [http://localhost:8000/](http://localhost:8000/)

@@ -122,6 +122,16 @@ def update_settings(payload: SettingsUpdateModel) -> dict:
 @router.post("/api/v1/system/clean-tmp", tags=["system"])
 def clean_temp_dir() -> dict:
     from api_app import API_DATA_DIR, PROJECT_DIR, job_manager
+
+    # Prevent deleting files when jobs are actively running or queued
+    if job_manager:
+        active_count = len(job_manager._active_procs) + job_manager._job_queue.qsize()
+        if active_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Không thể dọn dẹp thư mục tạm vì đang có {active_count} tác vụ đang xử lý hoặc trong hàng đợi.",
+            )
+
     count = 0
     size_bytes = 0
 
