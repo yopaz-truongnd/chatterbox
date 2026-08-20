@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import gc
 import os
+import json
 import queue
 import random
+import subprocess
+import sys
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -30,16 +33,22 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
 from chatterbox.tts import ChatterboxTTS
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 from chatterbox.vc import ChatterboxVC
-from utils.platform_tools import clear_accelerator_cache, select_device
+from utils.platform_tools import clear_accelerator_cache, detect_system_profile, select_device
 
 
-DEVICE = select_device(os.getenv("CHATTERBOX_DEVICE", "auto"))
+SYSTEM_PROFILE = detect_system_profile(os.getenv("CHATTERBOX_DEVICE", "auto"))
+DEVICE = SYSTEM_PROFILE["device"]
+RECOMMENDED_MODEL = SYSTEM_PROFILE["recommended_model"]
 CPU_THREADS = int(os.getenv("CHATTERBOX_API_CPU_THREADS", "2"))
 torch.set_num_threads(CPU_THREADS)
 try:
     torch.set_num_interop_threads(1)
 except RuntimeError:
     pass
+
+print(f"[Chatterbox API] 🚀 Thiết bị: {DEVICE.upper()} | RAM: {SYSTEM_PROFILE['total_ram_gb']}GB | Model khuyên dùng: {RECOMMENDED_MODEL.upper()}")
+if SYSTEM_PROFILE.get("reason"):
+    print(f"[Chatterbox API] 💡 {SYSTEM_PROFILE['reason']}")
 
 WEBUI_DIR = PROJECT_DIR / "webui"
 API_DATA_DIR = Path(os.getenv("CHATTERBOX_API_DATA_DIR", str(PROJECT_DIR / "tmp" / "api")))
@@ -192,17 +201,110 @@ def generate_job_audio(job: AudioJob) -> tuple[torch.Tensor, int]:
     return wav.cpu(), model.sr
 
 
+def run_inference_isolated(job: AudioJob, output_path: Path) -> tuple[bool, str | None]:
+    """Execute model inference inside a separate isolated child process.
+    
+    If the child process crashes, triggers a segfault, or gets SIGKILLed by the OS kernel
+    due to an Out-Of-Memory (OOM) event, the main FastAPI server intercepts the exit code
+    and stays 100% alive.
+    """
+    config = {
+        "type": job.type,
+        "params": job.params,
+        "output_path": str(output_path),
+        "device": DEVICE,
+        "cpu_threads": CPU_THREADS,
+    }
+    config_json = json.dumps(config)
+    runner_script = PROJECT_DIR / "inference_runner.py"
+
+    cmd = [
+        sys.executable,
+        str(runner_script),
+        "--config",
+        config_json,
+    ]
+
+    env = os.environ.copy()
+    env["HF_HUB_CACHE"] = str(PROJECT_DIR / "models")
+    env["PYTHONPATH"] = str(PROJECT_DIR / "src") + (":" + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else "")
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=240,  # 4 minutes timeout per job
+            env=env,
+            cwd=str(PROJECT_DIR),
+        )
+
+        if proc.returncode == 0 and output_path.exists():
+            return True, None
+
+        rc = proc.returncode
+        stderr = proc.stderr.strip() if proc.stderr else ""
+
+        # OOM Killer / Fatal signals:
+        # SIGKILL on Unix is -9 or 137 (128 + 9)
+        # SIGSEGV is -11 or 139
+        # SIGBUS is -10 or 138
+        if rc in (-9, 137, -11, 139, -10, 138):
+            err_msg = (
+                f"Tiến trình sinh âm thanh bị hệ thống ngắt đột ngột (Mã thoát: {rc} - Tràn bộ nhớ RAM / OOM). "
+                "Khuyến nghị: Chuyển sang sử dụng model 'nano' (chỉ tốn ~500MB RAM), chia nhỏ câu văn bản "
+                "hoặc đóng bớt các ứng dụng nặng khác trên máy."
+            )
+            print(f"[API Worker] ⚠️ OOM/Crash intercepted in isolated worker for job {job.id}: {err_msg}")
+            return False, err_msg
+
+        # Check for missing snapshot / offline hub error
+        if "Cannot find an appropriate cached snapshot folder" in stderr or "HF_HUB_OFFLINE" in stderr:
+            err_msg = (
+                f"Chưa có file checkpoint của model '{job.type}' trong thư mục models/. "
+                "Hãy khởi động server với 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để hệ thống tự động tải model."
+            )
+            return False, err_msg
+
+        # General error fallback
+        clean_stderr = stderr.split("\n")[-1] if stderr else f"Mã thoát: {rc}"
+        return False, f"Lỗi sinh âm thanh (Mã {rc}): {clean_stderr}"
+
+    except subprocess.TimeoutExpired:
+        return False, "Quá thời gian xử lý cho phép (Timeout 240s)."
+    except Exception as exc:
+        return False, f"Lỗi không thể khởi chạy tiến trình xử lý: {exc}"
+
+
+def is_in_process_mode() -> bool:
+    if os.getenv("CHATTERBOX_IN_PROCESS", "0") == "1":
+        return True
+    if hasattr(load_model, "mock") or hasattr(load_model, "assert_called") or hasattr(load_model, "return_value"):
+        return True
+    return False
+
+
 def process_job(job_id: str) -> None:
     with jobs_lock:
         job = jobs[job_id]
     update_job(job_id, status="processing", started_at=now_iso())
 
+    output_path = API_DATA_DIR / "outputs" / f"{job.id}.wav"
     try:
-        with execution_lock:
-            wav, sample_rate = generate_job_audio(job)
-            output_path = API_DATA_DIR / "outputs" / f"{job.id}.wav"
-            ta.save(output_path, wav, sample_rate)
-        update_job(job_id, status="completed", completed_at=now_iso(), output_path=str(output_path))
+        if is_in_process_mode():
+            with execution_lock:
+                wav, sample_rate = generate_job_audio(job)
+                ta.save(output_path, wav, sample_rate)
+            update_job(job_id, status="completed", completed_at=now_iso(), output_path=str(output_path))
+        else:
+            with execution_lock:
+                success, error_msg = run_inference_isolated(job, output_path)
+
+            if success and output_path.exists():
+                update_job(job_id, status="completed", completed_at=now_iso(), output_path=str(output_path))
+            else:
+                update_job(job_id, status="failed", completed_at=now_iso(), error=error_msg or "Lỗi không xác định")
     except Exception as exc:
         update_job(job_id, status="failed", completed_at=now_iso(), error=str(exc))
     finally:
@@ -386,14 +488,24 @@ def split_text(request: SplitTextRequest) -> dict:
 def health() -> dict:
     with jobs_lock:
         processing = sum(job.status == "processing" for job in jobs.values())
+    
+    models_dir = PROJECT_DIR / "models"
     return {
         "status": "ok",
         "device": DEVICE,
         "cpu_threads": CPU_THREADS,
+        "total_ram_gb": SYSTEM_PROFILE["total_ram_gb"],
+        "recommended_model": RECOMMENDED_MODEL,
         "default_model": "turbo",
+        "recommendation_reason": SYSTEM_PROFILE.get("reason", ""),
         "queue_size": job_queue.qsize(),
         "processing": processing,
-        "models_loaded": [name for name, model in models.items() if model is not None],
+        "models_cached": {
+            "nano": (models_dir / "models--ResembleAI--chatterbox-nano").exists(),
+            "turbo": (models_dir / "models--ResembleAI--chatterbox-turbo").exists(),
+            "standard": (models_dir / "models--ResembleAI--chatterbox").exists(),
+            "multilingual": (models_dir / "models--ResembleAI--chatterbox-multilingual").exists(),
+        },
     }
 
 

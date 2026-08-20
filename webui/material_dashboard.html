@@ -237,9 +237,9 @@
           </div>
           <div class="flex items-center gap-2">
             <select id="ttsModelSelect" onchange="handleModelChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500 cursor-pointer font-medium">
-              <option value="turbo">Chatterbox Turbo (350M - Hỗ trợ Tags)</option>
-              <option value="standard">Chatterbox Standard (500M - Tiêu chuẩn)</option>
-              <option value="nano">Chatterbox Nano (110M - Siêu nhẹ)</option>
+              <option value="nano">⚡ Chatterbox Nano (110M - Siêu nhẹ, an toàn RAM)</option>
+              <option value="turbo">🚀 Chatterbox Turbo (350M - Hỗ trợ Tags cảm xúc)</option>
+              <option value="standard">⭐ Chatterbox Standard (500M - Tiêu chuẩn)</option>
             </select>
             <button onclick="preloadCurrentModel()" class="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1 cursor-pointer" title="Nạp sẵn Model vào VRAM">
               <span class="material-symbols-outlined text-[16px]">download</span>
@@ -1566,6 +1566,8 @@
     }
 
     // ==================== SYSTEM HEALTH ====================
+    let userManuallyChangedModel = false;
+
     async function checkSystemHealth() {
       const statusEl = document.getElementById('deviceStatus');
       const indicator = document.getElementById('deviceIndicator');
@@ -1574,15 +1576,25 @@
         if (res.ok) {
           const data = await res.json();
           let devText = 'CPU Ready';
+          const ramInfo = data.total_ram_gb ? ` • ${data.total_ram_gb}GB RAM` : '';
           if (data.device === 'cuda') {
-            devText = '🟢 CUDA (GPU NVIDIA)';
+            devText = `🟢 CUDA (GPU NVIDIA${ramInfo})`;
           } else if (data.device === 'mps') {
-            devText = '🟢 Apple Metal (MPS)';
+            devText = `🟢 Apple Metal MPS${ramInfo}`;
           } else {
-            devText = `🟢 CPU (${data.cpu_threads || 2} Threads)`;
+            devText = `🟢 CPU (${data.cpu_threads || 2} Threads${ramInfo})`;
           }
           statusEl.textContent = devText;
           indicator.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+
+          // Auto-select recommended model (e.g. Nano for <=16GB RAM) if user hasn't manually switched
+          if (!userManuallyChangedModel && data.recommended_model) {
+            const selectEl = document.getElementById('ttsModelSelect');
+            if (selectEl && selectEl.value !== data.recommended_model) {
+              selectEl.value = data.recommended_model;
+              handleModelChange(data.recommended_model);
+            }
+          }
         } else {
           statusEl.textContent = '🟢 Server Online';
         }
@@ -1592,13 +1604,14 @@
     }
 
     function handleModelChange(val) {
+      userManuallyChangedModel = true;
       const hint = document.getElementById('modelDescHint');
       if (val === 'turbo') {
         hint.textContent = 'Chatterbox Turbo (350M - Tốc độ cao, hỗ trợ Tags cảm xúc)';
       } else if (val === 'standard') {
         hint.textContent = 'Chatterbox Standard (500M - Chất lượng âm thanh chuẩn cao nhất)';
       } else {
-        hint.textContent = 'Chatterbox Nano (110M - Siêu nhẹ, tối ưu cho CPU)';
+        hint.textContent = 'Chatterbox Nano (110M - Siêu nhẹ, an toàn tuyệt đối cho RAM ≤ 16GB)';
       }
     }
 
