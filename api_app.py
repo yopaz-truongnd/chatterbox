@@ -84,6 +84,7 @@ async def lifespan(_: FastAPI):
         timeout_seconds=JOB_TIMEOUT_SECONDS,
     )
     job_manager.startup()
+    character_api.configure_storage(API_DATA_DIR)
 
     # Clean expired records and orphaned files (TTL)
     deleted, freed = job_manager.store.cleanup_expired(retention_days=RETENTION_DAYS)

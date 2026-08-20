@@ -13,9 +13,13 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 
+import os
+from utils.platform_tools import get_default_data_dir
+
 PROJECT_DIR = Path(__file__).resolve().parent
-CHARACTER_DATA_DIR = PROJECT_DIR / "data" / "characters"
-CHARACTERS_FILE = PROJECT_DIR / "data" / "characters.json"
+DEFAULT_STORAGE_DIR = Path(os.getenv("CHATTERBOX_API_DATA_DIR") or get_default_data_dir())
+CHARACTER_DATA_DIR = DEFAULT_STORAGE_DIR / "characters"
+CHARACTERS_FILE = DEFAULT_STORAGE_DIR / "characters.json"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".ogg", ".m4a"}
 
@@ -70,8 +74,29 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def migrate_legacy_characters(target_data_dir: Path) -> None:
+    """One-time migration of legacy characters from <project>/data to the platform data directory."""
+    legacy_dir = PROJECT_DIR / "data"
+    legacy_file = legacy_dir / "characters.json"
+    legacy_chars_dir = legacy_dir / "characters"
+    target_file = target_data_dir / "characters.json"
+    target_chars_dir = target_data_dir / "characters"
+
+    if target_file.resolve() == legacy_file.resolve() or target_file.exists() or not legacy_file.exists():
+        return
+
+    try:
+        target_data_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(legacy_file, target_file)
+        if legacy_chars_dir.exists():
+            shutil.copytree(legacy_chars_dir, target_chars_dir, dirs_exist_ok=True)
+    except Exception:
+        pass
+
+
 def configure_storage(data_dir: Path) -> None:
     global CHARACTER_DATA_DIR, CHARACTERS_FILE
+    migrate_legacy_characters(data_dir)
     CHARACTER_DATA_DIR = data_dir / "characters"
     CHARACTERS_FILE = data_dir / "characters.json"
     load_characters()

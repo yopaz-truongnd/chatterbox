@@ -20,12 +20,19 @@ MODEL_NAMES = ("standard", "turbo", "nano", "multilingual", "voice-conversion")
 class SettingsUpdateModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    default_model: Literal["nano", "turbo", "standard", "multilingual"] | None = None
+    device: Literal["auto", "cuda", "mps", "cpu"] | None = None
     device_preference: Literal["auto", "cuda", "mps", "cpu"] | None = None
+    default_model: Literal["auto", "nano", "turbo", "standard", "multilingual"] | None = None
+    default_startup_model: str | None = None
     retention_days: int | None = Field(default=None, ge=1, le=30)
     cpu_threads: int | None = Field(default=None, ge=1, le=32)
+    cpu_threads_limit: int | None = Field(default=None, ge=1, le=32)
+    export_dir: str | None = None
     audio_format: Literal["wav", "mp3", "flac", "ogg"] | None = None
     dark_mode: bool | None = None
+    auto_open_export_dir: bool | None = None
+    desktop_notifications: bool | None = None
+    confirm_delete_history: bool | None = None
     custom_accent_color: str | None = Field(default=None, max_length=20)
 
 
@@ -88,10 +95,15 @@ def get_settings() -> dict:
 @router.post("/api/v1/settings", tags=["settings"])
 def update_settings(payload: SettingsUpdateModel) -> dict:
     clean_data = payload.model_dump(exclude_unset=True)
-    restart_required_keys = {"default_model", "device_preference", "retention_days", "cpu_threads"}
+    restart_required_keys = {
+        "device", "device_preference", "default_model", "default_startup_model",
+        "retention_days", "cpu_threads", "cpu_threads_limit"
+    }
     restart_required = any(k in clean_data for k in restart_required_keys)
 
-    settings_manager.settings.update(clean_data)
+    # Apply via settings_manager which handles migration/aliasing
+    for k, v in clean_data.items():
+        settings_manager.set(k, v)
     settings_manager.save()
 
     msg = (
@@ -109,16 +121,27 @@ def update_settings(payload: SettingsUpdateModel) -> dict:
 
 @router.post("/api/v1/system/clean-tmp", tags=["system"])
 def clean_temp_dir() -> dict:
-    from config.constants import TMP_DIR
+    from api_app import API_DATA_DIR, PROJECT_DIR, job_manager
     count = 0
     size_bytes = 0
-    if TMP_DIR.exists():
-        for f in TMP_DIR.glob("**/*"):
-            if f.is_file() and not f.name.startswith("."):
-                try:
-                    size_bytes += f.stat().st_size
-                    f.unlink(missing_ok=True)
-                    count += 1
-                except Exception:
-                    pass
+
+    # 1. Clean API data inputs and chunks
+    target_dirs = [API_DATA_DIR / "inputs", API_DATA_DIR / "chunks", PROJECT_DIR / "tmp"]
+    for d in target_dirs:
+        if d.exists():
+            for f in d.glob("**/*"):
+                if f.is_file() and not f.name.startswith("."):
+                    try:
+                        size_bytes += f.stat().st_size
+                        f.unlink(missing_ok=True)
+                        count += 1
+                    except Exception:
+                        pass
+
+    # 2. Trigger SQLite expired jobs TTL cleanup
+    if job_manager:
+        del_jobs, freed_db_bytes = job_manager.store.cleanup_expired(retention_days=1)
+        count += del_jobs
+        size_bytes += freed_db_bytes
+
     return {"status": "ok", "deleted_files": count, "freed_bytes": size_bytes}

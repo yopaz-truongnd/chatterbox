@@ -486,8 +486,8 @@ class TtsTab(tk.Frame):
         timer_lbl = tk.Label(dialog, text="0.0 giây", font=(UI_FONT, 18, "bold"), fg=ACCENT_COLOR, bg=PANEL2_BG)
         timer_lbl.pack(pady=6)
 
-        is_recording = {"val": False, "start_time": 0}
-        tmp_mic_wav = tempfile.mktemp(suffix=".wav", dir=str(TMP_DIR))
+        from utils.audio_tools import create_temp_audio_file
+        tmp_mic_wav = create_temp_audio_file(suffix=".wav", directory=TMP_DIR)
 
         def start_rec():
             is_recording["val"] = True
@@ -572,7 +572,8 @@ class TtsTab(tk.Frame):
                 messagebox.showerror("Lỗi", "Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.")
                 return
             
-            out_trimmed = tempfile.mktemp(suffix="_trimmed.wav")
+            from utils.audio_tools import create_temp_audio_file
+            out_trimmed = create_temp_audio_file(suffix="_trimmed.wav", directory=TMP_DIR)
             try:
                 trim_audio(self.ref_audio_path, out_trimmed, s, e)
                 self.ref_audio_path = out_trimmed
@@ -758,14 +759,15 @@ class TtsTab(tk.Frame):
             set_button_busy(self.run_btn, False, f"▶ Chạy  {self.main_window.shortcut_label}+↵", "⏳ Đang tạo audio…")
             if success:
                 processed_path = tmp_path
+                from utils.audio_tools import create_temp_audio_file
                 # Post-processing: Speed & Volume Normalization
                 if abs(speed_val - 1.0) > 0.01:
-                    speed_out = tempfile.mktemp(suffix="_speed.wav", dir=str(TMP_DIR))
+                    speed_out = create_temp_audio_file(suffix="_speed.wav", directory=TMP_DIR)
                     change_audio_speed(processed_path, speed_out, speed_val)
                     processed_path = speed_out
 
                 if do_norm:
-                    norm_out = tempfile.mktemp(suffix="_norm.wav", dir=str(TMP_DIR))
+                    norm_out = create_temp_audio_file(suffix="_norm.wav", directory=TMP_DIR)
                     normalize_audio(processed_path, norm_out)
                     processed_path = norm_out
 
