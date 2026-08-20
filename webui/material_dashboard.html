@@ -235,12 +235,22 @@
               <div id="modelDescHint" class="text-sm font-bold text-white">Chatterbox Turbo (350M - Tốc độ cao, hỗ trợ Tags cảm xúc)</div>
             </div>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <select id="ttsQualityPreset" onchange="applyQualityPreset(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-purple-300 rounded-lg px-2.5 py-2 font-medium cursor-pointer" title="Chọn nhanh Preset chất lượng">
+              <option value="">🎯 Preset: Tự chỉnh</option>
+              <option value="fast">⚡ Siêu Nhanh (Fast / Nano)</option>
+              <option value="balanced">⚖️ Cân Bằng (Balanced)</option>
+              <option value="expressive">🎭 Biểu Cảm Cao (Expressive)</option>
+            </select>
             <select id="ttsModelSelect" onchange="handleModelChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500 cursor-pointer font-medium">
               <option value="nano">⚡ Chatterbox Nano (110M - Siêu nhẹ, an toàn RAM)</option>
               <option value="turbo">🚀 Chatterbox Turbo (350M - Hỗ trợ Tags cảm xúc)</option>
               <option value="standard">⭐ Chatterbox Standard (500M - Tiêu chuẩn)</option>
             </select>
+            <div class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#231F2A] border border-[#3F3A46] text-xs">
+              <input type="checkbox" id="chkLongTextMode" class="w-4 h-4 rounded text-purple-600 cursor-pointer">
+              <label for="chkLongTextMode" class="text-slate-300 cursor-pointer font-medium">📖 Nối Văn bản dài</label>
+            </div>
             <button onclick="preloadCurrentModel()" class="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1 cursor-pointer" title="Nạp sẵn Model vào VRAM">
               <span class="material-symbols-outlined text-[16px]">download</span>
               <span class="hidden md:inline">Nạp Model</span>
@@ -512,12 +522,29 @@
                 </div>
               </div>
 
-              <!-- Main Generate Action Button -->
-              <div class="pt-2">
+              <!-- Main Generate Action Button & Live Progress Bar -->
+              <div class="pt-2 space-y-3">
                 <button id="generateBtn" onclick="triggerSynthesis()" class="w-full py-4 px-6 rounded-full bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-m3-2 transition-all cursor-pointer">
                   <span class="material-symbols-outlined text-[22px]">play_circle</span>
                   <span>SINH GIỌNG NÓI (Ctrl + Enter)</span>
                 </button>
+
+                <!-- Live Progress & Subprocess Cancellation Bar -->
+                <div id="ttsProgressContainer" class="hidden p-3 rounded-xl bg-[#0E0C12] border border-purple-500/40 space-y-2">
+                  <div class="flex items-center justify-between text-xs">
+                    <span id="ttsStageMessage" class="text-purple-300 font-medium animate-pulse">⏳ Đang xử lý...</span>
+                    <span id="ttsProgressPercent" class="font-mono text-purple-300 font-bold">0%</span>
+                  </div>
+                  <div class="w-full bg-[#231F2A] h-2 rounded-full overflow-hidden">
+                    <div id="ttsProgressFill" class="bg-gradient-to-r from-purple-600 to-pink-500 h-full w-0 transition-all duration-300"></div>
+                  </div>
+                  <div class="flex justify-end pt-1">
+                    <button id="ttsCancelJobBtn" onclick="cancelCurrentJob()" class="px-3 py-1 rounded-lg bg-red-600/20 hover:bg-red-600 text-xs font-medium text-red-300 hover:text-white border border-red-500/40 flex items-center gap-1 cursor-pointer transition-all">
+                      <span class="material-symbols-outlined text-[14px]">cancel</span>
+                      <span>Hủy tác vụ</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -576,6 +603,21 @@
                   <button id="btnDownload" onclick="downloadCurrentWav()" class="p-2.5 rounded-full bg-[#231F2A] hover:bg-purple-600 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Tải file âm thanh" disabled>
                     <span class="material-symbols-outlined text-[20px]">download</span>
                   </button>
+                </div>
+              </div>
+
+              <!-- Benchmark Telemetry Badge (Thời gian thực thi & Tốc độ RTF) -->
+              <div id="benchmarkBadge" class="hidden p-3 rounded-xl bg-purple-950/30 border border-purple-500/30 text-xs space-y-1">
+                <div class="flex items-center justify-between font-mono text-purple-300 font-bold">
+                  <span class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px] text-amber-400">bolt</span>
+                    <span id="bmSpeedText">Nhanh hơn thời gian thực 2.8x</span>
+                  </span>
+                  <span id="bmRtfText" class="text-[11px] text-slate-400 font-mono">RTF: 0.35</span>
+                </div>
+                <div class="text-[11px] text-slate-400 flex items-center justify-between font-mono pt-0.5">
+                  <span id="bmInferTime">Inference: 1.2s</span>
+                  <span id="bmAudioDur">Độ dài Audio: 3.5s</span>
                 </div>
               </div>
 
@@ -2006,14 +2048,75 @@
       }
     }
 
+    // Quality Presets & Cancellation Logic
+    let currentActiveJobId = null;
+
+    function applyQualityPreset(val) {
+      if (!val) return;
+      const modelSelect = document.getElementById('ttsModelSelect');
+      if (val === 'fast') {
+        modelSelect.value = 'nano';
+        handleModelChange('nano');
+        setSlider('sliderTemp', 'valTemp', 0.50);
+        setSlider('sliderPace', 'valPace', 0.60);
+        showToast('info', 'Đã áp dụng Preset: Siêu Nhanh (Nano / Low Latency)');
+      } else if (val === 'balanced') {
+        setSlider('sliderTemp', 'valTemp', 0.65);
+        setSlider('sliderPace', 'valPace', 0.50);
+        showToast('info', 'Đã áp dụng Preset: Cân Bằng (Tự nhiên / Mượt mà)');
+      } else if (val === 'expressive') {
+        modelSelect.value = 'turbo';
+        handleModelChange('turbo');
+        setSlider('sliderTemp', 'valTemp', 0.85);
+        setSlider('sliderExaggeration', 'valExaggeration', 1.0);
+        showToast('info', 'Đã áp dụng Preset: Biểu Cảm Cao (Turbo / Expressive)');
+      }
+    }
+
+    async function cancelCurrentJob() {
+      if (!currentActiveJobId) return;
+      try {
+        const res = await fetch(`/api/v1/jobs/${currentActiveJobId}/cancel`, { method: 'POST' });
+        if (res.ok) {
+          showToast('warning', 'Đã gửi lệnh hủy tác vụ tới server!');
+        }
+      } catch (e) {
+        showToast('error', 'Lỗi khi gửi yêu cầu hủy: ' + e.message);
+      }
+    }
+
+    function resetTtsUi(btn, origIcon, origText) {
+      if (btn) {
+        btn.innerHTML = `${origIcon}<span>${origText}</span>`;
+        btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+        btn.disabled = false;
+      }
+      const progressBox = document.getElementById('ttsProgressContainer');
+      if (progressBox) progressBox.classList.add('hidden');
+      currentActiveJobId = null;
+    }
+
     async function triggerSynthesis() {
       const btn = document.getElementById('generateBtn');
       const text = promptInput.value.trim();
       if (!text) return showToast('warning', 'Vui lòng nhập văn bản cần phát âm.');
 
-      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
+      const isLongText = document.getElementById('chkLongTextMode')?.checked;
+      const progressBox = document.getElementById('ttsProgressContainer');
+      const progressFill = document.getElementById('ttsProgressFill');
+      const progressPercent = document.getElementById('ttsProgressPercent');
+      const stageMsg = document.getElementById('ttsStageMessage');
+
+      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang xử lý...</span>';
       btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
       btn.disabled = true;
+
+      if (progressBox) {
+        progressBox.classList.remove('hidden');
+        progressFill.style.width = '5%';
+        progressPercent.textContent = '5%';
+        stageMsg.textContent = isLongText ? '📖 Đang phân đoạn & chuẩn bị render...' : '⏳ Đang khởi chạy tiến trình...';
+      }
 
       try {
         const formData = new FormData();
@@ -2026,39 +2129,80 @@
           formData.append('audio_prompt', uploadedRefFile);
         }
 
-        const endpoint = selectedModel === 'standard' ? '/api/v1/tts/standard' : '/api/v1/tts/turbo';
+        let endpoint = '/api/v1/tts/turbo';
+        if (isLongText) {
+          endpoint = '/api/v1/tts/long-text';
+          formData.append('pause_duration', '0.6');
+        } else if (selectedModel === 'standard') {
+          endpoint = '/api/v1/tts/standard';
+        }
+
         const response = await fetch(endpoint, { method: 'POST', body: formData });
 
         if (response.ok) {
           const job = await response.json();
+          currentActiveJobId = job.id;
           await pollJob(job.id, btn, 'SINH GIỌNG NÓI (Ctrl + Enter)', '<span class="material-symbols-outlined text-[22px]">play_circle</span>');
         } else {
-          showToast('error', 'Lỗi khi gửi yêu cầu tới server API.');
-          btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">play_circle</span><span>SINH GIỌNG NÓI (Ctrl + Enter)</span>';
-          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-          btn.disabled = false;
+          const errData = await response.json().catch(() => ({}));
+          showToast('error', 'Lỗi khi gửi yêu cầu tới server API: ' + (errData.detail || response.statusText));
+          resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
         }
       } catch (err) {
         showToast('error', 'Không thể kết nối tới server API: ' + err.message);
-        btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">play_circle</span><span>SINH GIỌNG NÓI (Ctrl + Enter)</span>';
-        btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-        btn.disabled = false;
+        resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
       }
     }
 
     async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + Enter)', origIcon = '<span class="material-symbols-outlined text-[22px]">play_circle</span>') {
       const generateBtn = btn || document.getElementById('generateBtn');
+      const progressFill = document.getElementById('ttsProgressFill');
+      const progressPercent = document.getElementById('ttsProgressPercent');
+      const stageMsg = document.getElementById('ttsStageMessage');
+      currentActiveJobId = jobId;
+
+      const phaseLabels = {
+        'queued': '⏳ Đang chờ trong hàng đợi...',
+        'loading_model': '🧠 Đang nạp mô hình vào bộ nhớ...',
+        'generating_tokens': '⚡ Đang sinh ngữ điệu & mã âm thanh...',
+        'generating_audio': '🔊 Đang giải mã sóng âm thanh (WAV)...',
+        'merging_audio': '✂️ Đang nối ghép các đoạn hoàn chỉnh...',
+        'completed': '✅ Hoàn tất thành công!',
+        'failed': '❌ Thất bại',
+        'cancelled': '⚠️ Đã hủy tác vụ'
+      };
+
       const interval = setInterval(async () => {
         try {
           const res = await fetch(`/api/v1/jobs/${jobId}`);
           if (res.ok) {
             const data = await res.json();
+            
+            // Update live progress bar & stage message
+            if (progressFill && progressPercent && stageMsg) {
+              const pct = Math.max(5, data.progress_percent || 0);
+              progressFill.style.width = `${pct}%`;
+              progressPercent.textContent = `${pct}%`;
+              stageMsg.textContent = phaseLabels[data.phase] || (data.phase ? `⏳ Đang xử lý (${data.phase})...` : '⏳ Đang xử lý...');
+            }
+
             if (data.status === 'completed' && data.audio_url) {
               clearInterval(interval);
-              if (generateBtn) {
-                generateBtn.innerHTML = `${origIcon}<span>${origText}</span>`;
-                generateBtn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-                generateBtn.disabled = false;
+              resetTtsUi(generateBtn, origIcon, origText);
+
+              // Render benchmark badge
+              const bmBadge = document.getElementById('benchmarkBadge');
+              if (bmBadge) {
+                if (data.benchmark) {
+                  const bm = data.benchmark;
+                  document.getElementById('bmSpeedText').textContent = bm.faster_than_realtime ? `Nhanh hơn thời gian thực ${bm.faster_than_realtime}x` : 'Hoàn tất';
+                  document.getElementById('bmRtfText').textContent = `RTF: ${bm.realtime_factor || 'N/A'}`;
+                  document.getElementById('bmInferTime').textContent = `Inference: ${bm.inference_seconds || 0}s`;
+                  document.getElementById('bmAudioDur').textContent = `Thời lượng: ${bm.audio_duration_seconds || 0}s`;
+                  bmBadge.classList.remove('hidden');
+                } else {
+                  bmBadge.classList.add('hidden');
+                }
               }
 
               playAudioUrl(data.audio_url);
@@ -2066,16 +2210,16 @@
               showToast('success', 'Sinh giọng nói hoàn tất thành công!');
             } else if (data.status === 'failed') {
               clearInterval(interval);
-              if (generateBtn) {
-                generateBtn.innerHTML = `${origIcon}<span>${origText}</span>`;
-                generateBtn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-                generateBtn.disabled = false;
-              }
+              resetTtsUi(generateBtn, origIcon, origText);
               showToast('error', 'Quá trình sinh giọng bị lỗi: ' + (data.error || "Lỗi không xác định"));
+            } else if (data.status === 'cancelled') {
+              clearInterval(interval);
+              resetTtsUi(generateBtn, origIcon, origText);
+              showToast('info', 'Tác vụ đã được hủy theo yêu cầu.');
             }
           }
         } catch (e) {}
-      }, 500);
+      }, 400);
     }
 
     // ==================== BATCH STUDIO CONTROLLERS ====================

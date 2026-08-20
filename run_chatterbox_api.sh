@@ -26,6 +26,14 @@ elif [ -f ".venv/bin/python" ]; then
     PYTHON_BIN=".venv/bin/python"
 fi
 
+if [ "$1" = "--test" ] || [ "$1" = "test" ]; then
+    echo "======================================================================="
+    echo "       CHATTERBOX TTS — CHẠY KIỂM THỬ TÍCH HỢP (UNIT TESTS)           "
+    echo "======================================================================="
+    export CHATTERBOX_IN_PROCESS=1
+    exec "$PYTHON_BIN" -m unittest discover -v tests/
+fi
+
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
 
