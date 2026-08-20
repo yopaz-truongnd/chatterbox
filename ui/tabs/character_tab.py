@@ -241,7 +241,8 @@ class CharacterTab(tk.Frame):
         temp_val = max(0.1, min(1.0, 1.2 - 0.7 * self.stability_var.get()))
         seed_val = max(0, self.seed_var.get())
 
-        tmp_out = tempfile.mktemp(suffix="_test_voice.wav", dir=str(TMP_DIR))
+        from utils.audio_tools import create_temp_audio_file
+        tmp_out = create_temp_audio_file(suffix="_test_voice.wav", directory=TMP_DIR)
 
         def callback(success, result):
             self.test_btn.config(state="normal", text="🔊 Nghe thử giọng")

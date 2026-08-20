@@ -175,3 +175,14 @@ def mix_bgm(speech_file: str, bgm_file: str, output_file: str, bgm_volume: float
 
     ta.save(output_file, mixed, sr)
     return output_file
+
+
+def create_temp_audio_file(suffix: str = ".wav", directory=None) -> str:
+    """Safely create a unique temporary audio file path without race conditions."""
+    import tempfile
+    dir_str = str(directory) if directory else None
+    if dir_str:
+        os.makedirs(dir_str, exist_ok=True)
+    fd, path = tempfile.mkstemp(suffix=suffix, dir=dir_str)
+    os.close(fd)
+    return path

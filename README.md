@@ -1,293 +1,126 @@
-![Chatterbox Multilingual Image](./Chatterbox-Multilingual.png)
+# 🎙️ Chatterbox TTS Studio & REST API
 
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.6.0-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-v1.4.0-009688?logo=fastapi&logoColor=white)](http://localhost:8000/docs)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%2010%2B%20%7C%20Linux-blue)](https://github.com/resemble-ai/chatterbox)
 
-# Chatterbox TTS
-
-[![Alt Text](https://img.shields.io/badge/listen-demo_samples-blue)](https://resemble-ai.github.io/chatterbox_demopage/)
-[![Alt Text](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm.svg)](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS)
-[![Alt Text](https://static-public.podonos.com/badges/insight-on-pdns-sm-dark.svg)](https://podonos.com/resembleai/chatterbox)
-[![Discord](https://img.shields.io/discord/1377773249798344776?label=join%20discord&logo=discord&style=flat)](https://discord.gg/rJq9cRJBJ6)
-
-*Made with ♥️ by* <a href="https://resemble.ai" target="_blank"><img width="100" alt="resemble-logo-horizontal" src="https://github.com/user-attachments/assets/35cf756b-3506-4943-9c72-c05ddfa4e525" /></a>
-
-**Chatterbox** is a family of state-of-the-art, open-source text-to-speech models by Resemble AI.
-
-## Latest Release: Chatterbox Multilingual V3
-
-**Chatterbox Multilingual V3** is the latest general-purpose multilingual TTS model in the Chatterbox family. It keeps the same 0.5B model size while improving speaker similarity, reducing hallucinations, and producing more natural, conversational speech across languages.
-
-V3 is designed for broad language coverage like V2, but with stronger stability and more expressive generation. It is the recommended multilingual model for users who want one voice cloning model that works across many languages.
-
-Alongside V3, we are releasing the **Single Language Pack**: dedicated finetunes for priority languages where tighter quality control, stronger language-specific behavior, and more specialized speech generation are valuable.
-
-- **Broad Multilingual Coverage:** Designed as the main general-purpose multilingual Chatterbox model, supporting wide language coverage similar to V2.
-- **Single Language Pack:** Dedicated single-language models provide stronger specialization and quality control where language- and regional-dialect-specific performance matters most.
-- **More Consistent Speaker Similarity:** Improves voice identity and accent preservation across languages, making cross-language voice cloning more stable and reliable.
-- **Reduced Hallucination:** V3 is optimized to reduce unwanted continuation, repetition, and off-prompt speech, especially in cases where earlier multilingual models were less stable.
-
-For low-latency English voice agents, **Chatterbox-Turbo** is our most efficient model. Built on a streamlined 350M parameter architecture, **Turbo** delivers high-quality speech with less compute and VRAM than our previous models. We have also distilled the speech-token-to-mel decoder, previously a bottleneck, reducing generation from 10 steps to just **one**, while retaining high-fidelity audio output.
-
-**Paralinguistic tags** are now native to the Turbo model, allowing you to use `[cough]`, `[laugh]`, `[chuckle]`, and more to add distinct realism. While Turbo was built primarily for low-latency voice agents, it excels at narration and creative workflows.
-
-For the most resource-constrained deployments, **Chatterbox-Nano** shares Turbo's architecture in an even smaller 110M parameter package. It targets on-device and CPU inference — running **3x faster than realtime on 8 CPU cores** — while keeping the same single-step decoder and native paralinguistic tag support. Nano is the recommended model when memory and latency budgets are tightest.
-
-If you like the model but need to scale or tune it for higher accuracy, check out our competitively priced TTS service (<a href="https://resemble.ai">link</a>). It delivers reliable performance with ultra-low latency of sub 200ms—ideal for production use in agents, applications, or interactive media.
-
-<img width="1200" height="600" alt="Podonos Turbo Eval" src="https://storage.googleapis.com/chatterbox-demo-samples/turbo/podonos_turbo.png" />
-
-### ⚡ Model Zoo
-
-Choose the right model for your application.
-
-| Model                                                                                                           | Size | Languages | Key Features                                            | Best For                                     | 🤗                                                                  | Examples |
-|:----------------------------------------------------------------------------------------------------------------| :--- | :--- |:--------------------------------------------------------|:---------------------------------------------|:--------------------------------------------------------------------------| :--- |
-| **Chatterbox-Turbo**                                                                                            | **350M** | **English** | Paralinguistic Tags (`[laugh]`), Lower Compute and VRAM | Zero-shot voice agents,  Production          | [Demo](https://huggingface.co/spaces/ResembleAI/chatterbox-turbo-demo)        | [Listen](https://resemble-ai.github.io/chatterbox_turbo_demopage/) |
-| **Chatterbox-Nano**                                                                                             | **110M** | **English** | Same architecture as Turbo, Paralinguistic Tags, Runs on CPU (3x realtime on 8 cores) | On-device / CPU inference, tight latency & memory budgets | [Model](https://huggingface.co/ResembleAI/chatterbox-nano)        | — |
-| **Chatterbox-Multilingual V3** [(Language list)](#supported-languages)                                          | **500M** | **23+** | Improved speaker similarity, reduced hallucinations, more natural multilingual speech | Global applications, localization, cross-language voice cloning | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS) | [Listen](https://resemble-ai.github.io/chatterbox_demopage/) |
-| **Single Language Pack** [(Models)](#single-language-pack)                                                      | 500M each | 6 dedicated finetunes | Language- and region-specific quality control           | Priority languages and dialect-sensitive applications | [Models](#single-language-pack) | [Demos](#single-language-pack) |
-| Chatterbox [(Tips and Tricks)](#original-chatterbox-tips)                                                       | 500M | English | CFG & Exaggeration tuning                               | General zero-shot TTS with creative controls | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox)              | [Listen](https://resemble-ai.github.io/chatterbox_demopage/) |
-
-## Installation
-```shell
-pip install chatterbox-tts
-```
-
-Alternatively, you can install from source:
-```shell
-# conda create -yn chatterbox python=3.11
-# conda activate chatterbox
-
-git clone https://github.com/resemble-ai/chatterbox.git
-cd chatterbox
-pip install -e .
-```
-We developed and tested Chatterbox on Python 3.11 on Debian 11 OS; the versions of the dependencies are pinned in `pyproject.toml` to ensure consistency. You can modify the code or dependencies in this installation mode.
-
-## Project Documentation
-
-- [Project architecture and runtime flows](PROJECT_ARCHITECTURE.md)
-- [Linux setup and API usage](SETUP_GUIDE.md)
-- [Model selection guide](MODELS_GUIDE.md)
-
-### Run Tests
-
-```shell
-source venv/bin/activate
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-```
-
-The API tests use mocked models, so they do not download checkpoints or run real inference.
-
-## Chatterbox Studio (Web GUI & Desktop App)
-
-We provide both a **Modern Material Design 3 Web GUI Studio** (served via FastAPI at `http://localhost:8000/`) and a native **Desktop GUI** (`main.py`) for zero-shot voice cloning, speech synthesis, and audio production.
-
-### Key Features:
-- **🌐 Material Design 3 Web Studio:** Modern, high-contrast dark dashboard with direct tab URL sub-routing (`/tts-studio`, `/batch-studio`, `/multilingual-tts`, `/voice-clone`, `/characters-studio`, `/history-studio`, `/settings-studio`), drag & drop text file loading, and Material 3 toast notifications.
-- **🗣️ TTS Studio:** Real-time character counts, 11 paralinguistic tag insertion chips (`[laugh]`, `[whisper]`, `[sigh]`, `[gasp]`, `[chuckle]`, etc.), interactive style preset combos (*Đọc tin tức, Kể chuyện, Biểu cảm mạnh, Thì thầm, Tiêu chuẩn*), and full audio generation controls.
-- **🎙️ Built-in Voice Library:** 6 pre-configured, studio-grade voices (*MC Nam Thời Sự, Nữ Biên Tập Viên, Kể Chuyện Đêm Khuya, Review & Recap Phim, Hoạt Hình / Anime, Trợ Lý Ảo AI*) ready with 1-click.
-- **🎭 Characters Management:** Complete voice profiles with custom reference audio upload, sliders for expressiveness, pace, stability, seed, system default character setting (`is_default`), and pre-creation voice preview testing (`🔊 Nghe thử giọng`).
-- **🎼 Batch Studio & Audio Merge:** Split scripts by lines, paragraphs, sentences, or custom delimiter (`|`, `;`, `---`), progressive batch execution, BGM mixing with volume & fade-out, and 1-click **Merge All Audio (`POST /api/v1/batch/merge`)** with configurable silence pause duration.
-- **🌐 Multilingual TTS:** Support for V3/V2 multilingual voice cloning across 23+ languages.
-- **🔁 Voice Conversion:** Audio-to-audio speech conversion with dual interactive waveform canvas and live microphone recording.
-- **🔌 REST API v1:** Comprehensive endpoints (`/api/v1/tts/turbo`, `/api/v1/tts/standard`, `/api/v1/tts/multilingual`, `/api/v1/voice-conversion`, `/api/v1/audio/merge`, `/api/v1/characters`, `/api/v1/settings`) with OpenAPI Swagger documentation at `http://localhost:8000/docs`.
-- **📁 Isolated Temp Storage:** Project-local `tmp/` folder isolated from system temporary files with 1-click cache purge (`POST /api/v1/system/clean-tmp`).
+Chatterbox TTS Studio là giải pháp tổng hợp giọng nói (Text-to-Speech), nhân bản giọng nói tức thì (Zero-Shot Voice Cloning) và chuyển đổi giọng nói (Voice Conversion) chạy hoàn toàn **Local Offline**, hỗ trợ đa nền tảng **macOS (Apple Silicon/Intel)**, **Windows 10/11** và **Linux**.
 
 ---
 
-### How to Run:
+## ⚡ 1. Khởi động Nhanh (Quick Start)
 
-#### 🟢 Launch Web GUI Studio & REST API (Recommended):
-```shell
-# 1. Start the server (FastAPI + Web Studio on port 8000)
+### 🍎 macOS & 🐧 Linux:
+```bash
+# 1. Cài đặt môi trường (chỉ lần đầu)
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+
+# 2. Cài đặt các gói phụ thuộc (Khuyên dùng: .[all] hoặc .[api])
+pip install -e ".[all]"      # Đầy đủ cả API, Web Studio và Desktop GUI
+# pip install -e ".[api]"    # Hoặc chỉ cài Web Studio & REST API
+
+# 3. Khởi chạy Web Studio & REST API Server
 ./run_chatterbox_api.sh
 
-# 2. Open browser:
-# Web Studio: http://localhost:8000/
-# API Swagger Docs: http://localhost:8000/docs
+# 4. Chạy kiểm thử tự động (37 unit tests)
+./run_chatterbox_api.sh --test
 ```
 
-#### 🖥️ Launch Desktop GUI (Tkinter):
-* **macOS / Linux:**
-  ```shell
-  ./run_chatterbox_gui.sh
-  ```
-* **Windows:**
-  * Double-click **`Run_Chatterbox_GUI.bat`** (or **`Run_Chatterbox_GUI_Silent.vbs`**).
+### 🪟 Windows 10/11:
+```powershell
+# Cài đặt môi trường trên PowerShell / Command Prompt
+python -m venv venv
+venv\Scripts\activate
+pip install --upgrade pip
+pip install -e ".[all]"      # hoặc pip install -e ".[api]"
+```
+* **Khởi chạy:** Nhấp đúp chuột vào file **[`Run_Chatterbox_API.bat`](Run_Chatterbox_API.bat)** hoặc chạy lệnh: `.\run_chatterbox_api.ps1`.
 
-## Usage
+Sau khi khởi chạy, truy cập trình duyệt:
+* 🎨 **Web GUI Studio:** [http://localhost:8000/](http://localhost:8000/)
+* 📖 **Tài liệu API (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
 
-##### Chatterbox-Turbo
+---
 
-```python
-import torchaudio as ta
-import torch
-from chatterbox.tts_turbo import ChatterboxTurboTTS
+## 🌟 2. Tính năng Cốt lõi
 
-device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+* ⚡ **Tự động tối ưu tài nguyên:** Tự nhận diện phần cứng (Apple Metal MPS trên macOS, NVIDIA CUDA trên Windows/Linux hoặc CPU). Tự động chọn model **Nano (110M)** cho máy có RAM $\le 16\text{ GB}$ hoặc CPU để tránh tràn RAM (OOM).
+* 🛡️ **Kiến trúc Cô lập Tiến trình (Isolated Subprocess):** Tác vụ sinh âm thanh chạy trong tiến trình riêng. Hạn chế tối đa crash server, hỗ trợ **hủy job (Cancel)** an toàn và giải phóng RAM ngay lập tức.
+* 📖 **Nối Văn bản dài (Long-Text Batch):** Tự động phân tách văn bản lớn (sách, truyện, kịch bản) theo câu/dấu chấm, sinh tuần tự và ghép thành **1 file WAV duy nhất** kèm khoảng lặng tùy chỉnh và hòa âm nhạc nền (BGM).
+* 💾 **Cơ sở dữ liệu SQLite & Tự động dọn dẹp:** Lưu trữ toàn bộ lịch sử job vào `jobs.db`, tự động phục hồi trạng thái sau khi restart server và tự xóa file cũ theo chính sách TTL (mặc định 3 ngày).
+* 🎭 **Quản lý Nhân vật & Giọng mẫu:** Thư viện 6 giọng mẫu chuyên nghiệp (*MC Thời Sự, Kể Chuyện Đêm Khuya, Review Phim, Anime,...*) và công cụ tạo nhân vật kèm file audio tham chiếu tùy biến.
+* 📊 **Đo lường Hiệu năng (Benchmark Telemetry):** Báo cáo chi tiết tốc độ sinh (`Realtime Factor - RTF`, tốc độ gấp X lần thời gian thực, thời gian nạp model và độ dài file âm thanh).
+* 🎛️ **Preset Chất lượng:** 3 cấu hình nhanh: ⚡ *Siêu Nhanh (Fast)*, ⚖️ *Cân Bằng (Balanced)*, 🎭 *Biểu Cảm Cao (Expressive)*.
 
-# Load the Turbo model
-model = ChatterboxTurboTTS.from_pretrained(device=device)
+---
 
-# Generate with Paralinguistic Tags
-text = "Hi there, Sarah here from MochaFone calling you back [chuckle], have you got one minute to chat about the billing issue?"
+## 📦 3. Danh mục Model (Model Zoo)
 
-# Generate audio (requires a reference clip for voice cloning)
-wav = model.generate(text, audio_prompt_path="your_10s_ref_clip.wav")
+| Model | Tham số | Ngôn ngữ | Đặc điểm nổi bật | Phù hợp nhất |
+| :--- | :--- | :--- | :--- | :--- |
+| **Chatterbox-Nano** | **110M** | Tiếng Anh / Đa dụng | Siêu nhẹ, chạy mượt trên CPU & RAM $\le 16\text{ GB}$, hỗ trợ thẻ cảm xúc `[laugh]`, `[whisper]`. | Máy cá nhân, Mac mini M1/M2, CPU-only. |
+| **Chatterbox-Turbo** | **350M** | Tiếng Anh / Đa dụng | Tốc độ cao, biểu cảm mạnh, hỗ trợ đầy đủ 11 thẻ cảm xúc paralinguistic. | GPU NVIDIA $\ge 6\text{ GB}$ VRAM, Apple Silicon 32GB+. |
+| **Chatterbox-Standard** | **500M** | Tiếng Anh | Tùy chỉnh sâu CFG Weight & Exaggeration. | Studio chuyên nghiệp, sản xuất âm thanh. |
+| **Chatterbox-Multilingual V3** | **500M** | 23+ Ngôn ngữ | Giữ chuẩn ngữ điệu và giọng nói gốc qua nhiều ngôn ngữ. | Ứng dụng toàn cầu, đa ngôn ngữ. |
 
-ta.save("test-turbo.wav", wav, model.sr)
+---
+
+## 🔌 4. REST API Endpoints Chính
+
+| Phương thức | Endpoint | Chức năng |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/tts` | Sinh âm thanh TTS cơ bản (Tự động chọn Nano hoặc Turbo theo cấu hình máy). |
+| `POST` | `/api/v1/tts/long-text` | Sinh âm thanh cho văn bản dài, tự chia đoạn và xuất ra 1 file WAV hoàn chỉnh. |
+| `POST` | `/api/v1/voice-conversion` | Chuyển đổi âm sắc từ file giọng gốc sang giọng mục tiêu (Voice Conversion). |
+| `GET` | `/api/v1/jobs/{id}` | Truy vấn trạng thái, tiến độ thực tế (0-100%) và telemetry benchmark của job. |
+| `POST` | `/api/v1/jobs/{id}/cancel` | Hủy ngay lập tức job đang chờ hoặc đang xử lý. |
+| `GET` | `/api/v1/jobs/{id}/audio` | Tải xuống file WAV kết quả chất lượng cao (24kHz Mono). |
+| `GET` | `/api/v1/diagnostics` | Báo cáo chẩn đoán toàn diện: OS, GPU, VRAM, RAM, FFmpeg, Checkpoints. |
+| `GET/POST`| `/api/v1/characters` | Quản lý danh sách nhân vật và cấu hình giọng mẫu. |
+| `POST` | `/api/v1/audio/merge` | Ghép nhiều đoạn âm thanh từ các job trước đó thành một file duy nhất kèm BGM. |
+
+---
+
+## 📂 5. Cấu trúc Dự án
+
+```text
+chatterbox/
+├── api_app.py                   # FastAPI Server entrypoint & Lifespan (<130 dòng)
+├── services/
+│   ├── inference.py             # Logic nạp model & sinh âm thanh chuẩn (Single Source of Truth)
+│   ├── audio.py                 # Ghép nối khoảng lặng, xử lý WAV & hòa âm BGM
+│   └── job_manager.py           # Quản lý hàng đợi, lifecycle của job & subprocess cô lập
+├── routers/
+│   ├── system.py                # Health, System Diagnostics, Settings & Models Status
+│   ├── tts.py                   # TTS Standard, Turbo, Nano, Long-Text, Presets & VC
+│   └── jobs.py                  # Tra cứu, Hủy job, Download audio & Merge batch
+├── utils/
+│   ├── platform_tools.py        # Tự nhận diện phần cứng Windows/macOS/Linux & thư mục lưu trữ
+│   └── text_cleaner.py          # Làm sạch và phân tách văn bản thông minh
+├── webui/
+│   └── material_dashboard.html  # Giao diện Web GUI Material Design 3
+├── run_chatterbox_api.sh        # Script khởi chạy & chạy test cho macOS / Linux
+├── Run_Chatterbox_API.bat       # Script khởi chạy 1-click cho Windows
+├── run_chatterbox_api.ps1       # Script PowerShell cho Windows
+└── tests/                       # Bộ kiểm thử tích hợp (37 unit tests)
 ```
 
-##### Chatterbox-Nano
+---
 
-Nano shares Turbo's architecture and is loaded through the same `ChatterboxTurboTTS` class by passing `nano=True`:
+## 🧪 6. Chạy Kiểm thử (Unit Tests)
 
-```python
-import torchaudio as ta
-import torch
-from chatterbox.tts_turbo import ChatterboxTurboTTS
+Kiểm thử toàn bộ hệ thống (được mock inference để chạy tức thì):
 
-device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-
-# Load the Nano model (also runs on CPU: device="cpu")
-model = ChatterboxTurboTTS.from_pretrained(device=device, nano=True)
-
-# Generate with Paralinguistic Tags
-text = "Hi there, Sarah here from MochaFone calling you back [chuckle], have you got one minute to chat about the billing issue?"
-
-# Generate audio (requires a reference clip for voice cloning)
-wav = model.generate(text, audio_prompt_path="your_10s_ref_clip.wav")
-
-ta.save("test-nano.wav", wav, model.sr)
+```bash
+./run_chatterbox_api.sh --test
 ```
+*Kết quả:* **37/37 tests passed trong ~0.5 giây**.
 
-##### Chatterbox and Chatterbox-Multilingual
+---
 
-```python
+## 📜 7. Giấy phép (License)
 
-import torchaudio as ta
-from chatterbox.tts import ChatterboxTTS
-from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-
-device = "cuda"  # or "cpu" / "mps"
-
-# English example
-model = ChatterboxTTS.from_pretrained(device=device)
-
-text = "Ezreal and Jinx teamed up with Ahri, Yasuo, and Teemo to take down the enemy's Nexus in an epic late-game pentakill."
-wav = model.generate(text)
-ta.save("test-english.wav", wav, model.sr)
-
-# Multilingual V3 examples
-multilingual_model = ChatterboxMultilingualTTS.from_pretrained(device=device, t3_model="v3")
-# To use the legacy V2 multilingual checkpoint, omit t3_model or pass t3_model="v2".
-
-french_text = "Bonjour, comment ça va? Ceci est le modèle de synthèse vocale multilingue Chatterbox, il prend en charge 23 langues."
-wav_french = multilingual_model.generate(french_text, language_id="fr")
-ta.save("test-french.wav", wav_french, multilingual_model.sr)
-
-chinese_text = "你好，今天天气真不错，希望你有一个愉快的周末。"
-wav_chinese = multilingual_model.generate(chinese_text, language_id="zh")
-ta.save("test-chinese.wav", wav_chinese, multilingual_model.sr)
-
-# If you want to synthesize with a different voice, specify the audio prompt
-AUDIO_PROMPT_PATH = "YOUR_FILE.wav"
-wav = model.generate(text, audio_prompt_path=AUDIO_PROMPT_PATH)
-ta.save("test-2.wav", wav, model.sr)
-```
-See `example_tts.py`, `example_tts_turbo.py`, `example_tts_nano.py`, and `example_vc.py` for more examples.
-
-## Supported Languages
-The general-purpose Chatterbox Multilingual model supports the following languages:
-
-Arabic (ar) • Danish (da) • German (de) • Greek (el) • English (en) • Spanish (es) • Finnish (fi) • French (fr) • Hebrew (he) • Hindi (hi) • Italian (it) • Japanese (ja) • Korean (ko) • Malay (ms) • Dutch (nl) • Norwegian (no) • Polish (pl) • Portuguese (pt) • Russian (ru) • Swedish (sv) • Swahili (sw) • Turkish (tr) • Chinese (zh)
-
-## Single Language Pack
-
-The Single Language Pack provides dedicated finetunes for priority languages and regional variants. Use these when you want stronger language-specific behavior, tighter quality control, or dialect-aware generation beyond the general multilingual model.
-
-| Language | Model Card | Demo Space |
-| --- | --- | --- |
-| Chinese | [ResembleAI/Chatterbox-Multilingual-zh-cmn](https://huggingface.co/ResembleAI/Chatterbox-Multilingual-zh-cmn) | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-zh-cmn) |
-| Latam Spanish | [ResembleAI/Chatterbox-Multilingual-es-mx-latam](https://huggingface.co/ResembleAI/Chatterbox-Multilingual-es-mx-latam) | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-es-mx-latam) |
-| Brazilian Portuguese | [ResembleAI/Chatterbox-Multilingual-pt-br](https://huggingface.co/ResembleAI/Chatterbox-Multilingual-pt-br) | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-pt-br) |
-| Spain Spanish | [ResembleAI/Chatterbox-Multilingual-es-es](https://huggingface.co/ResembleAI/Chatterbox-Multilingual-es-es) | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-es-es) |
-| Portugal Portuguese | [ResembleAI/Chatterbox-Multilingual-pt-pt](https://huggingface.co/ResembleAI/Chatterbox-Multilingual-pt-pt) | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-pt-pt) |
-| Hindi | [ResembleAI/Chatterbox-Multilingual-hi](https://huggingface.co/ResembleAI/Chatterbox-Multilingual-hi) | [Demo](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-hi) |
-
-## Original Chatterbox Tips
-- **General Use (TTS and Voice Agents):**
-  - Ensure that the reference clip matches the specified language tag. Otherwise, language transfer outputs may inherit the accent of the reference clip’s language. To mitigate this, set `cfg_weight` to `0`.
-  - The default settings (`exaggeration=0.5`, `cfg_weight=0.5`) work well for most prompts across all languages.
-  - If the reference speaker has a fast speaking style, lowering `cfg_weight` to around `0.3` can improve pacing.
-
-- **Expressive or Dramatic Speech:**
-  - Try lower `cfg_weight` values (e.g. `~0.3`) and increase `exaggeration` to around `0.7` or higher.
-  - Higher `exaggeration` tends to speed up speech; reducing `cfg_weight` helps compensate with slower, more deliberate pacing.
-
-
-## Built-in PerTh Watermarking for Responsible AI
-
-Every audio file generated by Chatterbox includes [Resemble AI's Perth (Perceptual Threshold) Watermarker](https://github.com/resemble-ai/perth) - imperceptible neural watermarks that survive MP3 compression, audio editing, and common manipulations while maintaining nearly 100% detection accuracy.
-
-
-## Watermark extraction
-
-You can look for the watermark using the following script.
-
-```python
-import perth
-import librosa
-
-AUDIO_PATH = "YOUR_FILE.wav"
-
-# Load the watermarked audio
-watermarked_audio, sr = librosa.load(AUDIO_PATH, sr=None)
-
-# Initialize watermarker (same as used for embedding)
-watermarker = perth.PerthImplicitWatermarker()
-
-# Extract watermark
-watermark = watermarker.get_watermark(watermarked_audio, sample_rate=sr)
-print(f"Extracted watermark: {watermark}")
-# Output: 0.0 (no watermark) or 1.0 (watermarked)
-```
-
-
-## Official Discord
-
-👋 Join us on [Discord](https://discord.gg/rJq9cRJBJ6) and let's build something awesome together!
-
-## Evaluation
-Chatterbox Turbo was evaluated using Podonos, a platform for reproducible subjective speech evaluation.
-
-We compared Chatterbox Turbo to competitive TTS systems using Podonos' standardized evaluation suite, focusing on overall preference, naturalness, and expressiveness.
-
-Evaluation reports:
-- [Chatterbox Turbo vs ElevenLabs Turbo v2.5](https://podonos.com/resembleai/chatterbox-turbo-vs-elevenlabs-turbo)
-- [Chatterbox Turbo vs Cartesia Sonic 3](https://podonos.com/resembleai/chatterbox-turbo-vs-cartesia-sonic3)
-- [Chatterbox Turbo vs VibeVoice 7B](https://podonos.com/resembleai/chatterbox-turbo-vs-vibevoice7b)
-
-These evaluations were conducted under identical conditions and are publicly accessible via Podonos.
-
-## Acknowledgements
-- [Podonos](https://podonos.com) — for supporting reproducible subjective speech evaluation
-- [Cosyvoice](https://github.com/FunAudioLLM/CosyVoice)
-- [Real-Time-Voice-Cloning](https://github.com/CorentinJ/Real-Time-Voice-Cloning)
-- [HiFT-GAN](https://github.com/yl4579/HiFTNet)
-- [Llama 3](https://github.com/meta-llama/llama3)
-- [S3Tokenizer](https://github.com/xingchensong/S3Tokenizer)
-
-## Citation
-If you find this model useful, please consider citing.
-```
-@misc{chatterboxtts2025,
-  author       = {{Resemble AI}},
-  title        = {{Chatterbox-TTS}},
-  year         = {2025},
-  howpublished = {\url{https://github.com/resemble-ai/chatterbox}},
-  note         = {GitHub repository}
-}
-```
-## Disclaimer
-Don't use this model to do bad things. Prompts are sourced from freely available data on the internet.
+Dự án phát triển dựa trên mô hình mã nguồn mở Chatterbox của Resemble AI theo giấy phép [MIT License](LICENSE).

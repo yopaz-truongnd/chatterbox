@@ -87,6 +87,23 @@ try:
 except Exception:
     pygame.mixer.init()
 
+def get_effective_default_model() -> str:
+    """Resolve effective startup model for Desktop GUI based on settings and system hardware."""
+    from utils.platform_tools import detect_system_profile
+    cfg = settings_manager.get("default_model", "auto")
+    if cfg == "auto":
+        profile = detect_system_profile()
+        rec = profile.get("recommended_model", "nano")
+        return "Chatterbox Nano (110M - Light/CPU)" if rec == "nano" else "Chatterbox Turbo (350M - Fast)"
+    if cfg in ("nano", "Chatterbox Nano (110M - Light/CPU)"):
+        return "Chatterbox Nano (110M - Light/CPU)"
+    if cfg in ("turbo", "Chatterbox Turbo (350M - Fast)"):
+        return "Chatterbox Turbo (350M - Fast)"
+    if cfg in ("multilingual", "Multilingual TTS"):
+        return "Multilingual TTS"
+    return "Chatterbox Standard (500M)"
+
+
 class ChatterboxEngine:
     def __init__(self, device="auto"):
         # Lấy cấu hình device từ settings nếu có
@@ -107,7 +124,7 @@ class ChatterboxEngine:
         return self.device
 
     def load_model(self, model_name, extra_args=None):
-        """Tải mô hình Chatterbox và lưu vào cache cache."""
+        """Tải mô hình Chatterbox và lưu vào cache."""
         with self._lock:
             if settings_manager.get("auto_unload_models", False) and self.active_model_name != model_name:
                 logger.info("Giải phóng các model cũ khỏi VRAM...")
@@ -121,20 +138,24 @@ class ChatterboxEngine:
                 return self.current_model
 
             logger.info("Đang tải model '%s' lên %s...", model_name, self.device.upper())
-            if model_name == "Chatterbox Standard (500M)":
+            if model_name in ("Chatterbox Standard (500M)", "standard"):
                 from chatterbox.tts import ChatterboxTTS
                 m = ChatterboxTTS.from_pretrained(device=self.device)
-            elif model_name == "Chatterbox Turbo (350M - Fast)":
+            elif model_name in ("Chatterbox Turbo (350M - Fast)", "turbo"):
                 from chatterbox.tts_turbo import ChatterboxTurboTTS
                 m = ChatterboxTurboTTS.from_pretrained(device=self.device, nano=False)
-            elif model_name == "Chatterbox Nano (110M - Light/CPU)":
+            elif model_name in ("Chatterbox Nano (110M - Light/CPU)", "nano"):
                 from chatterbox.tts_turbo import ChatterboxTurboTTS
-                m = ChatterboxTurboTTS.from_pretrained(device="cpu", nano=True)
-            elif model_name.startswith("Multilingual"):
+                try:
+                    m = ChatterboxTurboTTS.from_pretrained(device=self.device, nano=True)
+                except Exception as exc:
+                    logger.warning("Không thể nạp Nano trên %s (%s), chuyển về CPU...", self.device, exc)
+                    m = ChatterboxTurboTTS.from_pretrained(device="cpu", nano=True)
+            elif model_name.startswith("Multilingual") or model_name == "multilingual":
                 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
                 ver = extra_args.get("ver", "v3") if extra_args else "v3"
                 m = ChatterboxMultilingualTTS.from_pretrained(device=self.device, t3_model=ver)
-            elif model_name == "Voice Conversion (VC)":
+            elif model_name in ("Voice Conversion (VC)", "voice-conversion"):
                 from chatterbox.vc import ChatterboxVC
                 m = ChatterboxVC.from_pretrained(device=self.device)
             else:
