@@ -2,18 +2,37 @@
 
 Tài liệu ghi nhớ tóm tắt các bước thiết lập môi trường Python, cài đặt thư viện và khởi chạy dự án **Chatterbox TTS** trên Linux và macOS.
 
-## Cài đặt nhanh trên macOS (Apple Silicon)
+## Cài đặt nhanh trên macOS (Apple Silicon / Intel) & Linux
 
 ```bash
-brew install python@3.11
-/opt/homebrew/bin/python3.11 -m venv venv
+python3 -m venv venv
 source venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .
-./run_chatterbox_gui.sh
+pip install --upgrade pip
+pip install -e .
+./run_chatterbox_api.sh
 ```
 
-Ứng dụng tự ưu tiên Metal (`mps`) trên Apple Silicon và chuyển về CPU nếu MPS không khả dụng. Có thể ép API dùng thiết bị cụ thể bằng `CHATTERBOX_DEVICE=mps ./run_chatterbox_api.sh`.
+## Cài đặt nhanh trên Windows 10/11
+
+1. Cài đặt Python 3.11 (tích hợp sẵn "Add Python to PATH").
+2. Tạo venv và cài đặt:
+   ```cmd
+   python -m venv venv
+   venv\Scripts\activate
+   pip install --upgrade pip
+   pip install -e .
+   ```
+3. Khởi chạy bằng cách nhấp đúp file **`Run_Chatterbox_API.bat`** hoặc PowerShell **`.\run_chatterbox_api.ps1`**.
+
+## Chạy Kiểm thử Toàn diện (Unit Tests)
+
+```bash
+# macOS / Linux
+./run_chatterbox_api.sh --test
+
+# Windows
+Run_Chatterbox_API.bat --test
+```
 
 ---
 
