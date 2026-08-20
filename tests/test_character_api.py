@@ -1,3 +1,5 @@
+import json
+import os
 import shutil
 import tempfile
 import time
@@ -12,20 +14,19 @@ import api_app
 import character_api
 
 
-class RecordingModel:
-    sr = 24000
-
+class RecordingExecutor:
     def __init__(self):
         self.calls = []
 
-    def generate(self, *args, **kwargs):
-        self.calls.append({"args": args, "kwargs": kwargs})
-        return torch.zeros(1, 240)
+    def __call__(self, job_type, params, device):
+        self.calls.append({"job_type": job_type, "params": params, "device": device})
+        return torch.zeros(1, 240), 24000
 
 
 class CharacterApiTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        os.environ["CHATTERBOX_IN_PROCESS"] = "1"
         cls.temp_dir = tempfile.TemporaryDirectory()
         cls.root = Path(cls.temp_dir.name)
         api_app.API_DATA_DIR = cls.root / "api"
@@ -39,9 +40,10 @@ class CharacterApiTestCase(unittest.TestCase):
         cls.temp_dir.cleanup()
 
     def setUp(self):
-        api_app.job_queue.join()
-        with api_app.jobs_lock:
-            api_app.jobs.clear()
+        if api_app.job_manager:
+            api_app.job_manager._job_queue.join()
+            with api_app.job_manager._jobs_lock:
+                api_app.job_manager._jobs.clear()
         with character_api.characters_lock:
             character_api.characters.clear()
         shutil.rmtree(character_api.CHARACTER_DATA_DIR, ignore_errors=True)
@@ -67,10 +69,12 @@ class CharacterApiTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
 
-    def wait_for_job(self, job_id, timeout=3):
+    def wait_for_job(self, job_id, timeout=4):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            job = self.client.get(f"/api/v1/jobs/{job_id}").json()
+            response = self.client.get(f"/api/v1/jobs/{job_id}")
+            self.assertEqual(response.status_code, 200)
+            job = response.json()
             if job["status"] in {"completed", "failed"}:
                 return job
             time.sleep(0.02)
@@ -183,9 +187,9 @@ class CharacterApiTestCase(unittest.TestCase):
             f"/api/v1/characters/{character['id']}",
             files={"reference_audio": ("voice.wav", b"reference-bytes", "audio/wav")},
         )
-        recording_model = RecordingModel()
+        recorder = RecordingExecutor()
 
-        with patch.object(api_app, "load_model", return_value=recording_model):
+        with patch("services.job_manager.execute_model_inference", new=recorder):
             response = self.client.post(
                 "/api/v1/tts/standard",
                 data={"text": "Hello from Sarah.", "character_id": character["id"]},
@@ -199,7 +203,7 @@ class CharacterApiTestCase(unittest.TestCase):
         self.assertEqual(completed["params"]["cfg_weight"], 0.4)
         self.assertEqual(completed["params"]["temperature"], 0.57)
         self.assertEqual(completed["params"]["seed"], 42)
-        prompt_path = recording_model.calls[0]["kwargs"]["audio_prompt_path"]
+        prompt_path = recorder.calls[0]["params"]["audio_prompt_path"]
         self.assertIn(character["id"], prompt_path)
         self.assertTrue(Path(prompt_path).exists())
 
@@ -210,9 +214,9 @@ class CharacterApiTestCase(unittest.TestCase):
             files={"reference_audio": ("character.wav", b"character-reference", "audio/wav")},
         )
         persistent_reference, _ = character_api.resolve_character_voice(character["id"])
-        recording_model = RecordingModel()
+        recorder = RecordingExecutor()
 
-        with patch.object(api_app, "load_model", return_value=recording_model):
+        with patch("services.job_manager.execute_model_inference", new=recorder):
             response = self.client.post(
                 "/api/v1/tts",
                 data={"text": "Use request audio.", "character_id": character["id"]},
@@ -221,7 +225,7 @@ class CharacterApiTestCase(unittest.TestCase):
             completed = self.wait_for_job(response.json()["id"])
 
         self.assertEqual(completed["status"], "completed")
-        used_prompt = recording_model.calls[0]["kwargs"]["audio_prompt_path"]
+        used_prompt = recorder.calls[0]["params"]["audio_prompt_path"]
         self.assertNotEqual(used_prompt, persistent_reference)
         self.assertFalse(Path(used_prompt).exists())
         self.assertTrue(Path(persistent_reference).exists())

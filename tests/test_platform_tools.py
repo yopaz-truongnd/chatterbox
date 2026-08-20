@@ -75,8 +75,17 @@ class SelectDeviceTestCase(unittest.TestCase):
             self.assertIn("Chatterbox", str(data_dir))
 
     def test_port_availability_check(self):
-        # High port should typically be available
-        self.assertTrue(is_port_available("127.0.0.1", 59483))
+        import socket
+        # 1. Bind to ephemeral port 0 to obtain an actively used port
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            s.listen(1)
+            occupied_port = s.getsockname()[1]
+            # While socket is open, is_port_available should return False
+            self.assertFalse(is_port_available("127.0.0.1", occupied_port))
+
+        # 2. Once socket is closed, port should be available again
+        self.assertTrue(is_port_available("127.0.0.1", occupied_port))
 
     def test_ffmpeg_check_returns_tuple(self):
         available, hint = check_ffmpeg_available()

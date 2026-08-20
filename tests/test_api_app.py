@@ -1,3 +1,4 @@
+import os
 import tempfile
 import time
 import unittest
@@ -8,7 +9,8 @@ import torch
 from fastapi.testclient import TestClient
 
 import api_app
-from job_store import JobStore
+from job_store import AudioJob, JobStore
+from services.job_manager import JobManager
 
 
 class FakeModel:
@@ -28,9 +30,9 @@ class FailingModel:
 class ApiAppTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        os.environ["CHATTERBOX_IN_PROCESS"] = "1"
         cls.temp_dir = tempfile.TemporaryDirectory()
         api_app.API_DATA_DIR = Path(cls.temp_dir.name)
-        api_app.job_store = JobStore(api_app.API_DATA_DIR / "jobs.db")
         cls.client_context = TestClient(api_app.app)
         cls.client = cls.client_context.__enter__()
 
@@ -40,13 +42,12 @@ class ApiAppTestCase(unittest.TestCase):
         cls.temp_dir.cleanup()
 
     def setUp(self):
-        api_app.job_queue.join()
-        with api_app.jobs_lock:
-            api_app.jobs.clear()
-        for model_name in api_app.models:
-            api_app.models[model_name] = None
-        for output_path in api_app.API_DATA_DIR.joinpath("outputs").glob("*.wav"):
-            output_path.unlink()
+        if api_app.job_manager:
+            api_app.job_manager._job_queue.join()
+            with api_app.job_manager._jobs_lock:
+                api_app.job_manager._jobs.clear()
+            for output_path in api_app.API_DATA_DIR.joinpath("outputs").glob("*.wav"):
+                output_path.unlink()
 
     def wait_for_job(self, job_id, timeout=4):
         deadline = time.monotonic() + timeout
@@ -61,7 +62,6 @@ class ApiAppTestCase(unittest.TestCase):
 
     def test_health_reports_resource_policy(self):
         response = self.client.get("/health")
-
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
@@ -95,7 +95,6 @@ class ApiAppTestCase(unittest.TestCase):
 
     def test_openapi_contains_public_endpoints(self):
         response = self.client.get("/openapi.json")
-
         self.assertEqual(response.status_code, 200)
         paths = response.json()["paths"]
         expected_paths = {
@@ -125,12 +124,10 @@ class ApiAppTestCase(unittest.TestCase):
             + "\n\nUnicode remains unchanged: Tiếng Việt, 日本語, العربية. "
             + "Final words without normalization. " * 12
         )
-
         response = self.client.post(
             "/api/v1/text/split",
             json={"text": text, "min_chars": 200, "max_chars": 500},
         )
-
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         chunks = payload["chunks"]
@@ -146,11 +143,10 @@ class ApiAppTestCase(unittest.TestCase):
             "/api/v1/text/split",
             json={"text": "A valid input", "min_chars": 600, "max_chars": 500},
         )
-
         self.assertEqual(response.status_code, 422)
 
     def test_default_tts_uses_recommended_model_and_downloads_wav(self):
-        with patch.object(api_app, "load_model", return_value=FakeModel()):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
             response = self.client.post(
                 "/api/v1/tts",
                 data={"text": "Hello from the default endpoint."},
@@ -169,7 +165,7 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertGreater(len(audio.content), 0)
 
     def test_cancel_job_sets_status_cancelled(self):
-        with patch.object(api_app, "load_model", return_value=FakeModel()):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
             response = self.client.post("/api/v1/tts", data={"text": "Job to be cancelled."})
             self.assertEqual(response.status_code, 202)
             job_id = response.json()["id"]
@@ -179,7 +175,7 @@ class ApiAppTestCase(unittest.TestCase):
             self.assertEqual(cancel_res.json()["status"], "cancelled")
 
     def test_long_text_batch_synthesis(self):
-        with patch.object(api_app, "load_model", return_value=FakeModel()):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
             long_content = "Đoạn văn thứ nhất dùng để kiểm tra tính năng đọc truyện. " * 10
             response = self.client.post(
                 "/api/v1/tts/long-text",
@@ -192,7 +188,7 @@ class ApiAppTestCase(unittest.TestCase):
             self.assertIsNotNone(completed["audio_url"])
 
     def test_voice_conversion_cleans_uploaded_files(self):
-        with patch.object(api_app, "load_model", return_value=FakeModel()):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
             response = self.client.post(
                 "/api/v1/voice-conversion",
                 files={
@@ -207,7 +203,10 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(list(api_app.API_DATA_DIR.joinpath("inputs").iterdir()), [])
 
     def test_failed_inference_marks_job_failed(self):
-        with patch.object(api_app, "load_model", return_value=FailingModel()):
+        def failing_inference(*args, **kwargs):
+            raise RuntimeError("inference failed")
+
+        with patch("services.job_manager.execute_model_inference", side_effect=failing_inference):
             response = self.client.post("/api/v1/tts", data={"text": "This job fails."})
             self.assertEqual(response.status_code, 202)
             failed = self.wait_for_job(response.json()["id"])
@@ -216,25 +215,43 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertIn("inference failed", failed["error"])
         self.assertIsNone(failed["audio_url"])
 
-    def test_loading_new_model_releases_previous_model(self):
-        with patch.object(api_app.ChatterboxTurboTTS, "from_pretrained", return_value=object()):
-            api_app.load_model("turbo")
-            self.assertEqual(
-                [name for name, model in api_app.models.items() if model is not None],
-                ["turbo"],
-            )
+    def test_settings_validation_rejects_unknown_fields(self):
+        # Valid update
+        response = self.client.post("/api/v1/settings", json={"retention_days": 7, "dark_mode": True})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["settings"]["retention_days"], 7)
 
-            api_app.load_model("nano")
+        # Invalid field rejected
+        bad_response = self.client.post("/api/v1/settings", json={"unrecognized_hacker_key": "injected"})
+        self.assertEqual(bad_response.status_code, 422)
 
-        self.assertEqual(
-            [name for name, model in api_app.models.items() if model is not None],
-            ["nano"],
-        )
-        api_app.cleanup_runtime()
-        self.assertIsNotNone(api_app.models["nano"])
+    def test_startup_recovers_hanging_jobs(self):
+        # Create a JobManager with pre-existing queued and processing jobs in SQLite
+        temp_d = tempfile.TemporaryDirectory()
+        try:
+            db_dir = Path(temp_d.name)
+            store = JobStore(db_dir / "jobs.db")
+            store.save(AudioJob(id="stuck_queued", type="nano", params={"text": "hi"}, input_paths=[], status="queued", phase="queued", created_at="2026-08-20T00:00:00Z"))
+            store.save(AudioJob(id="stuck_processing", type="turbo", params={"text": "hi"}, input_paths=[], status="processing", phase="generating_tokens", created_at="2026-08-20T00:00:00Z"))
+
+            mgr = JobManager(data_dir=db_dir, project_dir=api_app.PROJECT_DIR, device="cpu", cpu_threads=2)
+            mgr.startup()
+            try:
+                j1 = mgr.get_job("stuck_queued")
+                j2 = mgr.get_job("stuck_processing")
+                self.assertEqual(j1.status, "failed")
+                self.assertEqual(j1.phase, "failed")
+                self.assertIn("API restarted before job completed", j1.error)
+                self.assertEqual(j2.status, "failed")
+                self.assertEqual(j2.phase, "failed")
+                self.assertIn("API restarted before job completed", j2.error)
+            finally:
+                mgr.shutdown()
+        finally:
+            temp_d.cleanup()
 
     def test_completed_job_can_be_filtered_and_deleted(self):
-        with patch.object(api_app, "load_model", return_value=FakeModel()):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
             response = self.client.post("/api/v1/tts", data={"text": "Delete this output."})
             completed = self.wait_for_job(response.json()["id"])
 
