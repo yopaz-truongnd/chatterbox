@@ -34,7 +34,14 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
 from chatterbox.tts import ChatterboxTTS
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 from chatterbox.vc import ChatterboxVC
-from utils.platform_tools import clear_accelerator_cache, detect_system_profile, select_device
+from utils.platform_tools import (
+    check_ffmpeg_available,
+    clear_accelerator_cache,
+    detect_full_diagnostics,
+    detect_system_profile,
+    get_default_data_dir,
+    select_device,
+)
 
 
 SYSTEM_PROFILE = detect_system_profile(os.getenv("CHATTERBOX_DEVICE", "auto"))
@@ -48,7 +55,7 @@ except RuntimeError:
     pass
 
 WEBUI_DIR = PROJECT_DIR / "webui"
-API_DATA_DIR = Path(os.getenv("CHATTERBOX_API_DATA_DIR", str(PROJECT_DIR / "tmp" / "api")))
+API_DATA_DIR = Path(os.getenv("CHATTERBOX_API_DATA_DIR", str(get_default_data_dir())))
 MAX_UPLOAD_BYTES = int(os.getenv("CHATTERBOX_API_MAX_UPLOAD_BYTES", 20 * 1024 * 1024))
 JOB_TIMEOUT_SECONDS = int(os.getenv("CHATTERBOX_JOB_TIMEOUT", "240"))
 RETENTION_DAYS = int(os.getenv("CHATTERBOX_JOB_RETENTION_DAYS", "3"))
@@ -565,7 +572,21 @@ async def lifespan(_: FastAPI):
 
     print_startup_banner()
     threading.Thread(target=worker_loop, name="chatterbox-audio-worker", daemon=True).start()
-    yield
+    try:
+        yield
+    finally:
+        # Clean shutdown of any active inference child processes
+        with active_subprocesses_lock:
+            for job_id, proc in list(active_subprocesses.items()):
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+            active_subprocesses.clear()
 
 
 app = FastAPI(
@@ -749,6 +770,13 @@ def health() -> dict:
             "multilingual": (models_dir / "models--ResembleAI--chatterbox-multilingual").exists(),
         },
     }
+
+
+@app.get("/api/v1/diagnostics", tags=["system"])
+@app.get("/api/v1/system/diagnostics", tags=["system"])
+def get_diagnostics() -> dict:
+    """Trả về báo cáo chẩn đoán toàn diện hệ thống: OS, GPU, VRAM, RAM, Device, FFmpeg, Checkpoints."""
+    return detect_full_diagnostics(os.getenv("CHATTERBOX_DEVICE", "auto"), PROJECT_DIR)
 
 
 @app.post("/api/v1/tts", status_code=status.HTTP_202_ACCEPTED, tags=["tts"])

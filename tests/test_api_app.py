@@ -79,6 +79,20 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertIn("balanced", data["presets"])
         self.assertIn("expressive", data["presets"])
 
+    def test_diagnostics_endpoint(self):
+        response = self.client.get("/api/v1/diagnostics")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("os", data)
+        self.assertIn("platform", data)
+        self.assertIn("python", data)
+        self.assertIn("torch", data)
+        self.assertIn("device", data)
+        self.assertIn("ram_total_gb", data)
+        self.assertIn("recommended_model", data)
+        self.assertIn("data_dir", data)
+        self.assertIn("checkpoints", data)
+
     def test_openapi_contains_public_endpoints(self):
         response = self.client.get("/openapi.json")
 
@@ -92,6 +106,7 @@ class ApiAppTestCase(unittest.TestCase):
             "/api/v1/tts/multilingual",
             "/api/v1/tts/long-text",
             "/api/v1/presets/quality",
+            "/api/v1/diagnostics",
             "/api/v1/voice-conversion",
             "/api/v1/characters",
             "/api/v1/characters/{character_id}",
