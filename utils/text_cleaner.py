@@ -59,3 +59,31 @@ def split_into_sentences(text: str) -> list:
                 raw_sentences.append(p_str)
                 
     return raw_sentences
+
+
+def split_text_preserving_content(text: str, min_chars: int = 200, max_chars: int = 500) -> list[dict]:
+    """Split text into semantic chunks while preserving 100% of characters and whitespace."""
+    if min_chars > max_chars:
+        raise ValueError("min_chars không được lớn hơn max_chars")
+
+    chunks = []
+    start = 0
+    text_length = len(text)
+    while start < text_length:
+        hard_end = min(start + max_chars, text_length)
+        end = hard_end
+        if hard_end < text_length:
+            soft_start = min(start + min_chars, hard_end)
+            for index in range(hard_end, soft_start - 1, -1):
+                if text[index - 1] in ".!?;:\n":
+                    end = index
+                    break
+            else:
+                for index in range(hard_end, soft_start - 1, -1):
+                    if text[index - 1].isspace():
+                        end = index
+                        break
+        chunks.append({"index": len(chunks), "start": start, "end": end, "text": text[start:end]})
+        start = end
+    return chunks
+

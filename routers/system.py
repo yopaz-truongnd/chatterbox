@@ -88,9 +88,23 @@ def get_settings() -> dict:
 @router.post("/api/v1/settings", tags=["settings"])
 def update_settings(payload: SettingsUpdateModel) -> dict:
     clean_data = payload.model_dump(exclude_unset=True)
+    restart_required_keys = {"default_model", "device_preference", "retention_days", "cpu_threads"}
+    restart_required = any(k in clean_data for k in restart_required_keys)
+
     settings_manager.settings.update(clean_data)
     settings_manager.save()
-    return {"status": "ok", "settings": settings_manager.settings}
+
+    msg = (
+        "Cài đặt đã được lưu thành công. Vui lòng khởi động lại server API để áp dụng các thay đổi phần cứng / thiết bị."
+        if restart_required
+        else "Cài đặt đã được lưu thành công."
+    )
+    return {
+        "status": "ok",
+        "restart_required": restart_required,
+        "message": msg,
+        "settings": settings_manager.settings,
+    }
 
 
 @router.post("/api/v1/system/clean-tmp", tags=["system"])

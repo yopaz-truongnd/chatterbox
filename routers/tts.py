@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 import character_api
 from chatterbox.mtl_tts import SUPPORTED_LANGUAGES
+from utils.text_cleaner import split_text_preserving_content
 
 router = APIRouter(tags=["tts"])
 
@@ -48,32 +49,6 @@ class SplitTextRequest(BaseModel):
     text: str = Field(min_length=1)
     min_chars: int = Field(default=200, ge=50, le=1000)
     max_chars: int = Field(default=500, ge=100, le=2000)
-
-
-def split_text_preserving_content(text: str, min_chars: int, max_chars: int) -> list[dict]:
-    if min_chars > max_chars:
-        raise HTTPException(status_code=422, detail="min_chars không được lớn hơn max_chars")
-
-    chunks = []
-    start = 0
-    text_length = len(text)
-    while start < text_length:
-        hard_end = min(start + max_chars, text_length)
-        end = hard_end
-        if hard_end < text_length:
-            soft_start = min(start + min_chars, hard_end)
-            for index in range(hard_end, soft_start - 1, -1):
-                if text[index - 1] in ".!?;:\n":
-                    end = index
-                    break
-            else:
-                for index in range(hard_end, soft_start - 1, -1):
-                    if text[index - 1].isspace():
-                        end = index
-                        break
-        chunks.append({"index": len(chunks), "start": start, "end": end, "text": text[start:end]})
-        start = end
-    return chunks
 
 
 def validate_text(text: str) -> str:
@@ -143,7 +118,10 @@ def list_languages() -> dict:
 
 @router.post("/api/v1/text/split", tags=["text"])
 def split_text(request: SplitTextRequest) -> dict:
-    chunks = split_text_preserving_content(request.text, request.min_chars, request.max_chars)
+    try:
+        chunks = split_text_preserving_content(request.text, request.min_chars, request.max_chars)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return {
         "chunks": chunks,
         "count": len(chunks),

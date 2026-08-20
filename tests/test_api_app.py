@@ -216,14 +216,19 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertIsNone(failed["audio_url"])
 
     def test_settings_validation_rejects_unknown_fields(self):
-        # Valid update
-        response = self.client.post("/api/v1/settings", json={"retention_days": 7, "dark_mode": True})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["settings"]["retention_days"], 7)
+        with patch("config.settings.settings_manager.save") as mock_save:
+            # Valid update with restart_required key
+            response = self.client.post("/api/v1/settings", json={"retention_days": 7, "dark_mode": True})
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertEqual(data["status"], "ok")
+            self.assertTrue(data["restart_required"])
+            self.assertEqual(data["settings"]["retention_days"], 7)
+            self.assertTrue(mock_save.called)
 
-        # Invalid field rejected
-        bad_response = self.client.post("/api/v1/settings", json={"unrecognized_hacker_key": "injected"})
-        self.assertEqual(bad_response.status_code, 422)
+            # Invalid field rejected
+            bad_response = self.client.post("/api/v1/settings", json={"unrecognized_hacker_key": "injected"})
+            self.assertEqual(bad_response.status_code, 422)
 
     def test_startup_recovers_hanging_jobs(self):
         # Create a JobManager with pre-existing queued and processing jobs in SQLite

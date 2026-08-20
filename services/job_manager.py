@@ -123,9 +123,8 @@ class JobManager:
         return self.store.list_jobs(status=status, limit=limit)
 
     def cancel_job(self, job_id: str) -> tuple[bool, str]:
-        """Cancel an active or queued job without deadlocking."""
-        proc_to_kill: subprocess.Popen | None = None
-        should_update = False
+        """Cancel an active or queued job without deadlocking, terminating all parent and child chunk processes."""
+        procs_to_kill: list[subprocess.Popen] = []
 
         # 1. Inspect state under jobs_lock
         with self._jobs_lock:
@@ -143,22 +142,29 @@ class JobManager:
             job.error = "Người dùng đã hủy tác vụ"
             self.store.save(job)
             self._jobs[job_id] = job
-            should_update = True
 
-        # 2. Terminate subprocess outside of jobs_lock
+        # 2. Terminate all matching parent and child processes outside of jobs_lock
         with self._proc_lock:
-            proc_to_kill = self._active_procs.get(job_id)
+            for jid, proc in list(self._active_procs.items()):
+                if jid == job_id or jid.startswith(f"{job_id}_"):
+                    procs_to_kill.append(proc)
 
-        if proc_to_kill:
+        for proc in procs_to_kill:
             try:
-                proc_to_kill.terminate()
-                time.sleep(0.5)
-                if proc_to_kill.poll() is None:
-                    proc_to_kill.kill()
+                proc.terminate()
+                time.sleep(0.3)
+                if proc.poll() is None:
+                    proc.kill()
             except Exception:
                 pass
 
         return True, "Đã hủy tác vụ thành công"
+
+    def save_completed_job(self, job: AudioJob) -> None:
+        """Register a pre-completed job (such as a batch merge) cleanly into store and memory cache."""
+        with self._jobs_lock:
+            self._jobs[job.id] = job
+            self.store.save(job)
 
     def delete_job(self, job_id: str) -> bool:
         """Delete job records and files safely."""
@@ -287,7 +293,7 @@ class JobManager:
         pause_duration = float(params.get("pause_duration", 0.6))
         sub_model = params.get("model", "nano")
 
-        from routers.tts import split_text_preserving_content
+        from utils.text_cleaner import split_text_preserving_content
         chunks = split_text_preserving_content(text, min_chars, max_chars)
         total_chunks = len(chunks)
         if total_chunks == 0:

@@ -155,9 +155,7 @@ async def merge_audio_jobs(
         duration_seconds=total_duration,
     )
     if job_manager:
-        with job_manager._jobs_lock:
-            job_manager._jobs[merge_id] = merge_job
-            job_manager.store.save(merge_job)
+        job_manager.save_completed_job(merge_job)
 
     result = {
         "id": merge_id,
