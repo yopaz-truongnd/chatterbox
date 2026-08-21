@@ -196,27 +196,55 @@ class ChatterboxMultilingualTTS:
             map_location = None
 
         ve = VoiceEncoder()
-        ve.load_state_dict(
-            torch.load(ckpt_dir / "ve.pt", map_location=map_location, weights_only=True)
-        )
+        if (ckpt_dir / "ve.safetensors").exists():
+            ve.load_state_dict(load_safetensors(ckpt_dir / "ve.safetensors"))
+        elif (ckpt_dir / "ve.pt").exists():
+            ve.load_state_dict(
+                torch.load(ckpt_dir / "ve.pt", map_location=map_location, weights_only=True)
+            )
+        else:
+            raise FileNotFoundError(
+                f"Không tìm thấy file checkpoint VoiceEncoder (ve.safetensors hoặc ve.pt) tại {ckpt_dir}. "
+                f"Vui lòng chạy server với kết nối mạng 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để tải checkpoint mô hình về máy."
+            )
         ve.to(device).eval()
 
         t3 = T3(T3Config.multilingual())
-        t3_state = load_safetensors(ckpt_dir / t3_model)
+        t3_file = ckpt_dir / t3_model
+        if not t3_file.exists():
+            raise FileNotFoundError(
+                f"Mô hình Multilingual chưa được tải về máy (không tìm thấy '{t3_model}' tại {ckpt_dir}). "
+                f"Vui lòng khởi động server với kết nối mạng bằng lệnh 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để tự động tải mô hình."
+            )
+        t3_state = load_safetensors(t3_file)
         if "model" in t3_state.keys():
             t3_state = t3_state["model"][0]
         t3.load_state_dict(t3_state)
         t3.to(device).eval()
 
         s3gen = S3Gen()
-        s3gen.load_state_dict(
-            torch.load(ckpt_dir / "s3gen.pt", map_location=map_location, weights_only=True)
-        )
+        if (ckpt_dir / "s3gen.safetensors").exists():
+            s3gen.load_state_dict(
+                load_safetensors(ckpt_dir / "s3gen.safetensors"), strict=False
+            )
+        elif (ckpt_dir / "s3gen.pt").exists():
+            s3gen.load_state_dict(
+                torch.load(ckpt_dir / "s3gen.pt", map_location=map_location, weights_only=True)
+            )
+        else:
+            raise FileNotFoundError(
+                f"Không tìm thấy file checkpoint S3Gen (s3gen.safetensors hoặc s3gen.pt) tại {ckpt_dir}. "
+                f"Vui lòng chạy server với kết nối mạng 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để tải checkpoint mô hình về máy."
+            )
         s3gen.to(device).eval()
 
-        tokenizer = MTLTokenizer(
-            str(ckpt_dir / "grapheme_mtl_merged_expanded_v1.json")
-        )
+        tok_file = ckpt_dir / "grapheme_mtl_merged_expanded_v1.json"
+        if not tok_file.exists():
+            raise FileNotFoundError(
+                f"Mô hình Multilingual thiếu file từ điển 'grapheme_mtl_merged_expanded_v1.json' tại {ckpt_dir}. "
+                f"Vui lòng khởi động server với kết nối mạng bằng lệnh 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để tải mô hình."
+            )
+        tokenizer = MTLTokenizer(str(tok_file))
 
         conds = None
         if (builtin_voice := ckpt_dir / "conds.pt").exists():
@@ -239,12 +267,22 @@ class ChatterboxMultilingualTTS:
             device = "cpu"
 
         t3_model = _resolve_multilingual_t3_model(t3_model)
+        allow_patterns = [
+            "ve.safetensors",
+            "ve.pt",
+            t3_model,
+            "s3gen.safetensors",
+            "s3gen.pt",
+            "grapheme_mtl_merged_expanded_v1.json",
+            "conds.pt",
+            "Cangjie5_TC.json",
+        ]
         ckpt_dir = Path(
             snapshot_download(
                 repo_id=REPO_ID,
                 repo_type="model",
                 revision="main",
-                allow_patterns=["ve.pt", t3_model, "s3gen.pt", "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json"],
+                allow_patterns=allow_patterns,
                 token=os.getenv("HF_TOKEN"),
             )
         )

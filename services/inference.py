@@ -109,7 +109,7 @@ def generate_with_model(model: Any, job_type: str, params: dict, device: str) ->
         elif job_type == "multilingual":
             wav = model.generate(
                 params["text"],
-                language_id=params.get("language_id", "vi"),
+                language_id=params.get("language_id", "en"),
                 audio_prompt_path=audio_prompt_path,
                 exaggeration=float(params.get("exaggeration", 0.5)),
                 temperature=float(params.get("temperature", 0.8)),

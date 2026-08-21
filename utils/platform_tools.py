@@ -236,6 +236,18 @@ def detect_system_profile(preference: str = "auto") -> dict:
     }
 
 
+def is_multilingual_cached(models_dir: Path) -> bool:
+    if (models_dir / "models--ResembleAI--chatterbox-multilingual").exists():
+        return True
+    chatterbox_dir = models_dir / "models--ResembleAI--chatterbox"
+    if chatterbox_dir.exists():
+        for ext in ("*.safetensors", "*.pt"):
+            for f in chatterbox_dir.glob(f"**/{ext}"):
+                if "t3_mtl" in f.name:
+                    return True
+    return False
+
+
 def detect_full_diagnostics(preference: str = "auto", project_dir: Path | None = None) -> dict:
     """Generate comprehensive cross-platform diagnostic report for debugging & health checks."""
     profile = detect_system_profile(preference)
@@ -250,7 +262,7 @@ def detect_full_diagnostics(preference: str = "auto", project_dir: Path | None =
         "nano": (models_dir / "models--ResembleAI--chatterbox-nano").exists(),
         "turbo": (models_dir / "models--ResembleAI--chatterbox-turbo").exists(),
         "standard": (models_dir / "models--ResembleAI--chatterbox").exists(),
-        "multilingual": (models_dir / "models--ResembleAI--chatterbox-multilingual").exists(),
+        "multilingual": is_multilingual_cached(models_dir),
     }
 
     os_name = f"{platform.system()} {platform.release()}"

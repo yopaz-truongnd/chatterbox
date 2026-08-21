@@ -317,6 +317,122 @@ class ApiAppTestCase(unittest.TestCase):
         response = self.client.post("/api/v1/tts/batch", json={"lines": []})
         self.assertEqual(response.status_code, 422)
 
+    def test_multilingual_tts_endpoint_success(self):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 2400), 24000)):
+            response = self.client.post(
+                "/api/v1/tts/multilingual",
+                data={
+                    "text": "Hello world, testing multilingual synthesis.",
+                    "language_id": "en",
+                    "exaggeration": 0.6,
+                    "temperature": 0.85,
+                },
+            )
+            self.assertEqual(response.status_code, 202)
+            job_id = response.json()["id"]
+            completed = self.wait_for_job(job_id, timeout=6)
+            self.assertEqual(completed["status"], "completed")
+            self.assertEqual(completed["params"]["language_id"], "en")
+            self.assertEqual(completed["params"]["exaggeration"], 0.6)
+
+    def test_multilingual_tts_endpoint_normalizes_language_code(self):
+        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 2400), 24000)):
+            response = self.client.post(
+                "/api/v1/tts/multilingual",
+                data={
+                    "text": "Bonjour tout le monde.",
+                    "language_id": " FR ",
+                },
+            )
+            self.assertEqual(response.status_code, 202)
+            job_id = response.json()["id"]
+            completed = self.wait_for_job(job_id, timeout=6)
+            self.assertEqual(completed["status"], "completed")
+            self.assertEqual(completed["params"]["language_id"], "fr")
+
+    def test_multilingual_tts_endpoint_rejects_unsupported_language(self):
+        response = self.client.post(
+            "/api/v1/tts/multilingual",
+            data={
+                "text": "Xin chào thế giới.",
+                "language_id": "vi",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Ngôn ngữ không được hỗ trợ", response.json()["detail"])
+
+    def test_multilingual_tts_endpoint_rejects_empty_text(self):
+        response = self.client.post(
+            "/api/v1/tts/multilingual",
+            data={
+                "text": "   ",
+                "language_id": "en",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_models_list_endpoint(self):
+        response = self.client.get("/api/v1/models")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("models", data)
+        model_names = [m["name"] for m in data["models"]]
+        self.assertIn("nano", model_names)
+        self.assertIn("turbo", model_names)
+        self.assertIn("standard", model_names)
+        self.assertIn("multilingual", model_names)
+
+    def test_model_preload_and_unload_endpoints(self):
+        with patch("services.inference.load_model", return_value=(None, 24000)):
+            # 1. Preload nano model
+            res_load = self.client.post("/api/v1/models/nano/load")
+            self.assertEqual(res_load.status_code, 200)
+            self.assertEqual(res_load.json()["status"], "ok")
+            self.assertEqual(res_load.json()["model"], "nano")
+
+            # 2. Check health reports loaded_model
+            res_health = self.client.get("/api/v1/health")
+            self.assertEqual(res_health.json()["loaded_model"], "nano")
+
+            # 3. Unload nano model
+            res_unload = self.client.delete("/api/v1/models/nano")
+            self.assertEqual(res_unload.status_code, 200)
+            self.assertEqual(res_unload.json()["status"], "ok")
+
+            # 4. Check health reports None
+            res_health2 = self.client.get("/api/v1/health")
+            self.assertIsNone(res_health2.json()["loaded_model"])
+
+    def test_model_preload_rejects_invalid_name(self):
+        res = self.client.post("/api/v1/models/hacker_bot/load")
+        self.assertEqual(res.status_code, 422)
+
+    def test_model_preload_rejects_uncached_offline_model(self):
+        with patch("routers.system.is_multilingual_cached", return_value=False):
+            res = self.client.post("/api/v1/models/multilingual/load")
+            self.assertEqual(res.status_code, 404)
+            self.assertIn("Mô hình Multilingual chưa được tải về máy", res.json()["detail"])
+
+    def test_delete_model_from_disk_endpoint(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_models = Path(temp_dir) / "models"
+            temp_nano = temp_models / "models--ResembleAI--chatterbox-nano"
+            temp_nano.mkdir(parents=True, exist_ok=True)
+            (temp_nano / "fake_weight.pt").write_bytes(b"0" * 1024)
+
+            with patch("api_app.PROJECT_DIR", Path(temp_dir)):
+                res = self.client.delete("/api/v1/models/nano/disk")
+                self.assertEqual(res.status_code, 200)
+                self.assertEqual(res.json()["status"], "ok")
+                self.assertFalse(temp_nano.exists())
+
+    def test_delete_model_from_disk_rejects_invalid_name(self):
+        res = self.client.delete("/api/v1/models/invalid_ai/disk")
+        self.assertEqual(res.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

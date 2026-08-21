@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 import character_api
 from routers import jobs, system, tts
 from services.job_manager import JobManager
-from utils.platform_tools import detect_system_profile, get_default_data_dir
+from utils.platform_tools import detect_system_profile, get_default_data_dir, is_multilingual_cached
 
 # 1. System & Hardware Profiling
 SYSTEM_PROFILE = detect_system_profile(os.getenv("CHATTERBOX_DEVICE", "auto"))
@@ -47,7 +47,7 @@ def print_startup_banner() -> None:
     nano_cached = (models_dir / "models--ResembleAI--chatterbox-nano").exists()
     turbo_cached = (models_dir / "models--ResembleAI--chatterbox-turbo").exists()
     std_cached = (models_dir / "models--ResembleAI--chatterbox").exists()
-    mtl_cached = (models_dir / "models--ResembleAI--chatterbox-multilingual").exists()
+    mtl_cached = is_multilingual_cached(models_dir)
 
     dev_label = (
         "Apple Metal (MPS)" if DEVICE == "mps"

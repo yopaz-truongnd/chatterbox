@@ -9,12 +9,18 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+import threading
+
 from config.settings import settings_manager
-from utils.platform_tools import detect_full_diagnostics, detect_system_profile
+from utils.platform_tools import detect_full_diagnostics, detect_system_profile, is_multilingual_cached
 
 router = APIRouter(tags=["system"])
 
 MODEL_NAMES = ("standard", "turbo", "nano", "multilingual", "voice-conversion")
+
+CURRENT_LOADED_MODEL: str | None = None
+_LOADED_MODEL_INSTANCE: tuple[Any, int] | None = None
+_MODEL_LOCK = threading.Lock()
 
 
 class SettingsUpdateModel(BaseModel):
@@ -56,8 +62,9 @@ def get_health() -> dict:
             "nano": (models_dir / "models--ResembleAI--chatterbox-nano").exists(),
             "turbo": (models_dir / "models--ResembleAI--chatterbox-turbo").exists(),
             "standard": (models_dir / "models--ResembleAI--chatterbox").exists(),
-            "multilingual": (models_dir / "models--ResembleAI--chatterbox-multilingual").exists(),
+            "multilingual": is_multilingual_cached(models_dir),
         },
+        "loaded_model": CURRENT_LOADED_MODEL,
     }
 
 
@@ -68,22 +75,227 @@ def get_diagnostics() -> dict:
     return detect_full_diagnostics(os.getenv("CHATTERBOX_DEVICE", "auto"), PROJECT_DIR)
 
 
+def get_model_disk_size_bytes(model_name: str, models_dir: Path) -> int:
+    total = 0
+    if not models_dir.exists():
+        return 0
+    if model_name in {"nano", "turbo"}:
+        target_dir = models_dir / f"models--ResembleAI--chatterbox-{model_name}"
+        if target_dir.exists():
+            for p in target_dir.glob("**/*"):
+                if p.is_file() and not p.is_symlink():
+                    total += p.stat().st_size
+    elif model_name == "multilingual":
+        target_dir = models_dir / "models--ResembleAI--chatterbox-multilingual"
+        if target_dir.exists():
+            for p in target_dir.glob("**/*"):
+                if p.is_file() and not p.is_symlink():
+                    total += p.stat().st_size
+        chatterbox_dir = models_dir / "models--ResembleAI--chatterbox"
+        if chatterbox_dir.exists():
+            for p in chatterbox_dir.glob("**/*"):
+                if p.is_file() and not p.is_symlink() and any(k in p.name for k in ("t3_mtl", "grapheme_mtl", "Cangjie")):
+                    total += p.stat().st_size
+    elif model_name in {"standard", "voice-conversion"}:
+        target_dir = models_dir / "models--ResembleAI--chatterbox"
+        if target_dir.exists():
+            for p in target_dir.glob("**/*"):
+                if p.is_file() and not p.is_symlink():
+                    total += p.stat().st_size
+    return total
+
+
 @router.get("/api/v1/models", tags=["models"])
 def list_models() -> dict:
     from api_app import PROJECT_DIR
     models_dir = PROJECT_DIR / "models"
+    result = []
+    for name in MODEL_NAMES:
+        is_cached = (
+            is_multilingual_cached(models_dir)
+            if name == "multilingual"
+            else (models_dir / f"models--ResembleAI--chatterbox-{name}").exists()
+            if name in {"turbo", "nano"}
+            else (models_dir / "models--ResembleAI--chatterbox").exists()
+        )
+        size_bytes = get_model_disk_size_bytes(name, models_dir)
+        size_mb = round(size_bytes / (1024 * 1024), 1) if size_bytes > 0 else 0
+        result.append({
+            "name": name,
+            "cached_on_disk": is_cached,
+            "size_bytes": size_bytes,
+            "size_mb": size_mb,
+            "loaded_in_memory": (CURRENT_LOADED_MODEL == name),
+        })
+
     return {
-        "models": [
-            {
-                "name": name,
-                "cached_on_disk": (
-                    (models_dir / f"models--ResembleAI--chatterbox-{name}").exists()
-                    if name in {"turbo", "nano", "multilingual"}
-                    else (models_dir / "models--ResembleAI--chatterbox").exists()
-                ),
-            }
-            for name in MODEL_NAMES
-        ]
+        "models": result,
+        "active_model": CURRENT_LOADED_MODEL,
+    }
+
+
+@router.delete("/api/v1/models/{name}/disk", tags=["models"])
+def delete_model_from_disk_endpoint(name: str) -> dict:
+    import gc
+    import shutil
+    from api_app import PROJECT_DIR
+    from utils.platform_tools import clear_accelerator_cache
+
+    model_name = name.strip().lower()
+    if model_name == "tts":
+        model_name = "standard"
+
+    if model_name not in MODEL_NAMES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Tên mô hình không hợp lệ: '{name}'. Danh sách mô hình hỗ trợ: {', '.join(MODEL_NAMES)}",
+        )
+
+    models_dir = PROJECT_DIR / "models"
+    freed_bytes = get_model_disk_size_bytes(model_name, models_dir)
+
+    # 1. Unload from RAM/VRAM if currently loaded
+    global CURRENT_LOADED_MODEL, _LOADED_MODEL_INSTANCE
+    with _MODEL_LOCK:
+        if CURRENT_LOADED_MODEL == model_name:
+            _LOADED_MODEL_INSTANCE = None
+            CURRENT_LOADED_MODEL = None
+            gc.collect()
+            clear_accelerator_cache()
+
+    # 2. Remove files from models_dir
+    deleted_items = 0
+    if model_name in {"nano", "turbo"}:
+        target_dir = models_dir / f"models--ResembleAI--chatterbox-{model_name}"
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+            deleted_items += 1
+    elif model_name == "multilingual":
+        target_dir = models_dir / "models--ResembleAI--chatterbox-multilingual"
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+            deleted_items += 1
+        chatterbox_dir = models_dir / "models--ResembleAI--chatterbox"
+        if chatterbox_dir.exists():
+            for p in list(chatterbox_dir.glob("**/*")):
+                if p.is_file() and any(k in p.name for k in ("t3_mtl", "grapheme_mtl", "Cangjie")):
+                    try:
+                        p.unlink(missing_ok=True)
+                        deleted_items += 1
+                    except Exception:
+                        pass
+    elif model_name in {"standard", "voice-conversion"}:
+        target_dir = models_dir / "models--ResembleAI--chatterbox"
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+            deleted_items += 1
+
+    freed_mb = round(freed_bytes / (1024 * 1024), 2)
+    return {
+        "status": "ok",
+        "message": f"Đã xóa toàn bộ checkpoint của mô hình {model_name.upper()} khỏi ổ đĩa (đã giải phóng {freed_mb} MB).",
+        "model": model_name,
+        "freed_bytes": freed_bytes,
+        "freed_mb": freed_mb,
+    }
+
+
+@router.post("/api/v1/models/{name}/load", tags=["models"])
+def preload_model_endpoint(name: str) -> dict:
+    import gc
+    from api_app import DEVICE, PROJECT_DIR
+    from services.inference import load_model
+    from utils.platform_tools import clear_accelerator_cache
+
+    model_name = name.strip().lower()
+    if model_name == "tts":
+        model_name = "standard"
+
+    if model_name not in MODEL_NAMES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Tên mô hình không hợp lệ: '{name}'. Danh sách mô hình hỗ trợ: {', '.join(MODEL_NAMES)}",
+        )
+
+    models_dir = PROJECT_DIR / "models"
+    is_offline = os.getenv("HF_HUB_OFFLINE", "1") == "1"
+
+    # Check disk cache availability
+    if model_name == "multilingual" and not is_multilingual_cached(models_dir) and is_offline:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Mô hình Multilingual chưa được tải về máy. "
+                "Vui lòng khởi động server với kết nối mạng bằng lệnh 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để tự động tải mô hình từ Hugging Face."
+            ),
+        )
+    elif model_name in {"turbo", "nano"} and not (models_dir / f"models--ResembleAI--chatterbox-{model_name}").exists() and is_offline:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Mô hình {model_name.upper()} chưa có trong thư mục models/.",
+        )
+    elif model_name in {"standard", "voice-conversion"} and not (models_dir / "models--ResembleAI--chatterbox").exists() and is_offline:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Mô hình {model_name.upper()} chưa có trong thư mục models/.",
+        )
+
+    global CURRENT_LOADED_MODEL, _LOADED_MODEL_INSTANCE
+    with _MODEL_LOCK:
+        try:
+            # Clear previous model first
+            _LOADED_MODEL_INSTANCE = None
+            gc.collect()
+            clear_accelerator_cache()
+
+            # Load new model
+            instance, sr = load_model(model_name, DEVICE)
+            _LOADED_MODEL_INSTANCE = (instance, sr)
+            CURRENT_LOADED_MODEL = model_name
+        except Exception as e:
+            CURRENT_LOADED_MODEL = None
+            _LOADED_MODEL_INSTANCE = None
+            gc.collect()
+            clear_accelerator_cache()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Lỗi khi nạp mô hình '{model_name}': {str(e)}",
+            )
+
+    return {
+        "status": "ok",
+        "message": f"Mô hình '{model_name.upper()}' đã được nạp sẵn sàng vào bộ nhớ ({DEVICE.upper()}).",
+        "model": model_name,
+        "device": DEVICE,
+    }
+
+
+@router.delete("/api/v1/models/{name}", tags=["models"])
+def unload_model_endpoint(name: str) -> dict:
+    import gc
+    from utils.platform_tools import clear_accelerator_cache
+
+    model_name = name.strip().lower()
+    if model_name == "tts":
+        model_name = "standard"
+
+    if model_name not in MODEL_NAMES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Tên mô hình không hợp lệ: '{name}'. Danh sách mô hình hỗ trợ: {', '.join(MODEL_NAMES)}",
+        )
+
+    global CURRENT_LOADED_MODEL, _LOADED_MODEL_INSTANCE
+    with _MODEL_LOCK:
+        _LOADED_MODEL_INSTANCE = None
+        CURRENT_LOADED_MODEL = None
+        gc.collect()
+        clear_accelerator_cache()
+
+    return {
+        "status": "ok",
+        "message": f"Đã giải phóng mô hình '{model_name.upper()}' khỏi bộ nhớ RAM/VRAM.",
+        "model": model_name,
     }
 
 

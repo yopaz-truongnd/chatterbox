@@ -231,16 +231,18 @@ async def create_multilingual_job(
 ) -> dict:
     from api_app import job_manager
 
-    if language_id not in SUPPORTED_LANGUAGES:
+    clean_lang = language_id.strip().lower() if language_id else ""
+    if clean_lang not in SUPPORTED_LANGUAGES:
+        supported_list = ", ".join(sorted(SUPPORTED_LANGUAGES.keys()))
         raise HTTPException(
             status_code=422,
-            detail=f"Ngôn ngữ không được hỗ trợ: {language_id}. Xem danh sách tại /api/v1/languages",
+            detail=f"Ngôn ngữ không được hỗ trợ: '{language_id}'. Danh sách mã ngôn ngữ hợp lệ ({len(SUPPORTED_LANGUAGES)} thứ tiếng): {supported_list}. Xem danh sách tại /api/v1/languages",
         )
     job_id = uuid.uuid4().hex
     audio_prompt_path, input_paths, voice_profile = await resolve_character_prompt(character_id, audio_prompt, job_id)
     params = {
         "text": validate_text(text),
-        "language_id": language_id,
+        "language_id": clean_lang,
         "character_id": character_id,
         "audio_prompt_path": audio_prompt_path,
         "exaggeration": effective_value(exaggeration, voice_profile, "expressiveness", 0.5),
