@@ -1626,6 +1626,60 @@
               </p>
             </div>
 
+            <!-- Supported Tools Card -->
+            <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
+                <span class="material-symbols-outlined text-purple-400 text-[16px]">build</span>
+                <span>Danh sách Công cụ MCP Hỗ trợ (5 Tools)</span>
+              </h3>
+              <p class="text-slate-400 text-[11px]">
+                Các AI Assistant sau khi kết nối MCP sẽ được cấp quyền sử dụng các công cụ sau để tương tác với hệ thống Chatterbox:
+              </p>
+              
+              <div class="space-y-2 mt-2">
+                <!-- Tool 1 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_list_characters</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Liệt kê tất cả nhân vật giọng mẫu và cấu hình âm sắc đang lưu trữ cục bộ.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-purple-600/20 text-purple-300 text-[9px] font-bold border border-purple-500/20 self-start md:self-center">Read-only</span>
+                </div>
+                <!-- Tool 2 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_generate_tts</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Sinh giọng nói từ văn bản (TTS) sử dụng giọng của nhân vật được chọn và trả về ID tác vụ.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 text-[9px] font-bold border border-blue-500/20 self-start md:self-center">TTS Job</span>
+                </div>
+                <!-- Tool 3 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_get_job_status</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Lấy thông tin tiến độ, kết quả của Job và đường dẫn tải file âm thanh đầu ra.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-slate-600/20 text-slate-400 text-[9px] font-bold border border-slate-500/20 self-start md:self-center">Job Status</span>
+                </div>
+                <!-- Tool 4 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_voice_conversion</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Chuyển đổi âm sắc (Voice Conversion) của file âm thanh nguồn sang giọng đọc của nhân vật đích.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/20 self-start md:self-center">Voice Clone</span>
+                </div>
+                <!-- Tool 5 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_evaluate_voice</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Đánh giá chất lượng đọc (âm lượng, độ diễn cảm, tốc độ, độ khớp chữ) và đọc to lời nhận xét của AI Coach.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-amber-600/20 text-amber-300 text-[9px] font-bold border border-amber-500/20 self-start md:self-center">AI Critic</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Configuration Card -->
             <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs">
               <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
