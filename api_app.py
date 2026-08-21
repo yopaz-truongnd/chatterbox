@@ -135,6 +135,7 @@ if WEBUI_DIR.exists():
 @app.get("/characters-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/history-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/settings-studio", response_class=FileResponse, tags=["gui"])
+@app.get("/connect-mcp", response_class=FileResponse, tags=["gui"])
 def get_web_gui():
     """Phục vụ giao diện Material Design 3 Web Dashboard trực tiếp trên trình duyệt."""
     dashboard_file = WEBUI_DIR / "material_dashboard.html"
