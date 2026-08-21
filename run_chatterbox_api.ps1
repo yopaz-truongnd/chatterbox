@@ -44,7 +44,7 @@ if (-not (Test-Path $env:CHATTERBOX_API_DATA_DIR)) {
 # Handle --test switch
 if ($Test) {
     Write-Host "=======================================================================" -ForegroundColor Cyan
-    Write-Host "       CHATTERBOX TTS — CHẠY KIỂM THỬ TÍCH HỢP (UNIT TESTS)           " -ForegroundColor Cyan
+    Write-Host "       CHATTERBOX TTS -- RUN INTEGRATION TESTS (UNIT TESTS)           " -ForegroundColor Cyan
     Write-Host "=======================================================================" -ForegroundColor Cyan
     $env:CHATTERBOX_IN_PROCESS = "1"
     & $PythonBin -m unittest discover -v tests/
@@ -62,17 +62,17 @@ try {
 }
 
 if (-not $PortAvailable) {
-    Write-Host "[CẢNH BÁO] Port $Port trên $HostAddress đang bị một tiến trình khác chiếm dụng!" -ForegroundColor Yellow
-    Write-Host "Bạn có thể chỉ định cổng khác bằng lệnh: .\run_chatterbox_api.ps1 -Port 8001" -ForegroundColor Yellow
+    Write-Host "[WARNING] Port $Port on $HostAddress is already in use by another process!" -ForegroundColor Yellow
+    Write-Host "You can specify another port using: .\run_chatterbox_api.ps1 -Port 8001" -ForegroundColor Yellow
 }
 
 Write-Host "=======================================================================" -ForegroundColor Magenta
-Write-Host "       CHATTERBOX TTS STUDIO — WEB GUI & REST API SERVER (POWERSHELL) " -ForegroundColor Magenta
+Write-Host "       CHATTERBOX TTS STUDIO -- WEB GUI & REST API SERVER (POWERSHELL) " -ForegroundColor Magenta
 Write-Host "=======================================================================" -ForegroundColor Magenta
-Write-Host "  🎨 Web GUI Studio:     http://${HostAddress}:${Port}/" -ForegroundColor Green
-Write-Host "  🔌 REST API v1 Base:   http://${HostAddress}:${Port}/api/v1/" -ForegroundColor White
-Write-Host "  📖 API Swagger Docs:   http://${HostAddress}:${Port}/docs" -ForegroundColor White
-Write-Host "  📁 Dữ liệu lưu trữ:    $env:CHATTERBOX_API_DATA_DIR" -ForegroundColor DarkGray
+Write-Host "  * Web GUI Studio:     http://${HostAddress}:${Port}/" -ForegroundColor Green
+Write-Host "  * REST API v1 Base:   http://${HostAddress}:${Port}/api/v1/" -ForegroundColor White
+Write-Host "  * API Swagger Docs:   http://${HostAddress}:${Port}/docs" -ForegroundColor White
+Write-Host "  * Data Directory:     $env:CHATTERBOX_API_DATA_DIR" -ForegroundColor DarkGray
 Write-Host "=======================================================================" -ForegroundColor Magenta
 Write-Host ""
 
