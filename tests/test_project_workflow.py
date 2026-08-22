@@ -304,6 +304,168 @@ class ProjectWorkflowTestCase(unittest.TestCase):
             self.assertIn("Chatterbox Event Stream", res["content"][0]["text"])
             self.assertIn("approved", res["content"][0]["text"])
 
+    def test_sync_project_failed_segment_clears_audio_url_and_marks_failed(self):
+        from services.project_planner import sync_project_with_job
+        from job_store import AudioJob
+
+        mock_job = AudioJob(
+            id="job_partially_failed",
+            type="batch",
+            params={"project_id": "proj_partial"},
+            input_paths=[],
+            status="completed",
+            duration_seconds=2.5,
+            benchmark={
+                "lines_results": [
+                    {
+                        "idx": 0,
+                        "status": "completed",
+                        "duration_seconds": 2.5,
+                        "start_seconds": 0.0,
+                        "end_seconds": 2.5,
+                        "quality": {"final": {"passed": True}},
+                    },
+                    {
+                        "idx": 1,
+                        "status": "failed",
+                        "duration_seconds": 0.0,
+                        "error": "Signal quality check failed",
+                        "quality": {"final": {"passed": False}},
+                    },
+                ],
+                "quality_report": {
+                    "passed": False,
+                    "total_segments": 2,
+                    "passed_segments": 1,
+                    "failed_segments": 1,
+                },
+            },
+        )
+
+        mock_jm = MagicMock()
+        mock_jm.get_job.return_value = mock_job
+
+        project = {
+            "id": "proj_partial",
+            "final_job_id": "job_partially_failed",
+            "status": "approved",
+            "segments": [
+                {"idx": 0, "text": "Line 1"},
+                {"idx": 1, "text": "Line 2"},
+            ],
+        }
+
+        updated = sync_project_with_job(project, mock_jm)
+        self.assertTrue(updated)
+        self.assertEqual(project["status"], "completed")
+        self.assertEqual(project["segments"][0]["status"], "completed")
+        self.assertEqual(project["segments"][0]["audio_url"], "/api/v1/jobs/job_partially_failed/lines/0")
+        self.assertEqual(project["segments"][1]["status"], "failed")
+        self.assertIsNone(project["segments"][1]["audio_url"])
+        self.assertEqual(project["segments"][1]["selected_attempt"]["status"], "failed")
+
+    def test_single_terminal_completed_event_emission(self):
+        from services.event_bus import event_bus
+        from services.job_manager import JobManager
+        from services.project_planner import sync_project_with_job
+
+        event_bus.clear()
+        jm = JobManager(
+            project_dir=Path(self.temp_dir.name),
+            data_dir=Path(self.temp_dir.name),
+            device="cpu",
+            cpu_threads=2,
+        )
+
+        # 1. Update job to completed
+        job = jm.submit_job(
+            job_type="batch",
+            params={"project_id": "proj_single_event"},
+            input_paths=[],
+        )
+        jm._update_job_status(job.id, status="completed", phase="completed", progress_percent=100)
+
+        # Verify exactly 1 completed event in event_bus
+        events_after_job = event_bus.get_events(after_id=0, project_id="proj_single_event")
+        completed_events = [e for e in events_after_job if e["type"] == "completed"]
+        self.assertEqual(len(completed_events), 1)
+
+        # 2. Sync project with job should NOT emit a 2nd duplicate completed event
+        project = {
+            "id": "proj_single_event",
+            "final_job_id": job.id,
+            "status": "approved",
+            "segments": [],
+        }
+        sync_project_with_job(project, jm)
+
+        events_after_sync = event_bus.get_events(after_id=0, project_id="proj_single_event")
+        completed_events_after_sync = [e for e in events_after_sync if e["type"] == "completed"]
+        self.assertEqual(len(completed_events_after_sync), 1)
+
+    def test_partial_failure_sets_completed_partial_status(self):
+        from services.batch_runner import BatchRunner
+        from services.job_manager import JobManager
+        from services.project_planner import sync_project_with_job
+        from services.event_bus import event_bus
+
+        event_bus.clear()
+        jm = JobManager(
+            project_dir=Path(self.temp_dir.name),
+            data_dir=Path(self.temp_dir.name),
+            device="cpu",
+            cpu_threads=2,
+        )
+        runner = BatchRunner(jm)
+
+        sr = 24000
+        t = torch.linspace(0, 1.0, sr)
+        good_tensor = (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
+        unfixable_empty = torch.zeros(1, 0)
+
+        def mock_infer(model_type, line_item, device):
+            if line_item["idx"] == 0:
+                return good_tensor, sr
+            else:
+                return unfixable_empty, sr
+
+        with patch("services.job_manager.execute_model_inference", side_effect=mock_infer):
+            job = jm.submit_job(
+                job_type="batch",
+                params={
+                    "project_id": "proj_partial_test",
+                    "lines": [
+                        {"idx": 0, "text": "Good segment", "pause_duration": 0.2},
+                        {"idx": 1, "text": "Unfixable segment", "pause_duration": 0.2},
+                    ],
+                    "model": "turbo",
+                },
+                input_paths=[],
+            )
+            out_wav = Path(self.temp_dir.name) / f"{job.id}.wav"
+            ok, err = runner.run_batch_job(job, out_wav, in_process=True)
+            self.assertTrue(ok)
+
+            final_job = jm.get_job(job.id)
+            self.assertEqual(final_job.status, "completed_partial")
+
+            project = {
+                "id": "proj_partial_test",
+                "final_job_id": job.id,
+                "status": "approved",
+                "segments": [
+                    {"idx": 0, "text": "Good segment"},
+                    {"idx": 1, "text": "Unfixable segment"},
+                ],
+            }
+            sync_project_with_job(project, jm)
+            self.assertEqual(project["status"], "completed_partial")
+
+            # Check terminal event type is completed_partial
+            events = event_bus.get_events(after_id=0, project_id="proj_partial_test")
+            completed_events = [e for e in events if e["type"] == "completed_partial"]
+            self.assertEqual(len(completed_events), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

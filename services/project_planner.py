@@ -49,6 +49,7 @@ ProjectStatus = Literal[
     "revising",
     "rendering_final",
     "completed",
+    "completed_partial",
     "needs_revision",
     "failed",
     "cancelled",
@@ -107,393 +108,18 @@ def _save_project_file(project: dict[str, Any]) -> None:
 
 
 # ==============================================================================
-# Gate 1: Requirement Extraction & Heuristics (English Scope Locked)
+# Gate 1 & 2 Pure Helpers (Delegated to modular services)
 # ==============================================================================
-
-def extract_requirements_from_text(text: str) -> dict[str, Any]:
-    """Extract audio project parameters from freeform prompt text."""
-    reqs: dict[str, Any] = {
-        "script_language": "en",
-        "voice_language": "en",
-    }
-    lower = text.lower()
-
-    # 1. Format detection (Word boundary)
-    if re.search(r"\bpodcast\b", lower):
-        reqs["content_format"] = "podcast"
-    elif re.search(r"\b(video|narration|voiceover|youtube|tiktok|thuyết minh)\b", lower):
-        reqs["content_format"] = "video_narration"
-    elif re.search(r"\b(audiobook|story|stories|novel|sách nói|truyện)\b", lower):
-        reqs["content_format"] = "audiobook"
-    elif re.search(r"\b(commercial|advertisement|ads?|promo|quảng cáo)\b", lower):
-        reqs["content_format"] = "advertisement"
-
-    # 2. Duration detection (e.g. "5 mins", "5-minute", "300s", "3 phút")
-    dur_match = re.search(r"(\d+)\s*[-\s]?\s*(phút|mins?|minutes?|m\b|giây|secs?|seconds?|s\b)", lower)
-    if dur_match:
-        val = int(dur_match.group(1))
-        unit = dur_match.group(2).lower()
-        if unit in ("phút", "min", "mins", "minute", "minutes", "m"):
-            reqs["target_duration_seconds"] = val * 60
-        else:
-            reqs["target_duration_seconds"] = val
-
-    # 3. Audience detection (Word boundary)
-    if re.search(r"\b(beginner|beginners|starter|starters|intro|nhập môn|người mới)\b", lower):
-        reqs["audience"] = "beginner"
-    elif re.search(r"\b(expert|experts|academic|advanced|chuyên gia|nâng cao)\b", lower):
-        reqs["audience"] = "expert"
-    elif re.search(r"\b(kids?|children|trẻ em|thiếu nhi)\b", lower):
-        reqs["audience"] = "kids"
-    elif re.search(r"\b(general|everyone|public|đại chúng)\b", lower):
-        reqs["audience"] = "general"
-
-    # 4. Tone detection (Word boundary)
-    if re.search(r"\b(storytelling|engaging|gentle|nhẹ nhàng|truyền cảm)\b", lower):
-        reqs["tone"] = "engaging storytelling"
-    elif re.search(r"\b(formal|professional|news|trang trọng|chuyên nghiệp)\b", lower):
-        reqs["tone"] = "professional"
-    elif re.search(r"\b(energetic|fun|lively|sôi nổi|năng động)\b", lower):
-        reqs["tone"] = "energetic"
-    elif re.search(r"\b(dramatic|epic|cinematic|kịch tính)\b", lower):
-        reqs["tone"] = "dramatic"
-    elif re.search(r"\b(calm|relaxing|meditation|thư giãn)\b", lower):
-        reqs["tone"] = "calm"
-
-    # 5. SFX / BGM detection (Strict matching: avoid false triggering on standalone 'nhẹ')
-    if re.search(r"\b(no sfx|dry voice|không nhạc|không sfx|giọng mộc)\b", lower):
-        reqs["sfx_level"] = "none"
-    elif re.search(r"\b(light sfx|soft music|light bgm|soft bgm|nhạc nền nhẹ|nhạc êm|nhẹ nhàng sfx)\b", lower):
-        reqs["sfx_level"] = "light"
-    elif re.search(r"\b(cinematic|heavy sfx|nhạc phim|điện ảnh|đậm sfx)\b", lower):
-        reqs["sfx_level"] = "cinematic"
-
-    # 6. Output formats detection
-    formats = []
-    if re.search(r"\b(wav|audio)\b", lower):
-        formats.append("wav")
-    if re.search(r"\b(srt|sub|subs|phụ đề)\b", lower):
-        formats.append("srt")
-    if re.search(r"\bvtt\b", lower):
-        formats.append("vtt")
-    if re.search(r"\bjson\b", lower):
-        formats.append("json")
-    if formats:
-        reqs["output_formats"] = list(dict.fromkeys(formats))
-
-    return reqs
-
-
-def apply_sensible_defaults(reqs: dict[str, Any], topic: str = "") -> dict[str, Any]:
-    """Populate sensible English defaults for any missing optional parameters."""
-    reqs = dict(reqs)
-    reqs["script_language"] = "en"
-    reqs["voice_language"] = "en"
-
-    if not reqs.get("content_format"):
-        reqs["content_format"] = "podcast"
-
-    if not reqs.get("target_duration_seconds"):
-        reqs["target_duration_seconds"] = 300
-
-    if not reqs.get("audience"):
-        reqs["audience"] = "general"
-
-    if not reqs.get("tone"):
-        fmt = reqs.get("content_format", "podcast")
-        reqs["tone"] = "engaging storytelling" if fmt in ("podcast", "audiobook") else "professional"
-
-    if not reqs.get("sfx_level"):
-        reqs["sfx_level"] = "light"
-
-    if not reqs.get("output_formats"):
-        reqs["output_formats"] = ["wav", "srt"]
-
-    if not reqs.get("pace"):
-        reqs["pace"] = "medium"
-
-    if not reqs.get("quality_preset"):
-        reqs["quality_preset"] = "balanced"
-
-    return reqs
-
-
-def analyze_missing_fields(reqs: dict[str, Any], auto_defaults: bool = False) -> tuple[list[str], list[str]]:
-    """Determine missing required and recommended fields."""
-    required_fields = ["content_format", "target_duration_seconds", "audience"]
-    recommended_fields = ["tone", "character_id", "sfx_level", "output_formats"]
-
-    missing_required = [f for f in required_fields if not reqs.get(f)]
-
-    if auto_defaults:
-        missing_recommended: list[str] = []
-    else:
-        missing_recommended = [f for f in recommended_fields if not reqs.get(f)]
-
-    return missing_required, missing_recommended
-
-
-def generate_question_batch(missing_required: list[str], missing_recommended: list[str]) -> list[dict[str, Any]]:
-    """Generate a clean, single-batch question list for missing requirements."""
-    questions: list[dict[str, Any]] = []
-
-    field_catalog = {
-        "content_format": {
-            "id": "content_format",
-            "question": "What format would you like this audio product in?",
-            "options": ["Podcast", "Video narration / Voiceover", "Audiobook / Story", "Commercial / Ad"],
-            "required": True,
-            "category": "content",
-        },
-        "target_duration_seconds": {
-            "id": "target_duration",
-            "question": "What is the target duration for this audio?",
-            "options": ["1 minute (Quick Overview)", "3 minutes (Standard)", "5 minutes (Detailed)", "10 minutes (In-depth)"],
-            "required": True,
-            "category": "content",
-        },
-        "audience": {
-            "id": "audience",
-            "question": "Who is the primary target audience?",
-            "options": ["Beginner / General Public", "Expert / Academic", "Kids / Children", "Professionals"],
-            "required": True,
-            "category": "content",
-        },
-        "tone": {
-            "id": "tone",
-            "question": "What tone and vocal style would you prefer?",
-            "options": ["Engaging storytelling", "Professional & Clear", "Calm & Relaxing", "Energetic & Fun", "Dramatic"],
-            "required": False,
-            "category": "voice",
-        },
-        "character_id": {
-            "id": "character_id",
-            "question": "Do you want to specify a particular voice or character?",
-            "options": ["Auto-select optimal English narrator", "Built-in: MC Male", "Built-in: Editor Female"],
-            "required": False,
-            "category": "voice",
-        },
-        "sfx_level": {
-            "id": "sfx_level",
-            "question": "Desired level of background music (BGM) and sound effects?",
-            "options": ["Light (Gentle background music)", "None (Dry voice only)", "Cinematic (Rich sound design)"],
-            "required": False,
-            "category": "audio",
-        },
-        "output_formats": {
-            "id": "output_formats",
-            "question": "Which output file formats do you need?",
-            "options": ["WAV Audio + SRT Subtitles", "WAV Audio only", "WAV + SRT + Project JSON"],
-            "required": False,
-            "category": "export",
-        },
-    }
-
-    for f in missing_required:
-        if f in field_catalog:
-            questions.append(field_catalog[f])
-
-    for f in missing_recommended:
-        if f in field_catalog:
-            questions.append(field_catalog[f])
-
-    return questions
-
-
-# ==============================================================================
-# Gate 2: English Script Planning & Outline Generation
-# ==============================================================================
-
-def generate_english_outline_and_script(
-    topic: str,
-    requirements: dict[str, Any],
-    custom_prompt: str | None = None,
-    script_text: str | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Generate structured English scene outline and full script based on requirements and target duration.
-    
-    If script_text is provided by Codex/Antigravity Agent, parses and preserves it directly.
-    """
-    clean_topic = topic.strip().title()
-    fmt = requirements.get("content_format", "podcast")
-
-    if script_text and script_text.strip():
-        # Agent authored script
-        full_text = script_text.strip()
-        scenes = []
-        raw_scenes = re.split(r"(?=\[(?:Scene\s*\d+|Introduction|Deep Dive|Key Takeaways|Summary|Conclusion)[^\]]*\])", full_text)
-        for idx, scn in enumerate(raw_scenes, 1):
-            if not scn.strip():
-                continue
-            h_match = re.match(r"^\[([^\]]+)\]\s*", scn)
-            title = h_match.group(1) if h_match else f"Scene {idx}"
-            scenes.append({
-                "scene_id": f"scene_{idx}",
-                "title": title,
-                "emotion": "engaging",
-                "dialogue": scn.strip(),
-            })
-    else:
-        # Baseline structured generation
-        target_dur = requirements.get("target_duration_seconds", 180)
-        num_scenes = max(2, min(6, int(target_dur // 60) or 2))
-
-        if num_scenes <= 2:
-            scenes = [
-                {
-                    "scene_id": "scene_1",
-                    "title": "Introduction & Overview",
-                    "emotion": "engaging",
-                    "dialogue": f"[Narrator]: Welcome to this special audio exploration of {clean_topic}. Today, we dive straight into the key concepts you need to know.",
-                },
-                {
-                    "scene_id": "scene_2",
-                    "title": "Core Insights & Conclusion",
-                    "emotion": "thoughtful",
-                    "dialogue": f"[Narrator]: When we examine {clean_topic} closely, its profound impact becomes undeniable. Thank you for listening, and stay curious!",
-                },
-            ]
-        elif num_scenes <= 3:
-            scenes = [
-                {
-                    "scene_id": "scene_1",
-                    "title": "Hook & Introduction",
-                    "emotion": "mysterious",
-                    "dialogue": f"[Narrator]: Have you ever wondered about {clean_topic}? In this episode, we uncover the fascinating story behind it.",
-                },
-                {
-                    "scene_id": "scene_2",
-                    "title": "Deep Dive & Major Milestones",
-                    "emotion": "engaging",
-                    "dialogue": f"[Narrator]: Let us explore the pivotal moments that define {clean_topic}. From fundamental breakthroughs to modern applications, every step reveals something remarkable.",
-                },
-                {
-                    "scene_id": "scene_3",
-                    "title": "Key Takeaways & Wrap-up",
-                    "emotion": "thoughtful",
-                    "dialogue": f"[Narrator]: As we look toward the future, {clean_topic} continues to inspire innovators worldwide. Thank you for tuning in!",
-                },
-            ]
-        else:
-            scenes = [
-                {
-                    "scene_id": "scene_1",
-                    "title": "Introduction & The Big Question",
-                    "emotion": "mysterious",
-                    "dialogue": f"[Narrator]: Imagine a world transformed by {clean_topic}. Today, we embark on an immersive journey to understand its true power.",
-                },
-                {
-                    "scene_id": "scene_2",
-                    "title": "Historical Context & Origins",
-                    "emotion": "informative",
-                    "dialogue": f"[Narrator]: To truly appreciate {clean_topic}, we must first look back at how it all began. The early pioneers laid the crucial groundwork.",
-                },
-                {
-                    "scene_id": "scene_3",
-                    "title": "Breakthroughs & Real-world Impact",
-                    "emotion": "energetic",
-                    "dialogue": f"[Narrator]: Today, breakthroughs in this field are accelerating faster than ever. Practical innovations are reshaping industries across the globe.",
-                },
-                {
-                    "scene_id": "scene_4",
-                    "title": "Summary & Vision for the Future",
-                    "emotion": "thoughtful",
-                    "dialogue": f"[Narrator]: The story of {clean_topic} is still being written every single day. Thank you for joining us on this exploration!",
-                },
-            ]
-
-        script_lines: list[str] = []
-        for s in scenes:
-            script_lines.append(f"[{s['title']}]")
-            script_lines.append(s["dialogue"])
-            script_lines.append("")
-        full_text = "\n".join(script_lines).strip()
-
-    outline = [{"scene_id": s["scene_id"], "title": s["title"], "emotion": s.get("emotion", "engaging")} for s in scenes]
-    total_words = len(full_text.split())
-    est_dur = round((total_words / 135) * 60, 1)
-
-    script_obj = {
-        "title": f"{fmt.title()}: {clean_topic}",
-        "estimated_duration_seconds": est_dur,
-        "word_count": total_words,
-        "scenes": scenes,
-        "full_text": full_text,
-    }
-
-    return outline, script_obj
-
-
-# ==============================================================================
-# Semantic Segmentation Engine
-# ==============================================================================
-
-def segment_script_text(
-    script_text: str,
-    target_pace: str = "medium",
-    default_model: str = "turbo",
-) -> list[dict[str, Any]]:
-    """Segment an English script into semantic chunks of 1-3 sentences (8-25s each)."""
-    raw_scenes = re.split(r"(?=\[(?:Scene\s*\d+|Introduction|Deep Dive|Key Takeaways|Summary|Conclusion)[^\]]*\])", script_text.strip())
-    if len(raw_scenes) == 1 and not raw_scenes[0].startswith("["):
-        raw_scenes = [script_text]
-
-    segments: list[dict[str, Any]] = []
-    seg_idx = 1
-
-    for s_idx, scene_str in enumerate(raw_scenes):
-        if not scene_str.strip():
-            continue
-
-        header_match = re.match(r"^\[([^\]]+)\]\s*", scene_str)
-        scene_name = header_match.group(1) if header_match else f"Scene {s_idx + 1}"
-        scene_id = f"scene_{s_idx + 1}"
-        body = re.sub(r"^\[[^\]]+\]\s*", "", scene_str).strip()
-
-        lines = [line.strip() for line in body.split("\n") if line.strip()]
-        if not lines:
-            continue
-
-        for line in lines:
-            spk_match = re.match(r"^\[([^\]]+)\]\s*:\s*(.*)$", line)
-            speaker = spk_match.group(1).strip() if spk_match else "Narrator"
-            diag = spk_match.group(2).strip() if spk_match else line
-
-            sentences = [s.strip() for s in re.split(r"(?<=[.?!])\s+", diag) if s.strip()]
-            if not sentences:
-                continue
-
-            step = 2 if len(sentences) >= 4 else 1
-            for i in range(0, len(sentences), step):
-                chunk = " ".join(sentences[i : i + step]).strip()
-                if not chunk:
-                    continue
-
-                words = chunk.split()
-                est_seconds = round(len(words) / 2.3, 1)  # ~138 WPM
-                pause_ms = 700 if (i + step >= len(sentences)) else 400
-
-                emotion = "thoughtful" if any(w in chunk.lower() for w in ["think", "reflect", "future", "history"]) else "engaging"
-
-                segments.append({
-                    "id": f"seg_{seg_idx:03d}",
-                    "scene_id": scene_id,
-                    "scene_name": scene_name,
-                    "speaker": speaker,
-                    "text": chunk,
-                    "word_count": len(words),
-                    "estimated_seconds": est_seconds,
-                    "pause_after_ms": pause_ms,
-                    "emotion": emotion,
-                    "pace": target_pace,
-                    "model": default_model,
-                    "attempts": [],
-                    "selected_attempt": None,
-                    "status": "planned",
-                })
-                seg_idx += 1
-
-    return segments
+from services.project_requirements import (
+    analyze_missing_fields,
+    apply_sensible_defaults,
+    extract_requirements_from_text,
+    generate_question_batch,
+)
+from services.project_script import (
+    generate_english_outline_and_script,
+    segment_script_text,
+)
 
 
 # ==============================================================================
@@ -547,46 +173,8 @@ def resolve_character_and_voice(
 
 
 # ==============================================================================
-# Signal Evaluation & WAV Post-Processing (Auto-Fixing Audio In-Place)
+# Job & Project Lifecycle Synchronization
 # ==============================================================================
-
-def postprocess_and_evaluate_audio_tensor(
-    tensor: torch.Tensor,
-    sample_rate: int = 24000,
-    target_lufs: float = -18.0,
-) -> tuple[torch.Tensor, dict[str, Any]]:
-    """Perform audio signal evaluation, silence trimming, loudness normalization, and peak limiting."""
-    if tensor.numel() == 0:
-        return tensor, {"passed": False, "error": "Empty audio tensor"}
-
-    # 1. Silence trimming at head and tail
-    energy = tensor.abs()[0]
-    thresh = 0.008
-    non_silent = (energy > thresh).nonzero(as_tuple=False)
-    if non_silent.numel() > 0:
-        start_idx = max(0, int(non_silent[0].item()) - int(sample_rate * 0.05))
-        end_idx = min(tensor.shape[-1], int(non_silent[-1].item()) + int(sample_rate * 0.05))
-        processed = tensor[..., start_idx:end_idx]
-    else:
-        processed = tensor
-
-    # 2. Loudness normalization & peak limiter
-    processed = normalize_loudness(processed, target_db=target_lufs, peak_limit=0.95)
-
-    duration_sec = round(processed.shape[-1] / sample_rate, 3)
-    rms_db = float(20.0 * torch.log10(torch.sqrt(torch.mean(processed ** 2) + 1e-9)))
-
-    eval_result = {
-        "passed": True,
-        "duration_seconds": duration_sec,
-        "rms_db": round(rms_db, 1),
-        "clipped": bool(processed.abs().max() > 0.98),
-        "trimmed_samples": int(tensor.shape[-1] - processed.shape[-1]),
-        "auto_fixed": bool(tensor.shape[-1] != processed.shape[-1]),
-    }
-
-    return processed, eval_result
-
 
 def sync_project_with_job(project: dict[str, Any], job_manager: Any) -> bool:
     """Synchronize project rendering status, individual segment audio URLs, evaluation, and SRT with JobManager."""
@@ -599,81 +187,77 @@ def sync_project_with_job(project: dict[str, Any], job_manager: Any) -> bool:
         return False
 
     updated = False
-    if job.status == "completed" and project.get("status") != "completed":
-        project["status"] = "completed"
+    if job.status in ("completed", "completed_partial") and project.get("status") not in ("completed", "completed_partial"):
+        project["status"] = job.status
         project["audio_url"] = f"/api/v1/jobs/{job.id}/audio"
         project["srt_url"] = f"/api/v1/jobs/{job.id}/srt"
 
         lines_results = job.benchmark.get("lines_results", []) if job.benchmark else []
+        idx_map = {r.get("idx", i): r for i, r in enumerate(lines_results)}
         segments = project.get("segments", [])
 
-        # Process and evaluate each individual segment
+        # Sync individual segment data from job benchmark
         for idx, seg in enumerate(segments):
-            seg["status"] = "completed"
-            seg_audio_url = f"/api/v1/jobs/{job.id}/lines/{idx}"
-            seg["audio_url"] = seg_audio_url
-
-            if idx < len(lines_results):
-                line_data = lines_results[idx]
+            line_data = idx_map.get(idx)
+            if line_data:
+                line_status = line_data.get("status", "failed")
+                seg["status"] = line_status
                 seg["duration_seconds"] = line_data.get("duration_seconds")
                 seg["start_seconds"] = line_data.get("start_seconds")
                 seg["end_seconds"] = line_data.get("end_seconds")
-                audio_file = line_data.get("audio_path")
-
-                if audio_file and Path(audio_file).exists():
-                    try:
-                        wav, sr = ta.load(audio_file)
-                        processed_wav, eval_metrics = postprocess_and_evaluate_audio_tensor(wav, sample_rate=sr)
-                        if eval_metrics.get("auto_fixed"):
-                            save_audio_wav(audio_file, processed_wav, sample_rate=sr)
-                        seg["evaluation"] = eval_metrics
-                    except Exception as exc:
-                        seg["evaluation"] = {"passed": True, "note": f"Auto-evaluation: {exc}"}
+                seg["evaluation"] = line_data.get("quality", {}).get("final", {"passed": (line_status == "completed"), "duration_seconds": seg.get("duration_seconds", 0.0)})
+                
+                if line_status == "completed":
+                    seg_audio_url = f"/api/v1/jobs/{job.id}/lines/{idx}"
+                    seg["audio_url"] = seg_audio_url
+                    seg["selected_attempt"] = {
+                        "attempt_id": 1,
+                        "status": "completed",
+                        "audio_url": seg_audio_url,
+                        "evaluation": seg["evaluation"],
+                    }
                 else:
-                    seg["evaluation"] = {"passed": True, "duration_seconds": seg.get("duration_seconds", 0.0)}
-
-            seg["selected_attempt"] = {
-                "attempt_id": 1,
-                "status": "completed",
-                "audio_url": seg_audio_url,
-                "evaluation": seg.get("evaluation", {}),
-            }
+                    seg["audio_url"] = None
+                    seg["error"] = line_data.get("error")
+                    seg["selected_attempt"] = {
+                        "attempt_id": 1,
+                        "status": "failed",
+                        "audio_url": None,
+                        "evaluation": seg["evaluation"],
+                        "error": line_data.get("error"),
+                    }
+            else:
+                seg["status"] = "failed"
+                seg["audio_url"] = None
+                seg["evaluation"] = {"passed": False, "duration_seconds": 0.0}
+                seg["selected_attempt"] = {
+                    "attempt_id": 1,
+                    "status": "failed",
+                    "audio_url": None,
+                    "evaluation": seg["evaluation"],
+                }
 
         # Project quality summary report
-        total_dur = float(job.duration_seconds) if isinstance(getattr(job, "duration_seconds", None), (int, float)) else sum(float(s.get("duration_seconds", 0.0) or 0.0) for s in segments)
-        project["quality_report"] = {
-            "total_segments": len(segments),
-            "completed_segments": len([s for s in segments if s.get("status") == "completed"]),
-            "audio_duration_seconds": round(total_dur, 3),
-            "passed": True,
-        }
+        if job.benchmark and job.benchmark.get("quality_report"):
+            project["quality_report"] = job.benchmark["quality_report"]
+        else:
+            total_dur = float(job.duration_seconds) if isinstance(getattr(job, "duration_seconds", None), (int, float)) else sum(float(s.get("duration_seconds", 0.0) or 0.0) for s in segments)
+            project["quality_report"] = {
+                "total_segments": len(segments),
+                "passed_segments": len([s for s in segments if s.get("status") == "completed" and s.get("evaluation", {}).get("passed", True)]),
+                "completed_segments": len([s for s in segments if s.get("status") == "completed"]),
+                "audio_duration_seconds": round(total_dur, 3),
+                "passed": (len([s for s in segments if s.get("status") != "completed"]) == 0),
+            }
 
-        event_bus.emit(
-            event_type="completed",
-            project_id=project.get("id"),
-            job_id=final_job_id,
-            status="completed",
-            progress=100,
-            data={
-                "audio_url": project.get("audio_url"),
-                "srt_url": project.get("srt_url"),
-                "duration_seconds": round(total_dur, 3),
-                "quality_report": project.get("quality_report"),
-            },
-        )
         updated = True
+
     elif job.status in ("failed", "cancelled") and project.get("status") not in ("failed", "cancelled"):
         project["status"] = "failed"
-        project["error"] = str(job.error) if getattr(job, "error", None) else f"Job terminated with status '{job.status}'"
+        project["error"] = str(job.error or f"Job terminated with status '{job.status}'")
         for seg in project.get("segments", []):
             seg["status"] = "failed"
-        event_bus.emit(
-            event_type="failed",
-            project_id=project.get("id"),
-            job_id=final_job_id,
-            status="failed",
-            data={"error": project.get("error")},
-        )
+            seg["audio_url"] = None
         updated = True
 
     if updated:

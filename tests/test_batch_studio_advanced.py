@@ -50,9 +50,11 @@ class BatchStudioAdvancedTestCase(unittest.TestCase):
         cls.temp_dir.cleanup()
 
     def setUp(self):
+        t = torch.linspace(0, 0.5, 12000)
+        healthy_dummy = (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
         self.mock_inference_patcher = patch(
             "services.job_manager.execute_model_inference",
-            return_value=(torch.zeros(1, 2400), 24000),
+            return_value=(healthy_dummy, 24000),
         )
         self.mock_inference_patcher.start()
         self.addCleanup(self.mock_inference_patcher.stop)
@@ -236,7 +238,8 @@ John: Tôi cũng rất vui được tham gia.
                 if audio_prompt_path:
                     self.conds = {"voice": f"custom_{Path(audio_prompt_path).stem}"}
                 self.history.append((text, self.conds["voice"]))
-                return torch.zeros(1, 2400)
+                t = torch.linspace(0, 0.5, 12000)
+                return (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
 
         model = DummyModel()
         lines = [
@@ -449,7 +452,8 @@ John: Tôi cũng rất vui được tham gia.
         from unittest.mock import patch, MagicMock
 
         mock_model = MagicMock()
-        dummy_wav = torch.zeros(1, 24000)
+        t = torch.linspace(0, 1.0, 24000)
+        dummy_wav = (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
 
         job_id = "test_subproc_batch_runner"
         out_wav = self.data_dir / "outputs" / f"{job_id}.wav"

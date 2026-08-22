@@ -10,14 +10,21 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
-JobStatus = Literal["queued", "processing", "completed", "failed", "cancelled"]
+TERMINAL_JOB_STATUSES = frozenset({"completed", "completed_partial", "failed", "cancelled"})
+SUCCESSFUL_JOB_STATUSES = frozenset({"completed", "completed_partial"})
+
+JobStatus = Literal["queued", "processing", "completed", "completed_partial", "failed", "cancelled"]
 JobType = Literal["tts", "turbo", "nano", "multilingual", "voice-conversion", "long-text", "batch"]
 JobPhase = Literal[
     "queued",
     "loading_model",
     "generating_tokens",
     "generating_audio",
+    "evaluating",
+    "auto_fixing",
+    "re_evaluating",
     "merging_audio",
+    "publishing",
     "completed",
     "failed",
     "cancelled",
@@ -46,7 +53,7 @@ class AudioJob:
         data.pop("input_paths", None)
         data.pop("output_path", None)
         data["params"] = _sanitize_public_payload(self.params)
-        data["audio_url"] = f"/api/v1/jobs/{self.id}/audio" if self.status == "completed" else None
+        data["audio_url"] = f"/api/v1/jobs/{self.id}/audio" if self.status in SUCCESSFUL_JOB_STATUSES else None
         if self.type in ("batch", "long-text") or "lines" in self.params:
             if self.benchmark and "lines_results" in self.benchmark:
                 data["lines_results"] = [
@@ -58,8 +65,8 @@ class AudioJob:
                 ]
             elif "lines_results" in self.params:
                 data["lines_results"] = _sanitize_public_payload(self.params["lines_results"])
-            data["srt_url"] = f"/api/v1/jobs/{self.id}/srt" if self.status == "completed" else None
-            data["zip_url"] = f"/api/v1/jobs/{self.id}/zip" if self.status == "completed" else None
+            data["srt_url"] = f"/api/v1/jobs/{self.id}/srt" if self.status in SUCCESSFUL_JOB_STATUSES else None
+            data["zip_url"] = f"/api/v1/jobs/{self.id}/zip" if self.status in SUCCESSFUL_JOB_STATUSES else None
         if data.get("benchmark"):
             data["benchmark"] = _sanitize_public_payload(data["benchmark"])
         return _sanitize_public_payload(data)
@@ -264,8 +271,9 @@ class JobStore:
             conn = self._get_conn()
             try:
                 with conn:
+                    status_placeholders = ",".join(f"'{s}'" for s in TERMINAL_JOB_STATUSES)
                     rows = conn.execute(
-                        "SELECT id, output_path FROM jobs WHERE created_at < ? AND status IN ('completed', 'failed', 'cancelled')",
+                        f"SELECT id, output_path FROM jobs WHERE created_at < ? AND status IN ({status_placeholders})",
                         (cutoff,),
                     ).fetchall()
 

@@ -77,30 +77,51 @@ class BatchRunner:
             lines_results = []
             t0_start = time.time()
 
+            from services.audio import evaluate_audio_signal, auto_fix_audio_signal
+
             for i, line_item in enumerate(lines):
                 line_idx = line_item.get("idx", i)
                 line_out = chunks_dir / f"line_{line_idx:04d}.wav"
                 line_pause = float(line_item.get("pause_duration", pause_duration))
 
-                # Batch resumption: reuse chunk if already completed and valid
+                pct = 10 + int((i / max(1, total_lines)) * 75)
+                self.jm._update_job_status(job.id, phase="generating_tokens", progress_percent=pct)
+
+                # Batch resumption: reuse chunk only if it passes QC (auto-fixing if necessary)
                 if (params.get("resume", False) or job.params.get("resume", False)) and line_out.exists() and line_out.stat().st_size > 44:
                     try:
-                        import torchaudio as ta
-                        info = ta.info(str(line_out))
-                        dur = round(info.num_frames / info.sample_rate, 3)
-                        successful_segments.append((line_out, line_pause, line_idx))
-                        lines_results.append({
-                            "idx": line_idx,
-                            "status": "completed",
-                            "audio_path": str(line_out),
-                            "duration_seconds": dur,
-                            "inference_seconds": 0.0,
-                            "text": line_item.get("text", ""),
-                            "pause_duration": line_pause,
-                            "original_start_seconds": line_item.get("start_seconds"),
-                            "original_end_seconds": line_item.get("end_seconds"),
-                        })
-                        continue
+                        w_resumed, load_err = load_and_resample_audio(line_out, 24000)
+                        sr_resumed = 24000
+                        if w_resumed is not None and load_err is None:
+                            eval_resumed = evaluate_audio_signal(w_resumed, sr_resumed)
+                            actions_resumed = []
+                            if not eval_resumed["passed"] and eval_resumed.get("fixable"):
+                                fixed_w, actions_resumed, final_eval_resumed = auto_fix_audio_signal(w_resumed, sr_resumed)
+                                if final_eval_resumed["passed"]:
+                                    save_audio_wav(line_out, fixed_w, sr_resumed)
+                                    w_resumed = fixed_w
+                                    eval_resumed = final_eval_resumed
+
+                            if eval_resumed["passed"]:
+                                dur = round(w_resumed.shape[-1] / sr_resumed, 3)
+                                successful_segments.append((line_out, line_pause, line_idx))
+                                lines_results.append({
+                                    "idx": line_idx,
+                                    "status": "completed",
+                                    "audio_path": str(line_out),
+                                    "duration_seconds": dur,
+                                    "inference_seconds": 0.0,
+                                    "text": line_item.get("text", ""),
+                                    "pause_duration": line_pause,
+                                    "quality": {
+                                        "initial": eval_resumed,
+                                        "actions": actions_resumed,
+                                        "final": eval_resumed,
+                                    },
+                                    "original_start_seconds": line_item.get("start_seconds"),
+                                    "original_end_seconds": line_item.get("end_seconds"),
+                                })
+                                continue
                     except Exception:
                         pass
 
@@ -108,6 +129,34 @@ class BatchRunner:
                 try:
                     import services.job_manager
                     wav, sr = services.job_manager.execute_model_inference(sub_model, line_item, self.jm.device)
+                    
+                    # QC Evaluation
+                    self.jm._update_job_status(job.id, phase="evaluating", progress_percent=pct)
+                    initial_eval = evaluate_audio_signal(wav, sr)
+                    
+                    # Auto-Fixing if fixable issues detected
+                    if not initial_eval["passed"] and initial_eval.get("fixable"):
+                        self.jm._update_job_status(job.id, phase="auto_fixing", progress_percent=pct)
+                        fixed_wav, actions, final_eval = auto_fix_audio_signal(wav, sr)
+                        self.jm._update_job_status(job.id, phase="re_evaluating", progress_percent=pct)
+                        wav = fixed_wav
+                        quality_meta = {
+                            "initial": initial_eval,
+                            "actions": actions,
+                            "final": final_eval,
+                        }
+                    else:
+                        quality_meta = {
+                            "initial": initial_eval,
+                            "actions": [],
+                            "final": initial_eval,
+                        }
+
+                    # Re-evaluate requirement: segment MUST pass QC to be completed and merged
+                    if not quality_meta["final"]["passed"]:
+                        err_issues = ", ".join(quality_meta["final"].get("issues", [])) or "Signal quality check failed"
+                        raise RuntimeError(f"Quality check failed after auto-fix: {err_issues}")
+
                     save_audio_wav(line_out, wav, sr)
                     dur = round(wav.shape[-1] / sr, 3)
                     successful_segments.append((line_out, line_pause, line_idx))
@@ -119,6 +168,7 @@ class BatchRunner:
                         "inference_seconds": round(time.time() - t0_line, 3),
                         "text": line_item.get("text", ""),
                         "pause_duration": line_pause,
+                        "quality": quality_meta,
                         "original_start_seconds": line_item.get("start_seconds"),
                         "original_end_seconds": line_item.get("end_seconds"),
                     })
@@ -132,6 +182,11 @@ class BatchRunner:
                         "text": line_item.get("text", ""),
                         "pause_duration": line_pause,
                         "error": str(exc),
+                        "quality": {
+                            "initial": {"passed": False, "issues": [str(exc)]},
+                            "actions": [],
+                            "final": {"passed": False, "issues": [str(exc)]},
+                        },
                         "original_start_seconds": line_item.get("start_seconds"),
                         "original_end_seconds": line_item.get("end_seconds"),
                     })
@@ -140,6 +195,7 @@ class BatchRunner:
 
             total_dur = 0.0
             if successful_segments:
+                self.jm._update_job_status(job.id, phase="merging_audio", progress_percent=88)
                 tensors = []
                 successful_pauses = []
                 target_sr = 24000
@@ -167,6 +223,7 @@ class BatchRunner:
                             ducking=bgm_ducking_flag,
                         )
 
+                    self.jm._update_job_status(job.id, phase="publishing", progress_percent=95)
                     save_audio_wav(output_path, merged_speech, target_sr)
                     total_dur = round(merged_speech.shape[-1] / target_sr, 3)
 
@@ -221,6 +278,25 @@ class BatchRunner:
             rtf = round(total_time / max(0.01, total_dur), 3) if total_dur > 0 else 0.0
             ftr = round(total_dur / max(0.01, total_time), 2) if total_time > 0 else 0.0
 
+            # Calculate quality summary report
+            total_segs = len(lines_results)
+            passed_segs = sum(1 for r in lines_results if r.get("status") == "completed" and r.get("quality", {}).get("final", {}).get("passed", False))
+            auto_fixed_segs = sum(1 for r in lines_results if len(r.get("quality", {}).get("actions", [])) > 0)
+            failed_segs = sum(1 for r in lines_results if r.get("status") == "failed")
+            all_warnings = list(slot_warnings)
+            for r in lines_results:
+                for w in r.get("quality", {}).get("final", {}).get("warnings", []):
+                    all_warnings.append(f"Dòng {r['idx']+1}: {w}")
+
+            quality_report = {
+                "passed": (failed_segs == 0 and passed_segs == total_segs and total_segs > 0),
+                "total_segments": total_segs,
+                "passed_segments": passed_segs,
+                "auto_fixed_segments": auto_fixed_segs,
+                "failed_segments": failed_segs,
+                "warnings": all_warnings,
+            }
+
             benchmark_data = {
                 "device": self.jm.device,
                 "model_type": sub_model,
@@ -232,6 +308,7 @@ class BatchRunner:
                 "realtime_factor": rtf,
                 "faster_than_realtime": ftr,
                 "slot_warnings": slot_warnings,
+                "quality_report": quality_report,
                 "lines_results": lines_results,
             }
             has_failures = any(r.get("status") == "failed" for r in lines_results)
@@ -247,12 +324,14 @@ class BatchRunner:
                 )
                 return False, "Toàn bộ các dòng trong kịch bản đều thất bại"
 
+            final_job_status = "completed_partial" if has_failures else "completed"
             self.jm._update_job_status(
                 job.id,
+                status=final_job_status,
+                phase="completed",
                 benchmark=benchmark_data,
                 duration_seconds=total_dur,
                 progress_percent=100,
-                phase="completed",
                 output_path=str(output_path) if output_path.exists() else None,
             )
             return True, None

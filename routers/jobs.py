@@ -110,7 +110,8 @@ async def stream_job_events(job_id: str, request: Request):
                 })
                 yield f"data: {payload}\n\n"
 
-            if job.status in ("completed", "failed", "cancelled"):
+            from job_store import TERMINAL_JOB_STATUSES, SUCCESSFUL_JOB_STATUSES
+            if job.status in TERMINAL_JOB_STATUSES:
                 break
             await asyncio.sleep(0.15)
 
@@ -132,12 +133,13 @@ def delete_job(job_id: str) -> dict:
 @router.get("/api/v1/jobs/{job_id}/audio")
 def download_audio(job_id: str) -> FileResponse:
     from api_app import job_manager
+    from job_store import SUCCESSFUL_JOB_STATUSES
     if not job_manager:
         raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
     job = job_manager.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy job")
-    if job.status != "completed" or not job.output_path:
+    if job.status not in SUCCESSFUL_JOB_STATUSES or not job.output_path:
         raise HTTPException(status_code=409, detail=f"Job chưa hoàn tất: {job.status}")
     output_path = Path(job.output_path)
     if not output_path.exists():
@@ -174,13 +176,14 @@ def download_job_srt(job_id: str) -> FileResponse:
 @router.get("/api/v1/jobs/{job_id}/export.zip")
 def download_job_zip(job_id: str) -> FileResponse:
     from api_app import API_DATA_DIR, job_manager
+    from job_store import SUCCESSFUL_JOB_STATUSES
 
     if not job_manager:
         raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
     job = job_manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy job")
-    if job.status != "completed":
+    if job.status not in SUCCESSFUL_JOB_STATUSES:
         raise HTTPException(status_code=409, detail=f"Job chưa hoàn tất: {job.status}")
 
     zip_path = API_DATA_DIR / "outputs" / f"{job_id}.zip"

@@ -20,7 +20,8 @@ class RecordingExecutor:
 
     def __call__(self, job_type, params, device):
         self.calls.append({"job_type": job_type, "params": params, "device": device})
-        return torch.zeros(1, 240), 24000
+        t = torch.linspace(0, 0.5, 12000)
+        return (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0), 24000
 
 
 class CharacterApiTestCase(unittest.TestCase):

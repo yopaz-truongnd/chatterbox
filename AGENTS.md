@@ -12,3 +12,13 @@
    - Chạy kiểm thử tự động (`./run_chatterbox_api.sh --test` hoặc `pytest`).
    - Báo cáo rõ ràng danh sách các file đã thay đổi/tạo mới.
    - Chờ người dùng duyệt và ra lệnh tiếp theo.
+
+## Repository Navigation
+
+- Trước khi đọc implementation, mở `docs/agent-map.md` và chọn nhóm tính năng nhỏ nhất phù hợp với yêu cầu.
+- Đọc primary files trước; chỉ mở secondary files khi thay đổi thật sự vượt qua ranh giới trách nhiệm.
+- Tìm symbol và caller bằng `rg` trước khi đọc toàn bộ file lớn.
+- Không đọc lại file chưa thay đổi trong cùng một task, trừ khi cần kiểm tra một symbol hoặc caller cụ thể.
+- Không đọc Desktop/Gradio khi task chỉ liên quan API, MCP hoặc project workflow.
+- Không đọc implementation multilingual nếu thay đổi không liên quan language handling. English là ưu tiên hiện tại, nhưng phải giữ khả năng multilingual.
+- Business logic nằm trong `services/`; router, MCP và UI chỉ validate, chuyển đổi hoặc trình bày dữ liệu.
