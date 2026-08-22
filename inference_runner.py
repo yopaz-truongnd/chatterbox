@@ -74,6 +74,30 @@ def run_batch_inference(config: dict) -> None:
         pct = 10 + int((i / max(1, total_lines)) * 75)
         report_progress("generating_tokens", pct, f"Đang xử lý dòng {i+1}/{total_lines}...")
 
+        # Batch resumption: reuse chunk if already completed and valid
+        if config.get("resume", False) and line_out.exists() and line_out.stat().st_size > 44:
+            try:
+                info = ta.info(str(line_out))
+                line_dur = round(info.num_frames / info.sample_rate, 3)
+                successful_segments.append((line_out, line_pause, line_idx))
+                line_res = {
+                    "idx": line_idx,
+                    "status": "completed",
+                    "audio_path": str(line_out),
+                    "duration_seconds": line_dur,
+                    "inference_seconds": 0.0,
+                    "text": line_text,
+                    "pause_duration": line_pause,
+                }
+                if "start_seconds" in line_item:
+                    line_res["original_start_seconds"] = line_item["start_seconds"]
+                if "end_seconds" in line_item:
+                    line_res["original_end_seconds"] = line_item["end_seconds"]
+                lines_results.append(line_res)
+                continue
+            except Exception:
+                pass
+
         t0_line = time.time()
         try:
             wav = generate_with_model(model, model_type, line_item, device)

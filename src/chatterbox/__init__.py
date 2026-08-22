@@ -1,9 +1,4 @@
-try:
-    from importlib.metadata import version
-except ImportError:
-    from importlib_metadata import version  # For Python <3.8
-
-__version__ = version("chatterbox-tts")
+from .version import __version__, APP_NAME
 
 
 from .tts import ChatterboxTTS

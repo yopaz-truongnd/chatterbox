@@ -81,6 +81,29 @@ class BatchRunner:
                 line_idx = line_item.get("idx", i)
                 line_out = chunks_dir / f"line_{line_idx:04d}.wav"
                 line_pause = float(line_item.get("pause_duration", pause_duration))
+
+                # Batch resumption: reuse chunk if already completed and valid
+                if (params.get("resume", False) or job.params.get("resume", False)) and line_out.exists() and line_out.stat().st_size > 44:
+                    try:
+                        import torchaudio as ta
+                        info = ta.info(str(line_out))
+                        dur = round(info.num_frames / info.sample_rate, 3)
+                        successful_segments.append((line_out, line_pause, line_idx))
+                        lines_results.append({
+                            "idx": line_idx,
+                            "status": "completed",
+                            "audio_path": str(line_out),
+                            "duration_seconds": dur,
+                            "inference_seconds": 0.0,
+                            "text": line_item.get("text", ""),
+                            "pause_duration": line_pause,
+                            "original_start_seconds": line_item.get("start_seconds"),
+                            "original_end_seconds": line_item.get("end_seconds"),
+                        })
+                        continue
+                    except Exception:
+                        pass
+
                 t0_line = time.time()
                 try:
                     import services.job_manager

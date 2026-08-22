@@ -1,60 +1,42 @@
-"""
-Chatterbox TTS / VC Engine Core - Tách biệt logic ML ra khỏi GUI
-"""
+"""Chatterbox TTS / VC Desktop Engine Core - delegates to central application services."""
 
-import os
-import random
-import torch
-import torchaudio as ta
-import numpy as np
-import pygame
-import re
-import threading
-import time
-from utils.logger import logger, set_active_progress_callback
-from config.constants import MAX_CHUNK_CHARS
-from config.settings import settings_manager
-from utils.platform_tools import clear_accelerator_cache, select_device
-
-def set_seed(seed: int):
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-
-def split_text(text, max_len=None):
-    """Chia văn bản dài thành các câu nhỏ <= max_len ký tự để tránh VRAM OOM."""
-    if max_len is None:
-        max_len = settings_manager.get("max_chunk_chars", MAX_CHUNK_CHARS)
-    sentences = re.split(r"(?<=[.!?\n])\s+", text.strip())
-    chunks, current = [], ""
-    for s in sentences:
-        if not s:
-            continue
-        if len(current) + len(s) + 1 <= max_len:
-            current = f"{current} {s}".strip()
-        else:
-            if current:
-                chunks.append(current)
-            current = s
-    if current:
-        chunks.append(current)
-    return chunks if chunks else [text]
+from __future__ import annotations
 
 import gc
+import logging
+import os
+import random
+import threading
+import time
+from typing import Any
 
-def apply_hardware_limits():
-    """Áp dụng các cấu hình giới hạn tài nguyên CPU, VRAM và độ ưu tiên tiến trình để tránh treo máy"""
+import numpy as np
+import pygame
+import torch
+import torchaudio as ta
+
+from config.constants import MAX_CHUNK_CHARS
+from config.settings import settings_manager
+from services.model_registry import get_model_spec, resolve_model_id
+from services.model_runtime import model_runtime
+from services.synthesis import set_synthesis_seed, split_text, synthesize_chunk_tensor
+from utils.logger import logger, set_active_progress_callback
+from utils.platform_tools import clear_accelerator_cache, select_device
+
+
+def set_seed(seed: int) -> None:
+    set_synthesis_seed(seed, "cpu")
+
+
+def apply_hardware_limits() -> None:
+    """Apply CPU thread limits, GPU memory fraction, and process niceness."""
     try:
-        # 1. Giới hạn số luồng CPU
         threads = settings_manager.get("cpu_threads_limit", 4)
         if isinstance(threads, int) and threads > 0:
             torch.set_num_threads(threads)
             os.environ["OMP_NUM_THREADS"] = str(threads)
             os.environ["MKL_NUM_THREADS"] = str(threads)
 
-        # 2. Giới hạn % VRAM GPU tối đa
         if torch.cuda.is_available():
             vram_pct = settings_manager.get("max_vram_fraction", 80)
             if isinstance(vram_pct, (int, float)) and 10 <= vram_pct <= 100:
@@ -64,28 +46,32 @@ def apply_hardware_limits():
                 except Exception:
                     pass
 
-        # 3. Đổi mức ưu tiên tiến trình (Process Priority / Nice Level)
         prio = settings_manager.get("process_priority", "low")
         if prio == "low" and hasattr(os, "nice"):
             try:
-                # Tăng nice level để giảm độ ưu tiên CPU, ưu tiên tài nguyên cho OS/UI
                 os.nice(5)
             except Exception:
                 pass
     except Exception as e:
         logger.warning("Lỗi khi áp dụng giới hạn phần cứng: %s", e)
 
-def cleanup_memory():
-    """Dọn dẹp bộ nhớ RAM và GPU VRAM sau khi hoàn thành công việc"""
+
+def cleanup_memory() -> None:
+    """Free RAM and GPU cache after generation."""
     if settings_manager.get("force_gc_after_gen", True):
         gc.collect()
         clear_accelerator_cache()
 
-# Khởi tạo pygame mixer cho phát âm thanh
+
+# Initialize pygame mixer for audio playback
 try:
     pygame.mixer.init(frequency=24000)
 except Exception:
-    pygame.mixer.init()
+    try:
+        pygame.mixer.init()
+    except Exception:
+        pass
+
 
 def get_effective_default_model() -> str:
     """Resolve effective startup model for Desktop GUI based on settings and system hardware."""
@@ -105,81 +91,78 @@ def get_effective_default_model() -> str:
 
 
 class ChatterboxEngine:
-    def __init__(self, device="auto"):
-        # Lấy cấu hình device từ settings nếu có
+    """Desktop Application Engine coordinating ModelRuntime and Synthesis services."""
+
+    def __init__(self, device: str = "auto") -> None:
         saved_device = settings_manager.get("device", "auto")
         preference = saved_device if saved_device != "auto" else device
         self.device = select_device(preference)
 
-        # Áp dụng giới hạn phần cứng chống treo máy
         apply_hardware_limits()
+        model_runtime.set_device(self.device)
 
-        self.loaded_models = {}
-        self.current_model = None
-        self.active_model_name = None
-        self.current_playing_file = None
+        self.loaded_models: dict[str, Any] = {}
+        self.current_model: Any | None = None
+        self.active_model_name: str | None = None
+        self.current_playing_file: str | None = None
         self._lock = threading.RLock()
 
-    def get_device(self):
+    def get_device(self) -> str:
         return self.device
 
-    def load_model(self, model_name, extra_args=None):
-        """Tải mô hình Chatterbox và lưu vào cache."""
+    def load_model(self, model_name: str, extra_args: dict | None = None) -> Any:
+        """Load Chatterbox model and cache it."""
         with self._lock:
             if settings_manager.get("auto_unload_models", False) and self.active_model_name != model_name:
                 logger.info("Giải phóng các model cũ khỏi VRAM...")
+                model_runtime.unload_all()
                 self.loaded_models.clear()
-                clear_accelerator_cache()
 
-            if model_name in self.loaded_models:
-                self.current_model = self.loaded_models[model_name]
-                self.active_model_name = model_name
-                logger.info("Model '%s' đã có sẵn trong Cache.", model_name)
-                return self.current_model
-
-            logger.info("Đang tải model '%s' lên %s...", model_name, self.device.upper())
-            if model_name in ("Chatterbox Standard (500M)", "standard"):
-                from chatterbox.tts import ChatterboxTTS
-                m = ChatterboxTTS.from_pretrained(device=self.device)
-            elif model_name in ("Chatterbox Turbo (350M - Fast)", "turbo"):
-                from chatterbox.tts_turbo import ChatterboxTurboTTS
-                m = ChatterboxTurboTTS.from_pretrained(device=self.device, nano=False)
-            elif model_name in ("Chatterbox Nano (110M - Light/CPU)", "nano"):
-                from chatterbox.tts_turbo import ChatterboxTurboTTS
-                try:
-                    m = ChatterboxTurboTTS.from_pretrained(device=self.device, nano=True)
-                except Exception as exc:
-                    logger.warning("Không thể nạp Nano trên %s (%s), chuyển về CPU...", self.device, exc)
-                    m = ChatterboxTurboTTS.from_pretrained(device="cpu", nano=True)
-            elif model_name.startswith("Multilingual") or model_name == "multilingual":
-                from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-                ver = extra_args.get("ver", "v3") if extra_args else "v3"
-                m = ChatterboxMultilingualTTS.from_pretrained(device=self.device, t3_model=ver)
-            elif model_name in ("Voice Conversion (VC)", "voice-conversion"):
-                from chatterbox.vc import ChatterboxVC
-                m = ChatterboxVC.from_pretrained(device=self.device)
-            else:
-                raise ValueError(f"Unknown model name: {model_name}")
-
-            self.loaded_models[model_name] = m
-            self.current_model = m
+            model, sr = model_runtime.load_model(
+                model_name,
+                device=self.device,
+                extra_args=extra_args,
+                keep_in_cache=True,
+            )
+            self.loaded_models[model_name] = model
+            self.current_model = model
             self.active_model_name = model_name
-            logger.info("Tải thành công model '%s'!", model_name)
-            return m
+            return model
 
-    def generate_tts(self, text, ref_path, model_name, exag, cfg, temp, seed, is_random_seed, out_path, progress_callback=None):
-        """Sinh giọng nói Tiếng Anh (Standard / Turbo / Nano)."""
+    def generate_tts(
+        self,
+        text: str,
+        ref_path: str | None,
+        model_name: str,
+        exag: float,
+        cfg: float,
+        temp: float,
+        seed: int,
+        is_random_seed: bool,
+        out_path: str,
+        progress_callback: Any = None,
+    ) -> tuple[str, int]:
+        """Synthesize English TTS with Standard, Turbo, or Nano models."""
         if is_random_seed:
             seed = random.randint(1, 999999)
         set_seed(seed)
 
         logger.info("Bắt đầu sinh TTS model '%s' (Seed: %d)", model_name, seed)
         model = self.load_model(model_name)
+        canonical_id = resolve_model_id(model_name)
 
         chunks = split_text(text)
         logger.info("Đã chia văn bản thành %d đoạn", len(chunks))
         wavs = []
         gen_start_time = time.time()
+
+        params = {
+            "exaggeration": exag,
+            "cfg_weight": cfg,
+            "temperature": temp,
+            "seed": seed,
+            "audio_prompt_path": ref_path,
+        }
 
         for i, chunk in enumerate(chunks, 1):
             def on_sampling_step(step_pct):
@@ -194,22 +177,10 @@ class ChatterboxEngine:
                     progress_callback(i, len(chunks), overall_pct, step_pct, eta)
 
             set_active_progress_callback(on_sampling_step)
-
             logger.info("Đang xử lý đoạn %d/%d: '%s...'", i, len(chunks), chunk[:40])
-            kwargs = {}
 
             try:
-                if "Turbo" in model_name or "Nano" in model_name:
-                    kwargs["temperature"] = temp
-                    if ref_path:
-                        kwargs["audio_prompt_path"] = ref_path
-                    wav = model.generate(chunk, **kwargs)
-                else:
-                    kwargs["exaggeration"] = exag
-                    kwargs["cfg_weight"] = cfg
-                    if ref_path:
-                        kwargs["audio_prompt_path"] = ref_path
-                    wav = model.generate(chunk, **kwargs)
+                wav = synthesize_chunk_tensor(model, canonical_id, chunk, params, self.device)
             finally:
                 set_active_progress_callback(None)
 
@@ -221,16 +192,26 @@ class ChatterboxEngine:
         full_wav = torch.cat(wavs, dim=-1) if len(wavs) > 1 else wavs[0]
         sr = getattr(model, "sr", 24000)
         ta.save(out_path, full_wav.cpu(), sr)
-        
+
         cleanup_memory()
         logger.info("Sinh thành công! File lưu tại: %s", out_path)
         return out_path, seed
 
-    def generate_multilingual(self, text, lang_code, ref_path, exag, cfg, model_ver, out_path, progress_callback=None):
-        """Sinh giọng nói đa ngôn ngữ (V3 / V2)."""
+    def generate_multilingual(
+        self,
+        text: str,
+        lang_code: str,
+        ref_path: str | None,
+        exag: float,
+        cfg: float,
+        model_ver: str,
+        out_path: str,
+        progress_callback: Any = None,
+    ) -> str:
+        """Synthesize multilingual speech."""
         m_name = f"Multilingual ({model_ver})"
         model = self.load_model(m_name, extra_args={"ver": model_ver})
-        
+
         logger.info("Bắt đầu sinh đa ngôn ngữ [Lang: %s, Ver: %s]", lang_code, model_ver)
         gen_start_time = time.time()
 
@@ -246,32 +227,35 @@ class ChatterboxEngine:
 
         set_active_progress_callback(on_sampling_step)
 
-        try:
-            kwargs = {
-                "language_id": lang_code,
-                "exaggeration": exag,
-                "cfg_weight": cfg
-            }
-            if ref_path:
-                kwargs["audio_prompt_path"] = ref_path
+        params = {
+            "language_id": lang_code,
+            "exaggeration": exag,
+            "cfg_weight": cfg,
+            "audio_prompt_path": ref_path,
+        }
 
-            wav = model.generate(text, **kwargs)
+        try:
+            wav = synthesize_chunk_tensor(model, "multilingual", text, params, self.device)
         finally:
             set_active_progress_callback(None)
 
         if progress_callback:
             progress_callback(1, 1, 100, 100, 0)
 
-        ta.save(out_path, wav.cpu(), model.sr)
+        ta.save(out_path, wav.cpu(), getattr(model, "sr", 24000))
         cleanup_memory()
         logger.info("Sinh đa ngôn ngữ thành công: %s", out_path)
         return out_path
 
-    def convert_voice(self, src_path, tgt_path, out_path, progress_callback=None):
-        """Chuyển đổi giọng nói từ audio sang audio (VC)."""
-        m_name = "Voice Conversion (VC)"
-        model = self.load_model(m_name)
-        
+    def convert_voice(
+        self,
+        src_path: str,
+        tgt_path: str | None,
+        out_path: str,
+        progress_callback: Any = None,
+    ) -> str:
+        """Voice conversion from source audio to target audio voice."""
+        model = self.load_model("voice-conversion")
         logger.info("Bắt đầu thực hiện chuyển đổi giọng nói (VC)")
         gen_start_time = time.time()
 
@@ -287,21 +271,26 @@ class ChatterboxEngine:
 
         set_active_progress_callback(on_sampling_step)
 
+        params = {
+            "source_audio_path": src_path,
+            "target_voice_path": tgt_path,
+        }
+
         try:
-            wav = model.generate(src_path, target_voice_path=tgt_path)
+            wav = synthesize_chunk_tensor(model, "voice-conversion", src_path, params, self.device)
         finally:
             set_active_progress_callback(None)
 
         if progress_callback:
             progress_callback(1, 1, 100, 100, 0)
 
-        ta.save(out_path, wav.cpu(), model.sr)
+        ta.save(out_path, wav.cpu(), getattr(model, "sr", 24000))
         cleanup_memory()
         logger.info("Chuyển đổi giọng hoàn tất: %s", out_path)
         return out_path
 
-    def play_audio(self, file_path):
-        """Phát file âm thanh sử dụng pygame mixer."""
+    def play_audio(self, file_path: str) -> None:
+        """Play audio file with pygame mixer."""
         try:
             logger.info("Phát file âm thanh: %s", file_path)
             pygame.mixer.music.stop()
@@ -312,7 +301,7 @@ class ChatterboxEngine:
             logger.error("Lỗi phát nhạc: %s", e, exc_info=True)
             raise
 
-    def stop_audio(self):
-        """Dừng nhạc đang phát."""
+    def stop_audio(self) -> None:
+        """Stop currently playing audio."""
         logger.info("Dừng âm thanh.")
         pygame.mixer.music.stop()

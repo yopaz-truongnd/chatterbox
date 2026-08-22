@@ -37,14 +37,27 @@ fi
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
 
-echo "======================================================================="
-echo "       CHATTERBOX TTS STUDIO — WEB GUI & REST API SERVER              "
-echo "======================================================================="
-echo "  🎨 Web GUI Studio:     http://${HOST}:${PORT}/"
-echo "  🔌 REST API v1 Base:   http://${HOST}:${PORT}/api/v1/"
-echo "  📖 API Swagger Docs:   http://${HOST}:${PORT}/docs"
-echo "  📑 ReDoc Manual:       http://${HOST}:${PORT}/redoc"
-echo "======================================================================="
-echo
+if [ "$1" = "--kill" ] || [ "$1" = "kill" ] || [ "$1" = "--stop" ]; then
+    OCCUPIED_PID=$(lsof -ti :"$PORT" 2>/dev/null || true)
+    if [ -n "$OCCUPIED_PID" ]; then
+        echo "🛑 Đang dừng tiến trình cũ (PID: $OCCUPIED_PID) trên cổng $PORT..."
+        kill -9 $OCCUPIED_PID 2>/dev/null || true
+        sleep 0.5
+        echo "✅ Đã giải phóng cổng $PORT thành công!"
+    else
+        echo "ℹ️  Cổng $PORT hiện đang không có tiến trình nào chiếm dụng."
+    fi
+    exit 0
+fi
+
+# Kiểm tra nếu cổng đang bị chiếm dụng
+OCCUPIED_PID=$(lsof -ti :"$PORT" 2>/dev/null || true)
+if [ -n "$OCCUPIED_PID" ]; then
+    echo "⚠️  CẢNH BÁO: Cổng $PORT đang bị chiếm bởi tiến trình PID: $OCCUPIED_PID"
+    echo "💡 Bạn có thể giải phóng cổng và chạy lại ngay bằng lệnh:"
+    echo "    ./run_chatterbox_api.sh --kill && ./run_chatterbox_api.sh"
+    echo "    (hoặc chạy trên cổng khác: PORT=8001 ./run_chatterbox_api.sh)"
+    echo
+fi
 
 exec "$PYTHON_BIN" -m uvicorn api_app:app --host "$HOST" --port "$PORT"

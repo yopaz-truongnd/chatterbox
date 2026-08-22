@@ -14,35 +14,42 @@ Dự án cung cấp các phương thức chạy linh hoạt:
 Local API và Web Studio được tích hợp chung trên nền FastAPI, cung cấp giao diện Material Design 3 trực quan kèm đầy đủ các RESTful API endpoints tại `/api/v1/` và Swagger UI tại `/docs`.
 
 ## 2. Cấu trúc thư mục
-
+ 
 ```text
 chatterbox/
-├── api_app.py                 # FastAPI server, queue, audio worker và REST endpoints
-├── character_api.py           # Character profiles router, voice parameters & audio upload
-├── run_material_dashboard.py  # Standalone launcher cho Web Dashboard
-├── main.py                    # Desktop GUI Tkinter entrypoint
-├── webui/
-│   └── material_dashboard.html# Giao diện Material Design 3 Web Studio hoàn chỉnh
-├── core/
-│   └── chatterbox_engine.py   # Engine dùng bởi Desktop GUI
-├── ui/
-│   ├── main_window.py         # Cửa sổ chính Tkinter
-│   ├── tabs/                  # TTS, multilingual, VC, batch, character, history, settings
-│   └── components/            # Audio player và waveform
-├── config/
-│   ├── constants.py           # Theme, tags, preset combos và danh sách ngôn ngữ
-│   ├── settings.py            # Default settings và SettingsManager
-│   └── settings.json          # Cấu hình local, không commit
-├── src/chatterbox/
+├── src/chatterbox/            # Core model architectures & single source of truth version.py
+│   ├── version.py             # __version__ = "1.4.0", APP_NAME
 │   ├── tts.py                 # Standard 500M
 │   ├── tts_turbo.py           # Turbo 350M và Nano 110M
 │   ├── mtl_tts.py             # Multilingual V3/V2
 │   └── vc.py                  # Voice Conversion
-├── models/                    # Hugging Face Hub cache của project
-├── tmp/                       # Thư mục lưu audio tạm của project (thay vì /tmp hệ thống)
-├── utils/                     # Logging, audio, threading, text và file helpers
-├── run_chatterbox_gui.sh      # Launcher Desktop GUI
-└── run_chatterbox_api.sh      # Launcher Web Studio & API
+├── services/                  # Application Services dùng chung cho cả Web, API & Desktop
+│   ├── exceptions.py          # Domain exceptions (InferenceError, ModelNotFoundError,...)
+│   ├── model_registry.py      # Nguồn MODEL_REGISTRY duy nhất (specs, sizes, capabilities, cache)
+│   ├── model_runtime.py       # Quản lý vòng đời nạp/cache/giải phóng model trong RAM/VRAM
+│   ├── synthesis.py           # Pipeline sinh audio chuẩn hóa tham số, chia text, set seed
+│   ├── script_parser.py       # Bộ phân tích kịch bản độc lập (CSV, Markdown, SRT/VTT, Delimiter, Regex)
+│   ├── batch_export.py        # Đóng gói và xuất phụ đề SRT/VTT, ZIP atomic archive, timeline merge
+│   ├── audio.py               # Xử lý âm thanh, loudness normalization, ducking, conversion
+│   ├── batch_runner.py        # Điều phối batch & long-text kèm cơ chế Resume sau restart
+│   ├── job_manager.py         # Quản lý hàng đợi job bất đồng bộ, telemetry, SSE stream
+│   └── critic.py              # Đánh giá ngữ điệu & speech feedback
+├── routers/                   # HTTP Boundary (FastAPI Routers)
+│   ├── system.py              # Health, diagnostics, models preflight, settings & benchmarks
+│   ├── tts.py                 # TTS endpoints (single, batch, long-text, multilingual, VC)
+│   ├── jobs.py                # Job query, cancellation, resumption, SSE events, audio/zip download
+│   └── critic.py              # Speech evaluation API
+├── character_api.py           # Voice Character store + Zip export/import portability
+├── ui/                        # Tkinter Desktop Boundary (Widgets & Event handlers)
+│   ├── main_window.py
+│   ├── tabs/                  # batch_tab, tts_tab, character_tab, history_tab, mtl_tab, vc_tab
+│   └── components/
+├── core/
+│   └── chatterbox_engine.py   # Desktop engine ủy quyền trực tiếp sang ModelRuntime & Synthesis
+├── webui/                     # Material Design 3 Web GUI
+├── tests/                     # Test suite (86+ unit & real model smoke tests)
+├── api_app.py                 # FastAPI server entrypoint
+└── main.py                    # Desktop GUI entrypoint
 ```
 
 ## 3. Model và mục đích sử dụng
@@ -92,11 +99,11 @@ Cấu hình mặc định nằm trong `config/settings.py`; giá trị local đ�
 | `export_dir` | `~/Downloads` | Thư mục xuất WAV |
 | `model_cache_dir` | thư mục `models` cấu hình | Cache model cho Desktop |
 | `language` | `🇻🇳 Tiếng Việt` | Ngôn ngữ giao diện |
-| `device` | `auto` | Tự chọn CUDA hoặc CPU |
-| `default_startup_model` | Standard 500M | Model mặc định Desktop |
+| `device` | `auto` | Tự chọn CUDA, MPS hoặc CPU |
+| `default_model` | `auto` (hoặc nano/turbo/standard) | Model mặc định khi khởi động |
 | `max_chunk_chars` | `4000` | Giới hạn chia đoạn Desktop |
 | `auto_unload_models` | `false` | Desktop tự clear model cũ khi đổi model |
-| `cpu_threads_limit` | tối đa 4 | Số CPU thread Desktop |
+| `cpu_threads` | tối đa 4 | Số CPU thread Desktop/API |
 | `process_priority` | `low` | Giảm ưu tiên process Desktop |
 | `max_vram_fraction` | `80` | Phần trăm VRAM tối đa nếu có CUDA |
 | `force_gc_after_gen` | `true` | Thu gom bộ nhớ sau sinh audio |
@@ -182,19 +189,26 @@ Trạng thái job:
 ```text
 queued → processing → completed
                     ↘ failed
+                    ↘ cancelled
 ```
 
-Job chỉ tồn tại trong RAM của process. Restart API sẽ mất danh sách job, nhưng các WAV cũ trong `CHATTERBOX_API_DATA_DIR/outputs` không tự động bị xóa.
+Toàn bộ thông tin trạng thái job, metadata, tiến trình và benchmark được lưu bền vững vào SQLite (`jobs.db`) qua `JobStore`. Khi server khởi động lại:
+- Các job bị treo ở trạng thái `queued` hoặc `processing` được tự động chuyển thành `failed` kèm thông báo lý do rõ ràng.
+- Các job batch hoặc long-text bị gián đoạn có thể tiếp tục xử lý từ dòng còn thiếu qua `POST /api/v1/jobs/{job_id}/resume` mà không cần tổng hợp lại các dòng đã hoàn thành.
+- Tiến trình sinh audio có thể được theo dõi trực tiếp theo thời gian thực qua kênh Server-Sent Events (SSE) tại `/api/v1/jobs/{job_id}/events`.
+- Dữ liệu job cũ và file tạm được tự động dọn dẹp theo thời gian lưu trữ TTL (`retention_days`).
 
 ## 8. Danh sách API
 
 Swagger UI: `http://127.0.0.1:8000/docs`.
 
-### System và text
+### System, Diagnostics & Benchmarks
 
 | Method | Endpoint | Mô tả |
 | --- | --- | --- |
-| `GET` | `/health` | Device, CPU threads, queue và model đang load |
+| `GET` | `/health` hoặc `/api/v1/health` | Device, CPU threads, queue, loaded model & cache key |
+| `GET` | `/api/v1/diagnostics` | Báo cáo chi tiết phần cứng, GPU, RAM, disk cache và CUDA toolkit |
+| `GET` | `/api/v1/benchmarks` | Lịch sử hiệu năng tổng hợp âm thanh (RTF, tốc độ xử lý, thời gian) |
 | `POST` | `/api/v1/text/split` | Chia text theo ranh giới hợp lý, bảo toàn nội dung tuyệt đối |
 
 ### Sinh, chuyển đổi và ghép nối audio
@@ -205,42 +219,54 @@ Swagger UI: `http://127.0.0.1:8000/docs`.
 | `POST` | `/api/v1/tts/turbo` | Turbo hoặc Nano qua field `model` |
 | `POST` | `/api/v1/tts/standard` | Standard 500M |
 | `POST` | `/api/v1/tts/multilingual` | Multilingual V3/V2 |
+| `POST` | `/api/v1/tts/batch` | Sinh audio kịch bản hàng loạt, xuất file lẻ, gộp WAV và SRT/VTT |
+| `POST` | `/api/v1/tts/long-text` | Sinh văn bản dài với cơ chế chia đoạn thông minh và ghép timeline |
 | `POST` | `/api/v1/voice-conversion` | Voice Conversion (Audio-to-audio) |
 | `POST` | `/api/v1/audio/merge` | Ghép nhiều job audio thành 1 file kèm khoảng lặng và BGM |
 | `POST` | `/api/v1/batch/merge` | Alias cho audio merge từ Batch Studio |
 
 Các endpoint sinh audio trả HTTP `202 Accepted` cùng `job.id`. Endpoint merge trả `200 OK` cùng `audio_url` file ghép.
 
-### Character API (Quản lý Nhân vật & Giọng mẫu)
+### Character API (Quản lý Nhân vật, Giọng mẫu & Portability)
 
 | Method | Endpoint | Mô tả |
 | --- | --- | --- |
 | `GET` | `/api/v1/characters` | Lấy danh sách tất cả các nhân vật |
-| `POST` | `/api/v1/characters` | Tạo nhân vật mới (hỗ trợ cả JSON và multipart/form-data kèm file mẫu) |
+| `POST` | `/api/v1/characters` | Tạo nhân vật mới (JSON hoặc multipart kèm file mẫu) |
 | `GET` | `/api/v1/characters/{id}` | Xem chi tiết hồ sơ nhân vật |
 | `PATCH` | `/api/v1/characters/{id}` | Cập nhật thông số hoặc đặt nhân vật mặc định (`is_default`) |
 | `DELETE` | `/api/v1/characters/{id}` | Xóa nhân vật và file âm thanh mẫu liên quan |
 | `GET` | `/api/v1/characters/{id}/reference-audio` | Tải/phát file âm thanh mẫu của nhân vật |
+| `GET` | `/api/v1/characters/{id}/export` | Xuất nhân vật & audio mẫu ra gói ZIP di động |
+| `POST` | `/api/v1/characters/import` | Nhập nhân vật từ gói ZIP di động |
 
-### Model
+### Model Management & Preflight Integrity
 
 | Method | Endpoint | Mô tả |
 | --- | --- | --- |
-| `GET` | `/api/v1/languages` | Ngôn ngữ Multilingual hỗ trợ |
-| `GET` | `/api/v1/models` | Model và trạng thái loaded |
-| `POST` | `/api/v1/models/{name}/load` | Preload model; clear model khác trước |
-| `DELETE` | `/api/v1/models/{name}` | Unload model khỏi RAM |
+| `GET` | `/api/v1/languages` | Danh sách ngôn ngữ Multilingual hỗ trợ |
+| `GET` | `/api/v1/models` | Danh sách model, kích thước, tính năng và trạng thái nạp |
+| `GET` | `/api/v1/models/preflight` | Kiểm tra tính toàn vẹn checkpoint của toàn bộ models trước khi chạy |
+| `GET` | `/api/v1/models/{name}/preflight` | Kiểm tra tính toàn vẹn checkpoint của 1 model cụ thể |
+| `POST` | `/api/v1/models/{name}/load` | Preload model vào RAM/VRAM với cache key phân biệt thiết bị |
+| `DELETE` | `/api/v1/models/{name}` | Giải phóng model khỏi RAM/VRAM |
+| `DELETE` | `/api/v1/models/{name}/disk` | Xóa hoàn toàn checkpoint của model khỏi ổ đĩa để giải phóng dung lượng |
 
 Tên model hợp lệ: `standard`, `turbo`, `nano`, `multilingual`, `voice-conversion`.
 
-### Job
+### Job Lifecycle, SSE & Resumption
 
 | Method | Endpoint | Mô tả |
 | --- | --- | --- |
 | `GET` | `/api/v1/jobs` | Danh sách job; lọc bằng `?status=completed` |
-| `GET` | `/api/v1/jobs/{job_id}` | Chi tiết trạng thái |
+| `GET` | `/api/v1/jobs/{job_id}` | Chi tiết trạng thái và thông số benchmark |
+| `GET` | `/api/v1/jobs/{job_id}/events` | Server-Sent Events (SSE) stream tiến độ sinh thời gian thực |
+| `POST` | `/api/v1/jobs/{job_id}/resume` | Tiếp tục sinh batch/long-text bị gián đoạn từ dòng còn thiếu |
+| `POST` | `/api/v1/jobs/{job_id}/cancel` | Hủy job đang trong hàng đợi hoặc đang xử lý |
 | `GET` | `/api/v1/jobs/{job_id}/audio` | Tải WAV khi completed |
-| `DELETE` | `/api/v1/jobs/{job_id}` | Xóa job terminal và WAV |
+| `GET` | `/api/v1/jobs/{job_id}/srt` | Tải phụ đề SRT |
+| `GET` | `/api/v1/jobs/{job_id}/zip` | Tải gói ZIP xuất khẩu (chứa WAV tổng, WAV lẻ, SRT, manifest JSON) |
+| `DELETE` | `/api/v1/jobs/{job_id}` | Xóa job và toàn bộ file audio kết quả |
 
 ### Cài đặt và Hệ thống
 
@@ -248,7 +274,7 @@ Tên model hợp lệ: `standard`, `turbo`, `nano`, `multilingual`, `voice-conve
 | --- | --- | --- |
 | `GET` | `/api/v1/settings` | Đọc cấu hình settings hiện tại |
 | `POST` | `/api/v1/settings` | Cập nhật cấu hình settings |
-| `POST` | `/api/v1/system/clean-tmp` | Dọn dẹp toàn bộ file tạm trong thư mục `tmp/` của dự án |
+| `POST` | `/api/v1/system/clean-tmp` | Dọn dẹp toàn bộ file tạm trong thư mục `tmp/` của dự án (bảo vệ CSDL) |
 
 Không thể xóa job đang `queued` hoặc `processing`.
 

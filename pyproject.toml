@@ -1,6 +1,6 @@
 [project]
 name = "chatterbox-tts"
-version = "0.1.7"
+version = "1.4.0"
 description = "Chatterbox: Open Source TTS and Voice Conversion by Resemble AI"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,7 +20,7 @@ dependencies = [
     "torchaudio>=2.9.0; python_version >= '3.14'",
     "transformers==5.2.0",
     "diffusers==0.29.0",
-    "resemble-perth @ git+https://github.com/resemble-ai/Perth.git@master",
+    "resemble-perth @ git+https://github.com/resemble-ai/Perth.git@ce86c49d029f42272c1902eccb675556b9ed2330",
     "conformer==0.3.2",
     "safetensors==0.5.3",
     "spacy-pkuseg",

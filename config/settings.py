@@ -47,28 +47,29 @@ DEFAULT_SETTINGS = {
     "max_batch_workers": 2,
 }
 
-# Bidirectional Model Mapping for Desktop UI
-MODEL_TO_LABEL = {
-    "auto": "✨ Tự động theo cấu hình máy (Auto)",
+# Bidirectional Model Mapping for Desktop UI (Derived directly from MODEL_REGISTRY)
+from services.model_registry import MODEL_REGISTRY, resolve_model_id
+
+_REGISTRY_LABELS = {
     "nano": "⚡ Chatterbox Nano (110M - Light/CPU)",
     "turbo": "🚀 Chatterbox Turbo (350M - Fast)",
     "standard": "🎙️ Chatterbox Standard (500M)",
     "multilingual": "🌐 Multilingual V3 (500M)",
 }
 
+MODEL_TO_LABEL = {
+    "auto": "✨ Tự động theo cấu hình máy (Auto)",
+    **{k: _REGISTRY_LABELS.get(k, spec.display_name) for k, spec in MODEL_REGISTRY.items() if k != "voice-conversion"},
+}
+
 LABEL_TO_MODEL = {label: model for model, label in MODEL_TO_LABEL.items()}
-LABEL_TO_MODEL.update({
-    "Chatterbox Standard (500M)": "standard",
-    "Chatterbox Turbo (350M - Fast)": "turbo",
-    "Chatterbox Nano (110M - Light/CPU)": "nano",
-    "Multilingual V3 (500M)": "multilingual",
-    "Multilingual TTS": "multilingual",
-    "standard": "standard",
-    "turbo": "turbo",
-    "nano": "nano",
-    "multilingual": "multilingual",
-    "auto": "auto",
-})
+for model_key, spec in MODEL_REGISTRY.items():
+    LABEL_TO_MODEL[model_key] = model_key
+    LABEL_TO_MODEL[spec.name] = model_key
+    LABEL_TO_MODEL[spec.display_name] = model_key
+    for alias in spec.aliases:
+        LABEL_TO_MODEL[alias] = model_key
+LABEL_TO_MODEL["auto"] = "auto"
 
 LEGACY_KEY_ALIASES = {
     "device_preference": "device",

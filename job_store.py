@@ -153,6 +153,20 @@ class JobStore:
                     """)
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)")
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS benchmarks (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            job_id TEXT NOT NULL,
+                            model TEXT NOT NULL,
+                            device TEXT NOT NULL,
+                            total_seconds REAL NOT NULL,
+                            audio_duration_seconds REAL NOT NULL,
+                            realtime_factor REAL NOT NULL,
+                            faster_than_realtime REAL NOT NULL,
+                            created_at TEXT NOT NULL
+                        )
+                    """)
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_benchmarks_model ON benchmarks(model)")
             finally:
                 conn.close()
 
@@ -265,6 +279,63 @@ class JobStore:
                 conn.close()
         return deleted_count, deleted_bytes
 
+    def record_benchmark(
+        self,
+        job_id: str,
+        model: str,
+        device: str,
+        total_seconds: float,
+        audio_duration_seconds: float,
+        realtime_factor: float,
+        faster_than_realtime: float,
+    ) -> None:
+        """Record inference benchmark performance metrics for future comparison."""
+        from datetime import UTC, datetime
+        now_ts = datetime.now(UTC).isoformat()
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                with conn:
+                    conn.execute(
+                        """
+                        INSERT INTO benchmarks (
+                            job_id, model, device, total_seconds, audio_duration_seconds,
+                            realtime_factor, faster_than_realtime, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            job_id,
+                            model,
+                            device,
+                            float(total_seconds),
+                            float(audio_duration_seconds),
+                            float(realtime_factor),
+                            float(faster_than_realtime),
+                            now_ts,
+                        ),
+                    )
+            finally:
+                conn.close()
+
+    def list_benchmarks(self, model: str | None = None, limit: int = 50) -> list[dict]:
+        """List benchmark history optionally filtered by model."""
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                if model:
+                    rows = conn.execute(
+                        "SELECT * FROM benchmarks WHERE model = ? ORDER BY created_at DESC LIMIT ?",
+                        (model, limit),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM benchmarks ORDER BY created_at DESC LIMIT ?",
+                        (limit,),
+                    ).fetchall()
+                return [dict(r) for r in rows]
+            finally:
+                conn.close()
+
     def _row_to_job(self, row: sqlite3.Row) -> AudioJob:
         return AudioJob(
             id=row["id"],
@@ -282,3 +353,4 @@ class JobStore:
             duration_seconds=row["duration_seconds"],
             benchmark=json.loads(row["benchmark_json"]) if row["benchmark_json"] else None,
         )
+

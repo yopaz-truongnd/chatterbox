@@ -275,6 +275,22 @@ class JobManager:
                     completed_at=now_iso(),
                     output_path=str(output_path),
                 )
+                final_job = self.get_job(job_id)
+                if final_job and final_job.benchmark:
+                    bm = final_job.benchmark
+                    if "realtime_factor" in bm and "total_seconds" in bm:
+                        try:
+                            self.store.record_benchmark(
+                                job_id=job_id,
+                                model=bm.get("model_type", final_job.type),
+                                device=bm.get("device", self.device),
+                                total_seconds=bm.get("total_seconds", 0.0),
+                                audio_duration_seconds=bm.get("audio_duration_seconds", final_job.duration_seconds or 0.0),
+                                realtime_factor=bm.get("realtime_factor", 0.0),
+                                faster_than_realtime=bm.get("faster_than_realtime", 0.0),
+                            )
+                        except Exception:
+                            pass
             else:
                 self._update_job_status(
                     job_id,
