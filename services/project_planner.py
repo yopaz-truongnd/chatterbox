@@ -361,7 +361,10 @@ def prepare_project(
         else "awaiting_answers"
     )
 
+    from services.narration_planner import scan_pronunciation_candidates
+
     questions = generate_question_batch(missing_req, missing_rec)
+    pron_candidates = scan_pronunciation_candidates(cleaned_topic)
 
     project_data = {
         "id": proj_id,
@@ -370,6 +373,8 @@ def prepare_project(
         "requirements": merged_reqs,
         "missing_required": missing_req,
         "missing_recommended": missing_rec,
+        "pronunciation_dict": {},
+        "pronunciation_candidates": pron_candidates,
         "outline": [],
         "script": {},
         "voice_plan": {
@@ -540,8 +545,11 @@ def confirm_requirements(project_id: str, confirmed: bool = True) -> dict[str, A
         topic=project.get("topic", ""),
         requirements=project["requirements"],
     )
+    from services.narration_planner import scan_pronunciation_candidates
+
     project["outline"] = outline
     project["script"] = script_obj
+    project["pronunciation_candidates"] = scan_pronunciation_candidates(script_obj.get("full_text", ""))
     project["status"] = "awaiting_script_confirmation"
 
     _save_project_file(project)
@@ -559,6 +567,7 @@ def confirm_requirements(project_id: str, confirmed: bool = True) -> dict[str, A
         "message": "✅ Requirements confirmed! English outline and script have been drafted for your review (Gate 2).",
         "outline": outline,
         "script": script_obj,
+        "pronunciation_candidates": project["pronunciation_candidates"],
         "summary": format_project_summary(project),
     }
 
@@ -586,9 +595,11 @@ def generate_script(
         custom_prompt=custom_prompt,
         script_text=script_text,
     )
+    from services.narration_planner import scan_pronunciation_candidates
 
     project["outline"] = outline
     project["script"] = script_obj
+    project["pronunciation_candidates"] = scan_pronunciation_candidates(script_obj.get("full_text", ""))
     project["status"] = "awaiting_script_confirmation"
     _save_project_file(project)
 
@@ -604,6 +615,7 @@ def generate_script(
         "status": "awaiting_script_confirmation",
         "outline": outline,
         "script": script_obj,
+        "pronunciation_candidates": project["pronunciation_candidates"],
         "summary": format_project_summary(project),
     }
 
@@ -612,6 +624,7 @@ def confirm_script(
     project_id: str,
     confirmed: bool = True,
     script_text: str | None = None,
+    pronunciation_dict: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Gate 2 Confirmation: Strictly review and approve the English script. Rejects unconfirmed requirements."""
     project = _load_project_file(project_id)
@@ -646,10 +659,24 @@ def confirm_script(
         project["script"]["word_count"] = words
         project["script"]["estimated_duration_seconds"] = round((words / 135) * 60, 1)
 
+    if pronunciation_dict:
+        curr_dict = project.get("pronunciation_dict", {})
+        curr_dict.update(pronunciation_dict)
+        project["pronunciation_dict"] = curr_dict
+
     full_text = project.get("script", {}).get("full_text", "").strip()
     if not full_text:
         raise ValidationError("Cannot approve project without a valid script. Please author or generate a script first.")
 
+    # Segment and pre-compile narration plan
+    segments = segment_script_text(
+        full_text,
+        target_pace=project.get("requirements", {}).get("pace", "medium"),
+        default_model=project.get("voice_plan", {}).get("default_model", "turbo"),
+        format_type=project.get("requirements", {}).get("content_format", "podcast"),
+        pronunciation_dict=project.get("pronunciation_dict", {}),
+    )
+    project["segments"] = segments
     project["status"] = "approved"
     _save_project_file(project)
 
@@ -657,14 +684,44 @@ def confirm_script(
         event_type="approved",
         project_id=project_id,
         status="approved",
-        data={"word_count": project["script"].get("word_count", 0)},
+        data={"word_count": project["script"].get("word_count", 0), "segment_count": len(segments)},
     )
 
     return {
         "project_id": project_id,
         "status": "approved",
         "message": "✅ English script and scene outline approved! Ready for high-level rendering orchestration.",
+        "segment_count": len(segments),
+        "segments": segments,
         "summary": format_project_summary(project),
+    }
+
+
+def update_project_pronunciation(
+    project_id: str,
+    pronunciation_dict: dict[str, str],
+) -> dict[str, Any]:
+    """Update project-level pronunciation dictionary (e.g., {'NASA': 'N.A.S.A.'})."""
+    project = _load_project_file(project_id)
+    curr_dict = project.get("pronunciation_dict", {})
+    curr_dict.update(pronunciation_dict)
+    project["pronunciation_dict"] = curr_dict
+
+    # If segments exist, re-compile narration plan with updated dictionary
+    if project.get("segments") and project.get("script", {}).get("full_text"):
+        project["segments"] = segment_script_text(
+            project["script"]["full_text"],
+            target_pace=project.get("requirements", {}).get("pace", "medium"),
+            default_model=project.get("voice_plan", {}).get("default_model", "turbo"),
+            format_type=project.get("requirements", {}).get("content_format", "podcast"),
+            pronunciation_dict=project["pronunciation_dict"],
+        )
+
+    _save_project_file(project)
+    return {
+        "project_id": project_id,
+        "pronunciation_dict": project["pronunciation_dict"],
+        "status": project.get("status"),
     }
 
 
@@ -748,9 +805,16 @@ def render_project(
         quality_preset=selected_preset,
     )
 
-    # Step 1: Semantic Segmentation
+    # Step 1: Semantic Segmentation with Narration Planning
     project["status"] = "segmenting"
-    segments = segment_script_text(final_script, target_pace="medium", default_model=resolved_model)
+    pron_dict = project.get("pronunciation_dict", {})
+    segments = segment_script_text(
+        final_script,
+        target_pace=reqs.get("pace", "medium"),
+        default_model=resolved_model,
+        format_type=reqs.get("content_format", "podcast"),
+        pronunciation_dict=pron_dict,
+    )
     project["segments"] = segments
 
     # Step 2: Build Batch Lines for BatchRunner
@@ -765,6 +829,7 @@ def render_project(
             "model": resolved_model,
             "character_id": resolved_char_id,
             "audio_prompt_path": resolved_audio_path,
+            "narration_plan": seg.get("narration_plan", {}),
             **resolved_voice,
         }
         batch_lines.append(line_item)

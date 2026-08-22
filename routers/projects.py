@@ -40,6 +40,11 @@ class GenerateScriptRequest(BaseModel):
 class ConfirmScriptRequest(BaseModel):
     confirmed: bool = Field(default=True, description="Approve script (True) or request revision (False)")
     script_text: str | None = Field(default=None, description="Optional updated script text edited by user")
+    pronunciation_dict: dict[str, str] | None = Field(default=None, description="Optional pronunciation dictionary mapping")
+
+
+class UpdatePronunciationRequest(BaseModel):
+    pronunciation_dict: dict[str, str] = Field(description="Dictionary of word pronunciation substitutions (e.g. {'NASA': 'N.A.S.A.'})")
 
 
 class ConfirmProjectRequest(BaseModel):
@@ -102,9 +107,23 @@ def confirm_requirements_endpoint(project_id: str, req: ConfirmRequirementsReque
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 
+@router.post("/{project_id}/pronunciation")
+def update_project_pronunciation_endpoint(project_id: str, req: UpdatePronunciationRequest) -> dict:
+    """Update project-level pronunciation dictionary."""
+    try:
+        return project_planner.update_project_pronunciation(
+            project_id=project_id,
+            pronunciation_dict=req.pronunciation_dict,
+        )
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
 @router.post("/{project_id}/generate-script")
 def generate_script_endpoint(project_id: str, req: GenerateScriptRequest) -> dict:
-    """Generate or re-generate English outline and script for the project."""
+    """Generate or update English script outline. Requires confirmed Gate 1 requirements."""
     try:
         return project_planner.generate_script(
             project_id=project_id,
@@ -113,6 +132,8 @@ def generate_script_endpoint(project_id: str, req: GenerateScriptRequest) -> dic
         )
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except (ProjectStateError, ValidationError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
@@ -125,6 +146,7 @@ def confirm_script_endpoint(project_id: str, req: ConfirmScriptRequest) -> dict:
             project_id=project_id,
             confirmed=req.confirmed,
             script_text=req.script_text,
+            pronunciation_dict=req.pronunciation_dict,
         )
     except ProjectNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -132,6 +154,8 @@ def confirm_script_endpoint(project_id: str, req: ConfirmScriptRequest) -> dict:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
 
 
 @router.post("/{project_id}/confirm")

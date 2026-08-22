@@ -127,38 +127,131 @@ class BatchRunner:
 
                 t0_line = time.time()
                 try:
+                    from services.critic import evaluate_speech_content
+                    from services.narration_planner import apply_pronunciation_dict
                     import services.job_manager
-                    wav, sr = services.job_manager.execute_model_inference(sub_model, line_item, self.jm.device)
-                    
-                    # QC Evaluation
+
+                    narration_plan = line_item.get("narration_plan", {})
+                    pron_dict = narration_plan.get("pronunciation")
+                    raw_text = line_item.get("text", "")
+                    synth_text = apply_pronunciation_dict(raw_text, pron_dict) if pron_dict else raw_text
+
+                    # Model-aware parameter handling (strip Turbo incompatible params)
+                    item_to_infer = dict(line_item)
+                    item_to_infer["text"] = synth_text
+                    if sub_model == "turbo":
+                        item_to_infer.pop("cfg_weight", None)
+                        item_to_infer.pop("exaggeration", None)
+                        item_to_infer.pop("min_p", None)
+
+                    candidate_strategy = narration_plan.get("candidate_strategy", "single")
+                    num_candidates = 2 if candidate_strategy == "multi_selective" else 1
+
+                    candidate_attempts: list[dict[str, Any]] = []
+                    best_candidate = None
+                    best_score = -1.0
+
                     self.jm._update_job_status(job.id, phase="evaluating", progress_percent=pct)
-                    initial_eval = evaluate_audio_signal(wav, sr)
-                    
-                    # Auto-Fixing if fixable issues detected
-                    if not initial_eval["passed"] and initial_eval.get("fixable"):
-                        self.jm._update_job_status(job.id, phase="auto_fixing", progress_percent=pct)
-                        fixed_wav, actions, final_eval = auto_fix_audio_signal(wav, sr)
-                        self.jm._update_job_status(job.id, phase="re_evaluating", progress_percent=pct)
-                        wav = fixed_wav
-                        quality_meta = {
-                            "initial": initial_eval,
-                            "actions": actions,
-                            "final": final_eval,
-                        }
-                    else:
-                        quality_meta = {
-                            "initial": initial_eval,
-                            "actions": [],
-                            "final": initial_eval,
-                        }
 
-                    # Re-evaluate requirement: segment MUST pass QC to be completed and merged
-                    if not quality_meta["final"]["passed"]:
-                        err_issues = ", ".join(quality_meta["final"].get("issues", [])) or "Signal quality check failed"
-                        raise RuntimeError(f"Quality check failed after auto-fix: {err_issues}")
+                    for cand_idx in range(num_candidates):
+                        cand_seed = line_item.get("seed")
+                        cand_temp = line_item.get("temperature", 0.8)
+                        if cand_idx > 0:
+                            cand_seed = ((cand_seed or 42) + 42 * cand_idx) % 1000000
+                            cand_temp = max(0.4, cand_temp - 0.1)
 
-                    save_audio_wav(line_out, wav, sr)
-                    dur = round(wav.shape[-1] / sr, 3)
+                        cand_item = dict(item_to_infer)
+                        cand_item["seed"] = cand_seed
+                        cand_item["temperature"] = cand_temp
+
+                        # Adaptive retry (up to 2 tries per candidate if failure occurs)
+                        cand_wav = None
+                        cand_sr = 24000
+                        cand_meta: dict[str, Any] = {}
+                        cand_passed = False
+
+                        for attempt in range(2):
+                            if attempt > 0:
+                                cand_item["seed"] = ((cand_item.get("seed") or 42) + attempt * 17) % 1000000
+                                cand_item["temperature"] = max(0.3, cand_item.get("temperature", 0.8) - 0.15)
+
+                            try:
+                                wav, sr = services.job_manager.execute_model_inference(sub_model, cand_item, self.jm.device)
+                                cand_wav = wav
+                                cand_sr = sr
+
+                                # 1. Signal QC
+                                init_eval = evaluate_audio_signal(wav, sr)
+                                actions = []
+                                final_eval = init_eval
+                                if not init_eval["passed"] and init_eval.get("fixable"):
+                                    self.jm._update_job_status(job.id, phase="auto_fixing", progress_percent=pct)
+                                    fixed_w, actions, final_eval = auto_fix_audio_signal(wav, sr)
+                                    self.jm._update_job_status(job.id, phase="re_evaluating", progress_percent=pct)
+                                    cand_wav = fixed_w
+                                    wav = fixed_w
+
+                                # 2. Content QC (ASR Speech Critic)
+                                target_wpm = narration_plan.get("target_wpm")
+                                content_eval = evaluate_speech_content(wav, sr, reference_text=raw_text, target_wpm=target_wpm)
+
+                                signal_score = 100.0 if final_eval["passed"] else 30.0
+                                content_score = content_eval.get("score", 100.0)
+                                combined_score = round(content_score * 0.6 + signal_score * 0.4, 1)
+                                is_passing = final_eval["passed"] and content_eval.get("passed", True)
+
+                                cand_meta = {
+                                    "candidate_idx": cand_idx,
+                                    "attempt": attempt + 1,
+                                    "seed": cand_item.get("seed"),
+                                    "temperature": cand_item.get("temperature"),
+                                    "signal": {
+                                        "initial": init_eval,
+                                        "actions": actions,
+                                        "final": final_eval,
+                                    },
+                                    "content": content_eval,
+                                    "score": combined_score,
+                                    "passed": is_passing,
+                                }
+
+                                if is_passing:
+                                    cand_passed = True
+                                    break
+                            except Exception as e:
+                                cand_meta = {
+                                    "candidate_idx": cand_idx,
+                                    "attempt": attempt + 1,
+                                    "error": str(e),
+                                    "passed": False,
+                                    "score": 0.0,
+                                }
+
+                        candidate_attempts.append(cand_meta)
+
+                        if cand_wav is not None:
+                            if cand_meta.get("score", 0) > best_score:
+                                best_candidate = (cand_wav, cand_sr, cand_meta)
+                                best_score = cand_meta.get("score", 0)
+
+                    if not best_candidate:
+                        raise RuntimeError("All candidate generations failed to synthesize audio")
+
+                    selected_wav, selected_sr, selected_meta = best_candidate
+                    for ca in candidate_attempts:
+                        ca["selected"] = (ca is selected_meta)
+
+                    if not selected_meta.get("passed", False):
+                        issues_list = []
+                        if selected_meta.get("signal", {}).get("final", {}).get("issues"):
+                            issues_list.extend(selected_meta["signal"]["final"]["issues"])
+                        if selected_meta.get("content", {}).get("issues"):
+                            issues_list.extend(selected_meta["content"]["issues"])
+                        err_issues = ", ".join(issues_list) or "Quality and content checks failed"
+                        raise RuntimeError(f"QC failed: {err_issues}")
+
+                    save_audio_wav(line_out, selected_wav, selected_sr)
+                    dur = round(selected_wav.shape[-1] / selected_sr, 3)
                     successful_segments.append((line_out, line_pause, line_idx))
                     lines_results.append({
                         "idx": line_idx,
@@ -166,9 +259,11 @@ class BatchRunner:
                         "audio_path": str(line_out),
                         "duration_seconds": dur,
                         "inference_seconds": round(time.time() - t0_line, 3),
-                        "text": line_item.get("text", ""),
+                        "text": raw_text,
                         "pause_duration": line_pause,
-                        "quality": quality_meta,
+                        "quality": selected_meta.get("signal", {}),
+                        "content_evaluation": selected_meta.get("content", {}),
+                        "attempts": candidate_attempts,
                         "original_start_seconds": line_item.get("start_seconds"),
                         "original_end_seconds": line_item.get("end_seconds"),
                     })
@@ -187,6 +282,7 @@ class BatchRunner:
                             "actions": [],
                             "final": {"passed": False, "issues": [str(exc)]},
                         },
+                        "attempts": candidate_attempts if 'candidate_attempts' in locals() else [],
                         "original_start_seconds": line_item.get("start_seconds"),
                         "original_end_seconds": line_item.get("end_seconds"),
                     })

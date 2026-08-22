@@ -145,6 +145,7 @@ def handle_confirm_script(args: dict, request_fn: Callable, api_url: str, **kwar
     proj_id = args.get("project_id")
     confirmed = bool(args.get("confirmed", True))
     script_text = args.get("script_text")
+    pronunciation_dict = args.get("pronunciation_dict")
 
     if not proj_id:
         return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
@@ -152,6 +153,7 @@ def handle_confirm_script(args: dict, request_fn: Callable, api_url: str, **kwar
     payload = {
         "confirmed": confirmed,
         "script_text": script_text,
+        "pronunciation_dict": pronunciation_dict,
     }
     res = request_fn(f"/api/v1/projects/{proj_id}/confirm-script", method="POST", data=payload)
     if "detail" in res:
@@ -160,6 +162,7 @@ def handle_confirm_script(args: dict, request_fn: Callable, api_url: str, **kwar
     msg = res.get("message", "")
     p_status = res.get("status", "")
     summary = res.get("summary", "")
+    seg_count = res.get("segment_count", 0)
 
     return {
         "content": [
@@ -168,7 +171,8 @@ def handle_confirm_script(args: dict, request_fn: Callable, api_url: str, **kwar
                 "text": (
                     f"Gate 2: {msg}\n"
                     f"* **Project ID**: `{proj_id}`\n"
-                    f"* **Trạng thái**: `{p_status.upper()}`\n\n"
+                    f"* **Trạng thái**: `{p_status.upper()}`\n"
+                    f"* **Số phân đoạn đã lập Narration Plan**: `{seg_count}`\n\n"
                     f"{summary}"
                 ),
             }

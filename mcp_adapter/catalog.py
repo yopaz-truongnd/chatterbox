@@ -230,6 +230,10 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "type": "string",
                     "description": "Optional updated script text edited by user.",
                 },
+                "pronunciation_dict": {
+                    "type": "object",
+                    "description": "Optional dictionary of custom word pronunciations (e.g. {'NASA': 'N.A.S.A.'}).",
+                },
             },
             "required": ["project_id"],
         },

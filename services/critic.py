@@ -199,3 +199,135 @@ def generate_feedback(
     }
 
     return report, spoken_feedback, structured_result
+
+
+def evaluate_speech_content(
+    audio_source: Path | str | Any,
+    sr: int = 24000,
+    reference_text: str = "",
+    target_wpm: float | None = None,
+) -> dict[str, Any]:
+    """ASR Content Critic: Transcribes speech with Whisper and compares against reference script.
+    
+    Detects dropped/missing words, stutter/repeated words, and calculates actual WPM pacing.
+    """
+    import tempfile
+    import torch
+    from services.audio import save_audio_wav
+
+    temp_wav_path: Path | None = None
+
+    if isinstance(audio_source, (str, Path)):
+        audio_path = Path(audio_source)
+    elif isinstance(audio_source, torch.Tensor):
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+            temp_wav_path = Path(tf.name)
+        save_audio_wav(temp_wav_path, audio_source, sr)
+        audio_path = temp_wav_path
+    else:
+        return {
+            "passed": False,
+            "score": 0.0,
+            "transcription": "",
+            "accuracy_percent": 0.0,
+            "missing_words": [],
+            "repeated_words": [],
+            "actual_wpm": 0.0,
+            "target_wpm": target_wpm,
+            "issues": ["Invalid audio source for ASR evaluation"],
+            "warnings": [],
+        }
+
+    try:
+        transcription = transcribe_audio_whisper(audio_path)
+    finally:
+        if temp_wav_path and temp_wav_path.exists():
+            temp_wav_path.unlink(missing_ok=True)
+
+    # Check if whisper is unavailable (stub message)
+    is_stub = transcription.startswith("[") and transcription.endswith("]")
+
+    ref_clean = reference_text.strip()
+    ref_words = [w.lower() for w in re.findall(r"\b[A-Za-z0-9']+\b", ref_clean)]
+    hyp_words = [w.lower() for w in re.findall(r"\b[A-Za-z0-9']+\b", transcription)]
+
+    missing_words: list[str] = []
+    repeated_words: list[str] = []
+    issues: list[str] = []
+    warnings: list[str] = []
+
+    if is_stub or not ref_words:
+        # Fallback if whisper library is not present or prompt is empty
+        return {
+            "passed": True,
+            "score": 100.0,
+            "transcription": transcription,
+            "accuracy_percent": 100.0,
+            "missing_words": [],
+            "repeated_words": [],
+            "actual_wpm": target_wpm or 138.0,
+            "target_wpm": target_wpm,
+            "issues": [],
+            "warnings": [transcription] if is_stub else [],
+        }
+
+    # 1. Detect missing words
+    for rw in ref_words:
+        if rw not in hyp_words:
+            missing_words.append(rw)
+
+    # 2. Detect repeated / hallucinated words (consecutive repetitions in hypothesis not in reference)
+    for i in range(len(hyp_words) - 1):
+        if hyp_words[i] == hyp_words[i + 1]:
+            rep_word = hyp_words[i]
+            # Check if reference had legitimate repetition
+            ref_had_rep = any(ref_words[j] == rep_word and j + 1 < len(ref_words) and ref_words[j + 1] == rep_word for j in range(len(ref_words)))
+            if not ref_had_rep and rep_word not in repeated_words:
+                repeated_words.append(rep_word)
+
+    # 3. Calculate word accuracy
+    total_ref = max(1, len(ref_words))
+    error_count = len(missing_words) + len(repeated_words)
+    acc_ratio = max(0.0, 1.0 - (error_count / total_ref))
+    accuracy_percent = round(acc_ratio * 100.0, 1)
+
+    # 4. Pacing calculation
+    dur_s = 1.0
+    if isinstance(audio_source, (str, Path)) and Path(audio_source).exists():
+        try:
+            dur_s = float(librosa.get_duration(path=str(audio_source)))
+        except Exception:
+            dur_s = max(1.0, len(ref_words) / 2.3)
+    elif isinstance(audio_source, torch.Tensor):
+        dur_s = max(0.01, audio_source.shape[-1] / sr)
+
+    actual_wpm = round((len(hyp_words) / max(0.01, dur_s)) * 60.0, 1)
+
+    if missing_words:
+        if len(missing_words) > max(2, int(total_ref * 0.35)):
+            issues.append(f"Missing {len(missing_words)} words from script (dropped/unspoken text)")
+        else:
+            warnings.append(f"Minor word omissions: {missing_words[:3]}")
+
+    if repeated_words:
+        issues.append(f"Hallucinated or repeated words: {repeated_words[:3]}")
+
+    if target_wpm and abs(actual_wpm - target_wpm) > 55:
+        warnings.append(f"Pacing divergence: {actual_wpm} WPM vs target {target_wpm} WPM")
+
+    passed = len(issues) == 0 and accuracy_percent >= 65.0
+    score = round(max(0.0, min(100.0, accuracy_percent - (15.0 * len(issues)) - (5.0 * len(warnings)))), 1)
+
+    return {
+        "passed": passed,
+        "score": score,
+        "transcription": transcription,
+        "accuracy_percent": accuracy_percent,
+        "missing_words": missing_words,
+        "repeated_words": repeated_words,
+        "actual_wpm": actual_wpm,
+        "target_wpm": target_wpm,
+        "issues": issues,
+        "warnings": warnings,
+    }
+

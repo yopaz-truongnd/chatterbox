@@ -130,8 +130,12 @@ def segment_script_text(
     script_text: str,
     target_pace: str = "medium",
     default_model: str = "turbo",
+    format_type: str = "podcast",
+    pronunciation_dict: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Segment an English script into semantic chunks of 1-3 sentences (8-25s each)."""
+    """Segment an English script into semantic chunks of 1-3 sentences (8-25s each) and attach Narration Plans."""
+    from services.narration_planner import compile_narration_plan
+
     raw_scenes = re.split(r"(?=\[(?:Scene\s*\d+|Introduction|Deep Dive|Key Takeaways|Summary|Conclusion)[^\]]*\])", script_text.strip())
     if len(raw_scenes) == 1 and not raw_scenes[0].startswith("["):
         raw_scenes = [script_text]
@@ -191,4 +195,10 @@ def segment_script_text(
                 })
                 seg_idx += 1
 
-    return segments
+    return compile_narration_plan(
+        segments,
+        format_type=format_type,
+        default_pace=target_pace,
+        default_model=default_model,
+        pronunciation_dict=pronunciation_dict,
+    )
