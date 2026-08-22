@@ -133,7 +133,7 @@ source venv/bin/activate
 ### ⚡ Chế độ 3: Python Script (CLI / Code mẫu)
 
 ```bash
-python3 example_tts_turbo.py
+python3 examples/tts_turbo.py
 ```
 
 ---

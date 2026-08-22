@@ -1,6 +1,6 @@
 # Kiến trúc và luồng hoạt động Chatterbox TTS Studio
 
-Tài liệu này mô tả cấu hình, thành phần, model, entrypoint và luồng xử lý hiện tại của toàn bộ dự án. Tài liệu cài đặt từng bước nằm trong `SETUP_GUIDE.md`; hướng dẫn chọn model nằm trong `MODELS_GUIDE.md`.
+Tài liệu này mô tả cấu hình, thành phần, model, entrypoint và luồng xử lý hiện tại của toàn bộ dự án. Tài liệu cài đặt từng bước nằm trong `docs/setup.md`; hướng dẫn chọn model nằm trong `docs/models.md`.
 
 ## 1. Tổng quan
 

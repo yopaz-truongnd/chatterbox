@@ -102,30 +102,48 @@ Tích hợp sẵn stdio MCP Server tương thích tiêu chuẩn Claude Desktop, 
 
 ```text
 chatterbox/
-├── api_app.py                   # FastAPI Server entrypoint & Lifespan (<180 dòng)
+├── api_app.py                   # FastAPI Server entrypoint & Lifespan
 ├── mcp_server.py                # Stdio MCP Server (16 tools) cho AI Agents
-├── services/
+├── character_api.py             # Voice Character store & Zip export/import
+├── job_store.py                 # SQLite Job Persistence & TTL Cleanup
+├── inference_runner.py          # Isolated Subprocess Runner
+├── main.py                      # Desktop GUI launcher wrapper
+├── apps/                        # Giao diện ứng dụng
+│   ├── desktop.py               # Tkinter Desktop GUI
+│   ├── material_dashboard.py    # Static Material 3 Web runner
+│   └── gradio/                  # Gradio Apps (tts, tts_turbo, voice_conversion, multilingual)
+├── examples/                    # Code mẫu chạy độc lập
+│   ├── tts.py, tts_nano.py, tts_turbo.py, voice_conversion.py, macos.py
+├── scripts/                     # Scripts khởi chạy và tiện ích
+│   ├── api/                     # run.sh, run.ps1, run.bat
+│   ├── desktop/                 # run.sh, run.bat, run_silent.vbs
+│   └── download_models.py       # Tải trước model offline
+├── docs/                        # Tài liệu hướng dẫn & Kiến trúc
+│   ├── architecture.md          # Sơ đồ kiến trúc & luồng hoạt động
+│   ├── setup.md                 # Hướng dẫn cài đặt đa nền tảng
+│   ├── models.md                # Danh mục model và hướng dẫn cấu hình phần cứng
+│   └── assets/                  # Hình ảnh mô tả
+├── services/                    # Application Business Logic
 │   ├── event_bus.py             # In-memory Ring Buffer Event Bus & Condition Long-Polling
 │   ├── project_planner.py       # Two-Gate confirmation, semantic segmentation & auto-fix
 │   ├── inference.py             # Logic nạp model & sinh âm thanh chuẩn
 │   ├── audio.py                 # Ghép nối khoảng lặng, loudness normalization & BGM
 │   └── job_manager.py           # Quản lý hàng đợi, lifecycle của job & subprocess cô lập
-├── routers/
+├── routers/                     # FastAPI Endpoints
 │   ├── events.py                # Long-polling event streaming router
 │   ├── projects.py              # Two-Gate Audio Projects REST API
-│   ├── system.py                # Health, System Diagnostics, Settings & Models Status
-│   ├── tts.py                   # TTS Standard, Turbo, Nano, Long-Text, Presets & VC
+│   ├── system.py                # Health, Diagnostics, Settings & Models Status
+│   ├── tts.py                   # TTS Single, Batch, Long-Text, Presets & VC
 │   └── jobs.py                  # Tra cứu, Hủy job, Download audio & Merge batch
-├── utils/
-│   ├── platform_tools.py        # Tự nhận diện phần cứng Windows/macOS/Linux & thư mục lưu trữ
-│   └── text_cleaner.py          # Làm sạch và phân tách văn bản thông minh
-├── webui/
-│   ├── material_dashboard.html  # Giao diện Web GUI Material Design 3
+├── webui/                       # Material Design 3 Web GUI Frontend
+│   ├── material_dashboard.html  # Dashboard Single Page App
 │   ├── js/                      # Controllers: main, tts, batch, projects, notifications,...
 │   └── css/styles.css           # Bảng phong cách giao diện
-├── run_chatterbox_api.sh        # Script khởi chạy & chạy test cho macOS / Linux
-├── Run_Chatterbox_API.bat       # Script khởi chạy 1-click cho Windows
-├── run_chatterbox_api.ps1       # Script PowerShell cho Windows
+├── run_chatterbox_api.sh        # Launcher API macOS / Linux (Wrapper tương thích)
+├── Run_Chatterbox_API.bat       # Launcher API Windows Batch (Wrapper tương thích)
+├── run_chatterbox_api.ps1       # Launcher API Windows PowerShell (Wrapper tương thích)
+├── run_chatterbox_gui.sh        # Launcher Desktop macOS / Linux (Wrapper tương thích)
+├── Run_Chatterbox_GUI.bat       # Launcher Desktop Windows Batch (Wrapper tương thích)
 └── tests/                       # Bộ kiểm thử tích hợp (108 unit tests)
 ```
 

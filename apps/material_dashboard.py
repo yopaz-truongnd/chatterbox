@@ -11,7 +11,7 @@ import socketserver
 from pathlib import Path
 
 PORT = 7860
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 WEBUI_DIR = PROJECT_DIR / "webui"
 
 class DashboardHTTPHandler(http.server.SimpleHTTPRequestHandler):
