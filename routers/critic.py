@@ -56,8 +56,8 @@ async def evaluate_voice_job(
         # 3. Transcribe speech using Whisper via service
         transcription = transcribe_audio_whisper(audio_path)
         
-        # 4. Generate report & spoken text via service
-        report, spoken_feedback = generate_feedback(stats, transcription, reference_text)
+        # 4. Generate report, spoken text & structured evaluation via service
+        report, spoken_feedback, structured_result = generate_feedback(stats, transcription, reference_text)
         
         # 5. Submit TTS job for the feedback speech
         coach_id = coach_character_id or "char_coach"
@@ -84,6 +84,7 @@ async def evaluate_voice_job(
         
         return {
             "status": "completed",
+            "evaluation": structured_result,
             "stats": stats,
             "transcription": transcription,
             "markdown_report": report,

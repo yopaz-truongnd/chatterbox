@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "chatterbox": {
-      "command": "python",
-      "args": ["mcp_server.py"],
+      "command": "/var/www/chatterbox/venv/bin/python",
+      "args": [
+        "/var/www/chatterbox/mcp_server.py"
+      ],
       "env": {
         "CHATTERBOX_API_URL": "http://127.0.0.1:8000"
       }
