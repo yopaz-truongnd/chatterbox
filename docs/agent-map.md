@@ -2,35 +2,44 @@
 
 Chọn đúng nhóm tính năng trước khi đọc code. Đọc primary files trước và chỉ mở secondary files khi thay đổi đi qua trách nhiệm của chúng.
 
-## Product planning flow
+## Product Planning & Narration Pipeline
 
-Dùng cho topic, câu hỏi bổ sung, xác nhận yêu cầu, xác nhận script, segmentation và project lifecycle.
+Dùng cho topic, câu hỏi làm rõ (single batch), xác nhận yêu cầu (Gate 1), lập kịch bản & phân đoạn (Gate 2), phát âm riêng (Pronunciation Dict), kế hoạch diễn cảm (Narration Plan) và vòng đời dự án.
 
-- Primary: `services/project_planner.py`
+- Primary Services:
+  - `services/project_planner.py` — State machine facade, quản lý Gate 1/Gate 2, JobManager sync.
+  - `services/project_requirements.py` — Trích xuất heuristic yêu cầu, phân tích thiếu sót, tạo câu hỏi.
+  - `services/project_script.py` — Sinh cấu trúc scene outline, kịch bản tiếng Anh, phân đoạn ngữ nghĩa (8-25s).
+  - `services/narration_planner.py` — Quét từ cần xác nhận phát âm, áp dụng từ điển phiên âm, lập Narration Plan (role, emotion, energy, target WPM, dynamic pauses, emphasis, candidate strategy).
 - REST API: `routers/projects.py`
-- MCP adapter: `mcp_server.py`
+- MCP Adapter:
+  - `mcp_server.py` — JSON-RPC stdio server facade & HTTP dispatcher.
+  - `mcp_adapter/catalog.py` — Tool schemas (16 tools).
+  - `mcp_adapter/project_tools.py` — Handlers cho Project Planning, Pronunciation, Render và Event Stream.
+  - `mcp_adapter/voice_tools.py` — Handlers cho Voice, TTS, Characters, Download và Audio Critic.
 - Web UI: `webui/js/projects.js`
-- Tests: `tests/test_project_workflow.py`
+- Tests: `tests/test_project_workflow.py`, `tests/test_narration_plan.py`
 
-## Voice quality pipeline
+## Voice Quality & Dual-Critic Pipeline
 
-Dùng cho evaluate, trim silence, normalize, auto-fix, re-evaluate, merge và publish.
+Dùng cho evaluate signal, Whisper ASR content critic, auto-fix, selective multi-candidate, adaptive retry, merge và publish.
 
-1. `services/audio.py` — signal evaluation và audio transformations.
-2. `services/batch_runner.py` — in-process batch sequencing.
-3. `inference_runner.py` — chỉ đọc khi thay đổi phải chạy qua subprocess.
-4. `services/job_manager.py` — chỉ đọc khi thay đổi job status, phase hoặc event.
-5. `services/project_planner.py::sync_project_with_job` — chỉ đọc khi public project state thay đổi.
-6. `tests/test_project_workflow.py` và `tests/test_batch_studio_advanced.py` — regression tests.
+1. `services/audio.py` — Signal evaluation (silence, RMS, clipping, duration, Crest factor) và signal auto-fix.
+2. `services/critic.py` — ASR Speech Content Critic (`evaluate_speech_content`: Whisper transcribe, WER, missing words/dropped text detection, repetition/stutter detection, actual WPM measurement).
+3. `services/batch_runner.py` — In-process batch sequencing, model-aware parameter stripping, selective 2-candidate generation cho dialogue/climax/pronunciation, ranking (60% Content + 40% Signal), adaptive retry.
+4. `inference_runner.py` — Subprocess batch runner parity.
+5. `services/job_manager.py` — Quản lý trạng thái tác vụ, phase (`evaluating`, `auto_fixing`, `re_evaluating`, `merging_audio`, `publishing`) và event.
+6. `tests/test_audio_quality.py` — Test signal QC, auto-fix, resume và phase progress.
+7. `tests/test_narration_plan.py` — Test Narration Plan, pronunciation dictionary, ASR content evaluation và candidate ranking.
 
-Invariant:
+Invariant xử lý segment:
 
 ```text
-generate -> evaluate -> auto-fix once -> re-evaluate
-         -> merge passing chunks -> publish
+[Generate Candidate(s)] -> [Signal QC + Whisper ASR Content Critic]
+                        -> [Signal Auto-Fix nếu fixable] -> [Re-evaluate]
+                        -> [Nếu lỗi: Adaptive Retry với new seed/temperature (tối đa 2 lần)]
+                        -> [Rank & Chọn candidate tốt nhất] -> [Merge passing chunks] -> [Publish]
 ```
-
-Không sao chép quality rules ra ngoài `services/audio.py`.
 
 ## Events
 
@@ -38,9 +47,9 @@ Không sao chép quality rules ra ngoài `services/audio.py`.
 - Producer: `services/job_manager.py`
 - Project synchronization: `services/project_planner.py`
 - REST API: `routers/events.py`
-- MCP adapter: `mcp_server.py::chatterbox_get_events`
+- MCP adapter: `mcp_adapter/project_tools.py::handle_get_events_stream`
 
-`JobManager` sở hữu technical progress. Project planner chỉ đồng bộ product state và không nên phát lại terminal event đã có.
+`JobManager` sở hữu technical progress. Project planner chỉ đồng bộ product state và không phát lại terminal event đã có.
 
 ## TTS API
 
@@ -61,20 +70,21 @@ Không sao chép quality rules ra ngoài `services/audio.py`.
 - Job endpoints: `routers/jobs.py`
 - Tests: `tests/test_batch_studio_advanced.py`
 
-## UI applications
+## UI Applications
 
 - Material Web UI: `webui/`
 - Desktop application: `apps/desktop.py`, `ui/`, `utils/`
 - Gradio applications: `apps/gradio/`
 
-Không mở cả ba UI stack nếu task chỉ liên quan một stack.
-
-## Ownership rules
+## Ownership Rules
 
 - Audio tensors và signal QC thuộc `services/audio.py`.
-- Batch sequencing thuộc `services/batch_runner.py`.
+- Whisper STT và Speech Content Critic thuộc `services/critic.py`.
+- Narration Plan & Pronunciation Scanner thuộc `services/narration_planner.py`.
+- Kịch bản & phân đoạn ngữ nghĩa thuộc `services/project_script.py`.
+- Batch candidate generation & retry sequencing thuộc `services/batch_runner.py` và `inference_runner.py`.
 - Worker state và technical events thuộc `services/job_manager.py`.
 - Product state và confirmation gates thuộc `services/project_planner.py`.
 - HTTP validation thuộc `routers/`.
-- MCP chỉ chuyển request/response, không chứa business logic.
-- UI không tự triển khai lại state machine của backend.
+- MCP chỉ đóng vai trò adapter chuyển đổi giao thức, định nghĩa schema trong `mcp_adapter/catalog.py`.
+
