@@ -13,11 +13,14 @@ from job_store import AudioJob, JobStore
 from services.job_manager import JobManager
 
 
+DUMMY_AUDIO = (0.177 * torch.sin(2 * 3.14159 * 440 * torch.linspace(0, 0.5, 12000))).unsqueeze(0)
+
+
 class FakeModel:
     sr = 24000
 
     def generate(self, *args, **kwargs):
-        return torch.zeros(1, 240)
+        return DUMMY_AUDIO
 
 
 class FailingModel:
@@ -146,7 +149,7 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_default_tts_uses_recommended_model_and_downloads_wav(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             response = self.client.post(
                 "/api/v1/tts",
                 data={"text": "Hello from the default endpoint."},
@@ -165,7 +168,7 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertGreater(len(audio.content), 0)
 
     def test_cancel_job_sets_status_cancelled(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             response = self.client.post("/api/v1/tts", data={"text": "Job to be cancelled."})
             self.assertEqual(response.status_code, 202)
             job_id = response.json()["id"]
@@ -175,7 +178,7 @@ class ApiAppTestCase(unittest.TestCase):
             self.assertEqual(cancel_res.json()["status"], "cancelled")
 
     def test_long_text_batch_synthesis(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             long_content = "Đoạn văn thứ nhất dùng để kiểm tra tính năng đọc truyện. " * 10
             response = self.client.post(
                 "/api/v1/tts/long-text",
@@ -188,7 +191,7 @@ class ApiAppTestCase(unittest.TestCase):
             self.assertIsNotNone(completed["audio_url"])
 
     def test_voice_conversion_cleans_uploaded_files(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             response = self.client.post(
                 "/api/v1/voice-conversion",
                 files={
@@ -256,7 +259,7 @@ class ApiAppTestCase(unittest.TestCase):
             temp_d.cleanup()
 
     def test_completed_job_can_be_filtered_and_deleted(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             response = self.client.post("/api/v1/tts", data={"text": "Delete this output."})
             completed = self.wait_for_job(response.json()["id"])
 
@@ -280,7 +283,7 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(response.json()["status"], "ok")
 
     def test_batch_tts_endpoint_processes_multiple_lines_and_generates_srt(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 2400), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             lines = [
                 {"idx": 0, "text": "Dòng thứ nhất kịch bản."},
                 {"idx": 1, "text": "Dòng thứ hai đối thoại."},
@@ -318,7 +321,7 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_multilingual_tts_endpoint_success(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 2400), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             response = self.client.post(
                 "/api/v1/tts/multilingual",
                 data={
@@ -336,7 +339,7 @@ class ApiAppTestCase(unittest.TestCase):
             self.assertEqual(completed["params"]["exaggeration"], 0.6)
 
     def test_multilingual_tts_endpoint_normalizes_language_code(self):
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 2400), 24000)):
+        with patch("services.job_manager.execute_model_inference", return_value=(DUMMY_AUDIO, 24000)):
             response = self.client.post(
                 "/api/v1/tts/multilingual",
                 data={
@@ -430,6 +433,86 @@ class ApiAppTestCase(unittest.TestCase):
     def test_delete_model_from_disk_rejects_invalid_name(self):
         res = self.client.delete("/api/v1/models/invalid_ai/disk")
         self.assertEqual(res.status_code, 422)
+
+    def test_completed_partial_job_allows_audio_srt_zip_and_blocks_cancel(self):
+        job_id = "test_partial_endpoints_job"
+        out_wav = api_app.API_DATA_DIR / "outputs" / f"{job_id}.wav"
+        out_srt = api_app.API_DATA_DIR / "outputs" / f"{job_id}.srt"
+        chunks_dir = api_app.API_DATA_DIR / "chunks" / job_id
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+        out_wav.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00")
+        out_srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+
+        job = AudioJob(
+            id=job_id,
+            type="batch",
+            params={"lines": [{"idx": 0, "text": "Hello"}], "export_srt": True},
+            input_paths=[],
+            status="completed_partial",
+            output_path=str(out_wav),
+            duration_seconds=1.0,
+            benchmark={
+                "lines_results": [
+                    {"idx": 0, "status": "completed", "duration_seconds": 1.0},
+                    {"idx": 1, "status": "failed", "duration_seconds": 0.0},
+                ],
+                "quality_report": {
+                    "passed": False,
+                    "total_segments": 2,
+                    "passed_segments": 1,
+                    "failed_segments": 1,
+                },
+            },
+        )
+        api_app.job_manager.store.save(job)
+        with api_app.job_manager._jobs_lock:
+            api_app.job_manager._jobs[job_id] = job
+
+        # 1. Public dict includes audio_url, srt_url, zip_url
+        pub = job.public_dict()
+        self.assertEqual(pub["audio_url"], f"/api/v1/jobs/{job_id}/audio")
+        self.assertEqual(pub["srt_url"], f"/api/v1/jobs/{job_id}/srt")
+        self.assertEqual(pub["zip_url"], f"/api/v1/jobs/{job_id}/zip")
+
+        # 2. Audio download succeeds
+        audio_res = self.client.get(f"/api/v1/jobs/{job_id}/audio")
+        self.assertEqual(audio_res.status_code, 200)
+
+        # 3. SRT download succeeds
+        srt_res = self.client.get(f"/api/v1/jobs/{job_id}/srt")
+        self.assertEqual(srt_res.status_code, 200)
+
+        # 4. ZIP download succeeds
+        zip_res = self.client.get(f"/api/v1/jobs/{job_id}/zip")
+        self.assertEqual(zip_res.status_code, 200)
+
+        # 5. Cancel request does not override completed_partial
+        cancel_res = self.client.post(f"/api/v1/jobs/{job_id}/cancel")
+        self.assertEqual(cancel_res.status_code, 200)
+        self.assertEqual(api_app.job_manager.get_job(job_id).status, "completed_partial")
+
+    def test_completed_partial_job_ttl_cleanup(self):
+        from datetime import UTC, datetime, timedelta
+        job_id = "test_expired_partial_job"
+        out_wav = api_app.API_DATA_DIR / "outputs" / f"{job_id}.wav"
+        out_wav.write_bytes(b"fake wav")
+        old_time = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+
+        job = AudioJob(
+            id=job_id,
+            type="batch",
+            params={},
+            input_paths=[],
+            status="completed_partial",
+            output_path=str(out_wav),
+            created_at=old_time,
+            completed_at=old_time,
+        )
+        api_app.job_manager.store.save(job)
+        deleted_count, _ = api_app.job_manager.store.cleanup_expired(retention_days=1, data_dir=api_app.API_DATA_DIR)
+        self.assertGreaterEqual(deleted_count, 1)
+        self.assertIsNone(api_app.job_manager.store.get(job_id))
+        self.assertFalse(out_wav.exists())
 
 
 if __name__ == "__main__":

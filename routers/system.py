@@ -1,26 +1,31 @@
-"""System health, diagnostics, settings validation, and models status router."""
+"""System health, diagnostics, settings validation, benchmarks, and models status router."""
 
 from __future__ import annotations
 
+import gc
 import os
+import shutil
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-import threading
-
 from config.settings import settings_manager
-from utils.platform_tools import detect_full_diagnostics, detect_system_profile, is_multilingual_cached
+from services.model_registry import (
+    MODEL_NAMES,
+    MODEL_REGISTRY,
+    check_model_preflight,
+    get_model_disk_size_bytes,
+    is_model_cached,
+    is_multilingual_cached,
+    list_registered_models,
+    resolve_model_id,
+)
+from services.model_runtime import model_runtime
+from utils.platform_tools import clear_accelerator_cache, detect_full_diagnostics, detect_system_profile
 
 router = APIRouter(tags=["system"])
-
-MODEL_NAMES = ("standard", "turbo", "nano", "multilingual", "voice-conversion")
-
-CURRENT_LOADED_MODEL: str | None = None
-_LOADED_MODEL_INSTANCE: tuple[Any, int] | None = None
-_MODEL_LOCK = threading.Lock()
 
 
 class SettingsUpdateModel(BaseModel):
@@ -48,6 +53,7 @@ def get_health() -> dict:
     from api_app import CPU_THREADS, DEVICE, PROJECT_DIR, RECOMMENDED_MODEL, SYSTEM_PROFILE, job_manager
 
     models_dir = PROJECT_DIR / "models"
+    active_loaded = model_runtime.active_model_name
     return {
         "status": "ok",
         "device": DEVICE,
@@ -59,12 +65,13 @@ def get_health() -> dict:
         "queue_size": job_manager._job_queue.qsize() if job_manager else 0,
         "processing": len(job_manager._active_procs) if job_manager else 0,
         "models_cached": {
-            "nano": (models_dir / "models--ResembleAI--chatterbox-nano").exists(),
-            "turbo": (models_dir / "models--ResembleAI--chatterbox-turbo").exists(),
-            "standard": (models_dir / "models--ResembleAI--chatterbox").exists(),
+            "nano": is_model_cached("nano", models_dir),
+            "turbo": is_model_cached("turbo", models_dir),
+            "standard": is_model_cached("standard", models_dir),
             "multilingual": is_multilingual_cached(models_dir),
         },
-        "loaded_model": CURRENT_LOADED_MODEL,
+        "loaded_model": active_loaded,
+        "active_cache_key": model_runtime.active_cache_key,
     }
 
 
@@ -75,76 +82,47 @@ def get_diagnostics() -> dict:
     return detect_full_diagnostics(os.getenv("CHATTERBOX_DEVICE", "auto"), PROJECT_DIR)
 
 
-def get_model_disk_size_bytes(model_name: str, models_dir: Path) -> int:
-    total = 0
-    if not models_dir.exists():
-        return 0
-    if model_name in {"nano", "turbo"}:
-        target_dir = models_dir / f"models--ResembleAI--chatterbox-{model_name}"
-        if target_dir.exists():
-            for p in target_dir.glob("**/*"):
-                if p.is_file() and not p.is_symlink():
-                    total += p.stat().st_size
-    elif model_name == "multilingual":
-        target_dir = models_dir / "models--ResembleAI--chatterbox-multilingual"
-        if target_dir.exists():
-            for p in target_dir.glob("**/*"):
-                if p.is_file() and not p.is_symlink():
-                    total += p.stat().st_size
-        chatterbox_dir = models_dir / "models--ResembleAI--chatterbox"
-        if chatterbox_dir.exists():
-            for p in chatterbox_dir.glob("**/*"):
-                if p.is_file() and not p.is_symlink() and any(k in p.name for k in ("t3_mtl", "grapheme_mtl", "Cangjie")):
-                    total += p.stat().st_size
-    elif model_name in {"standard", "voice-conversion"}:
-        target_dir = models_dir / "models--ResembleAI--chatterbox"
-        if target_dir.exists():
-            for p in target_dir.glob("**/*"):
-                if p.is_file() and not p.is_symlink():
-                    total += p.stat().st_size
-    return total
-
-
 @router.get("/api/v1/models", tags=["models"])
 def list_models() -> dict:
     from api_app import PROJECT_DIR
     models_dir = PROJECT_DIR / "models"
-    result = []
-    for name in MODEL_NAMES:
-        is_cached = (
-            is_multilingual_cached(models_dir)
-            if name == "multilingual"
-            else (models_dir / f"models--ResembleAI--chatterbox-{name}").exists()
-            if name in {"turbo", "nano"}
-            else (models_dir / "models--ResembleAI--chatterbox").exists()
-        )
-        size_bytes = get_model_disk_size_bytes(name, models_dir)
-        size_mb = round(size_bytes / (1024 * 1024), 1) if size_bytes > 0 else 0
-        result.append({
-            "name": name,
-            "cached_on_disk": is_cached,
-            "size_bytes": size_bytes,
-            "size_mb": size_mb,
-            "loaded_in_memory": (CURRENT_LOADED_MODEL == name),
-        })
-
+    active_loaded = model_runtime.active_model_name
+    result = list_registered_models(models_dir=models_dir, active_model=active_loaded)
     return {
         "models": result,
-        "active_model": CURRENT_LOADED_MODEL,
+        "active_model": active_loaded,
+        "active_cache_key": model_runtime.active_cache_key,
     }
+
+
+@router.get("/api/v1/models/preflight", tags=["models"])
+def preflight_all_models() -> dict:
+    """Preflight integrity check for all registered models."""
+    from api_app import PROJECT_DIR
+    models_dir = PROJECT_DIR / "models"
+    reports = [check_model_preflight(name, models_dir) for name in MODEL_NAMES]
+    all_ready = all(r["valid"] for r in reports if r["cached"])
+    return {
+        "status": "ok",
+        "all_ready": all_ready,
+        "models": reports,
+    }
+
+
+@router.get("/api/v1/models/{name}/preflight", tags=["models"])
+def preflight_single_model(name: str) -> dict:
+    """Preflight integrity check for a specific model before launching inference."""
+    from api_app import PROJECT_DIR
+    models_dir = PROJECT_DIR / "models"
+    report = check_model_preflight(name, models_dir)
+    return report
 
 
 @router.delete("/api/v1/models/{name}/disk", tags=["models"])
 def delete_model_from_disk_endpoint(name: str) -> dict:
-    import gc
-    import shutil
     from api_app import PROJECT_DIR
-    from utils.platform_tools import clear_accelerator_cache
 
-    model_name = name.strip().lower()
-    if model_name == "tts":
-        model_name = "standard"
-
+    model_name = resolve_model_id(name)
     if model_name not in MODEL_NAMES:
         raise HTTPException(
             status_code=422,
@@ -155,13 +133,7 @@ def delete_model_from_disk_endpoint(name: str) -> dict:
     freed_bytes = get_model_disk_size_bytes(model_name, models_dir)
 
     # 1. Unload from RAM/VRAM if currently loaded
-    global CURRENT_LOADED_MODEL, _LOADED_MODEL_INSTANCE
-    with _MODEL_LOCK:
-        if CURRENT_LOADED_MODEL == model_name:
-            _LOADED_MODEL_INSTANCE = None
-            CURRENT_LOADED_MODEL = None
-            gc.collect()
-            clear_accelerator_cache()
+    model_runtime.unload_model(model_name)
 
     # 2. Remove files from models_dir
     deleted_items = 0
@@ -202,15 +174,9 @@ def delete_model_from_disk_endpoint(name: str) -> dict:
 
 @router.post("/api/v1/models/{name}/load", tags=["models"])
 def preload_model_endpoint(name: str) -> dict:
-    import gc
     from api_app import DEVICE, PROJECT_DIR
-    from services.inference import load_model
-    from utils.platform_tools import clear_accelerator_cache
 
-    model_name = name.strip().lower()
-    if model_name == "tts":
-        model_name = "standard"
-
+    model_name = resolve_model_id(name)
     if model_name not in MODEL_NAMES:
         raise HTTPException(
             status_code=422,
@@ -221,82 +187,67 @@ def preload_model_endpoint(name: str) -> dict:
     is_offline = os.getenv("HF_HUB_OFFLINE", "1") == "1"
 
     # Check disk cache availability
-    if model_name == "multilingual" and not is_multilingual_cached(models_dir) and is_offline:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Mô hình Multilingual chưa được tải về máy. "
-                "Vui lòng khởi động server với kết nối mạng bằng lệnh 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để tự động tải mô hình từ Hugging Face."
-            ),
-        )
-    elif model_name in {"turbo", "nano"} and not (models_dir / f"models--ResembleAI--chatterbox-{model_name}").exists() and is_offline:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Mô hình {model_name.upper()} chưa có trong thư mục models/.",
-        )
-    elif model_name in {"standard", "voice-conversion"} and not (models_dir / "models--ResembleAI--chatterbox").exists() and is_offline:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Mô hình {model_name.upper()} chưa có trong thư mục models/.",
-        )
-
-    global CURRENT_LOADED_MODEL, _LOADED_MODEL_INSTANCE
-    with _MODEL_LOCK:
-        try:
-            # Clear previous model first
-            _LOADED_MODEL_INSTANCE = None
-            gc.collect()
-            clear_accelerator_cache()
-
-            # Load new model
-            instance, sr = load_model(model_name, DEVICE)
-            _LOADED_MODEL_INSTANCE = (instance, sr)
-            CURRENT_LOADED_MODEL = model_name
-        except Exception as e:
-            CURRENT_LOADED_MODEL = None
-            _LOADED_MODEL_INSTANCE = None
-            gc.collect()
-            clear_accelerator_cache()
+    if not is_model_cached(model_name, models_dir) and is_offline:
+        if model_name == "multilingual":
             raise HTTPException(
-                status_code=500,
-                detail=f"Lỗi khi nạp mô hình '{model_name}': {str(e)}",
+                status_code=404,
+                detail=(
+                    "Mô hình Multilingual chưa được tải về máy. "
+                    "Vui lòng khởi động server với kết nối mạng bằng lệnh 'HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh' để tự động tải mô hình từ Hugging Face."
+                ),
             )
+        raise HTTPException(
+            status_code=404,
+            detail=f"Mô hình {model_name.upper()} chưa có trong thư mục models/.",
+        )
+
+    try:
+        model_runtime.load_model(model_name, device=DEVICE, keep_in_cache=True)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Lỗi khi nạp mô hình '{model_name}': {str(e)}",
+        )
 
     return {
         "status": "ok",
         "message": f"Mô hình '{model_name.upper()}' đã được nạp sẵn sàng vào bộ nhớ ({DEVICE.upper()}).",
         "model": model_name,
         "device": DEVICE,
+        "cache_key": model_runtime.active_cache_key,
     }
 
 
 @router.delete("/api/v1/models/{name}", tags=["models"])
 def unload_model_endpoint(name: str) -> dict:
-    import gc
-    from utils.platform_tools import clear_accelerator_cache
-
-    model_name = name.strip().lower()
-    if model_name == "tts":
-        model_name = "standard"
-
+    model_name = resolve_model_id(name)
     if model_name not in MODEL_NAMES:
         raise HTTPException(
             status_code=422,
             detail=f"Tên mô hình không hợp lệ: '{name}'. Danh sách mô hình hỗ trợ: {', '.join(MODEL_NAMES)}",
         )
 
-    global CURRENT_LOADED_MODEL, _LOADED_MODEL_INSTANCE
-    with _MODEL_LOCK:
-        _LOADED_MODEL_INSTANCE = None
-        CURRENT_LOADED_MODEL = None
-        gc.collect()
-        clear_accelerator_cache()
+    model_runtime.unload_model(model_name)
 
     return {
         "status": "ok",
         "message": f"Đã giải phóng mô hình '{model_name.upper()}' khỏi bộ nhớ RAM/VRAM.",
         "model": model_name,
     }
+
+
+@router.get("/api/v1/benchmarks", tags=["benchmarks"])
+def list_benchmarks_endpoint(
+    model: Annotated[str | None, Query(description="Filter by model ID")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> dict:
+    """Retrieve historical inference benchmark performance metrics."""
+    from api_app import job_manager
+    if not job_manager or not job_manager.store:
+        return {"benchmarks": [], "count": 0}
+
+    results = job_manager.store.list_benchmarks(model=model, limit=limit)
+    return {"benchmarks": results, "count": len(results)}
 
 
 @router.get("/api/v1/settings", tags=["settings"])
@@ -313,7 +264,6 @@ def update_settings(payload: SettingsUpdateModel) -> dict:
     }
     restart_required = any(k in clean_data for k in restart_required_keys)
 
-    # Apply via settings_manager which handles migration/aliasing
     for k, v in clean_data.items():
         settings_manager.set(k, v)
     settings_manager.save()
@@ -335,7 +285,6 @@ def update_settings(payload: SettingsUpdateModel) -> dict:
 def clean_temp_dir() -> dict:
     from api_app import API_DATA_DIR, PROJECT_DIR, job_manager
 
-    # Prevent deleting files when jobs are actively running or queued
     if job_manager:
         active_count = len(job_manager._active_procs) + job_manager._job_queue.qsize()
         if active_count > 0:
@@ -347,12 +296,11 @@ def clean_temp_dir() -> dict:
     count = 0
     size_bytes = 0
 
-    # 1. Clean API data inputs and chunks
     target_dirs = [API_DATA_DIR / "inputs", API_DATA_DIR / "chunks", PROJECT_DIR / "tmp"]
     for d in target_dirs:
         if d.exists():
             for f in d.glob("**/*"):
-                if f.is_file() and not f.name.startswith("."):
+                if f.is_file() and not f.name.startswith(".") and not f.name.endswith(".db") and f.name != "jobs.db":
                     try:
                         size_bytes += f.stat().st_size
                         f.unlink(missing_ok=True)
@@ -360,7 +308,6 @@ def clean_temp_dir() -> dict:
                     except Exception:
                         pass
 
-    # 2. Trigger SQLite expired jobs TTL cleanup
     if job_manager:
         del_jobs, freed_db_bytes = job_manager.store.cleanup_expired(retention_days=1)
         count += del_jobs

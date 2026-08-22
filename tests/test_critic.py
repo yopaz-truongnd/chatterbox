@@ -61,7 +61,9 @@ class CriticTestCase(unittest.TestCase):
         import numpy as np
         import soundfile as sf
 
-        with patch("services.job_manager.execute_model_inference", return_value=(torch.zeros(1, 240), 24000)), \
+        t = torch.linspace(0, 0.5, 12000)
+        healthy_dummy = (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
+        with patch("services.job_manager.execute_model_inference", return_value=(healthy_dummy, 24000)), \
              patch("routers.critic.analyze_audio_signals", return_value={"duration": 2.0, "loudness": -18.5, "pitch_mean": 220.0, "pitch_std": 35.0}), \
              patch("routers.critic.transcribe_audio_whisper", return_value="Hello world, this is a test."):
              
@@ -84,6 +86,9 @@ class CriticTestCase(unittest.TestCase):
                 data = response.json()
                 self.assertEqual(data["status"], "completed")
                 self.assertIn("markdown_report", data)
+                self.assertIn("evaluation", data)
+                self.assertIn("overall_score", data["evaluation"])
+                self.assertIn("passed", data["evaluation"])
                 self.assertIn("feedback_job_id", data)
                 self.assertIn("feedback_audio_url", data)
                 self.assertEqual(data["transcription"], "Hello world, this is a test.")

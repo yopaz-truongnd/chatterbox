@@ -133,7 +133,9 @@ source venv/bin/activate
 ### ⚡ Chế độ 3: Python Script (CLI / Code mẫu)
 
 ```bash
-python3 example_tts_turbo.py
+source venv/bin/activate
+python -m examples.tts_turbo
+# Hoặc: venv/bin/python -m examples.tts_turbo
 ```
 
 ---
@@ -274,7 +276,7 @@ Các nhóm hành vi được kiểm tra:
 - Reference audio tùy chọn: thêm, tải, thay và xóa.
 - `character_id` áp dụng voice profile/reference và upload request được ưu tiên.
 
-Xem mô tả chi tiết tại `PROJECT_ARCHITECTURE.md`, mục **Test suite**.
+Xem mô tả chi tiết tại tài liệu [Kiến trúc & Luồng hoạt động](architecture.md), mục **Test suite**.
 
 ---
 

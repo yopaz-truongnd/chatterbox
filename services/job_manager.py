@@ -28,8 +28,8 @@ def now_iso() -> str:
 
 class JobManager:
     def __init__(self, data_dir: Path, project_dir: Path, device: str, cpu_threads: int, timeout_seconds: int = 240):
-        self.data_dir = data_dir
-        self.project_dir = project_dir
+        self.data_dir = Path(data_dir)
+        self.project_dir = Path(project_dir)
         self.device = device
         self.cpu_threads = cpu_threads
         self.timeout_seconds = timeout_seconds
@@ -138,7 +138,8 @@ class JobManager:
             if job is None:
                 return False, "Không tìm thấy job"
 
-            if job.status in ("completed", "failed", "cancelled"):
+            from job_store import TERMINAL_JOB_STATUSES
+            if job.status in TERMINAL_JOB_STATUSES:
                 return True, f"Job đã ở trạng thái {job.status}"
 
             # Mark cancelled
@@ -192,9 +193,58 @@ class JobManager:
         with self._jobs_lock:
             job = self._jobs.get(job_id)
             if job:
+                old_status = getattr(job, "status", None)
+                old_phase = getattr(job, "phase", None)
+                old_progress = getattr(job, "progress_percent", 0) or 0
                 for k, v in changes.items():
                     setattr(job, k, v)
                 self.store.save(job)
+
+                # Emit lightweight event for listeners
+                try:
+                    from services.event_bus import event_bus
+                    project_id = job.params.get("project_id") if isinstance(job.params, dict) else None
+                    new_progress = getattr(job, "progress_percent", 0) or 0
+                    new_phase = getattr(job, "phase", None)
+
+                    if job.status in ("completed", "completed_partial") and old_status not in ("completed", "completed_partial"):
+                        qr = job.benchmark.get("quality_report") if isinstance(job.benchmark, dict) else None
+                        event_bus.emit(
+                            event_type=job.status,
+                            project_id=project_id,
+                            job_id=job.id,
+                            status=job.status,
+                            progress=100,
+                            data={
+                                "audio_url": f"/api/v1/jobs/{job.id}/audio",
+                                "srt_url": f"/api/v1/jobs/{job.id}/srt",
+                                "duration_seconds": job.duration_seconds,
+                                "quality_report": qr,
+                            },
+                        )
+                    elif job.status == "failed" and old_status != "failed":
+                        event_bus.emit(
+                            event_type="failed",
+                            project_id=project_id,
+                            job_id=job.id,
+                            status="failed",
+                            progress=new_progress,
+                            data={"error": job.error},
+                        )
+                    elif job.status == "processing" or job.phase in ("generating_tokens", "evaluating", "auto_fixing", "re_evaluating", "merging_audio", "publishing"):
+                        progress_changed_enough = (new_progress - old_progress >= 5) or (new_progress > 0 and old_progress == 0)
+                        phase_changed = (new_phase != old_phase and new_phase is not None)
+                        if progress_changed_enough or phase_changed:
+                            event_bus.emit(
+                                event_type="render_progress",
+                                project_id=project_id,
+                                job_id=job.id,
+                                status="rendering",
+                                progress=new_progress,
+                                data={"phase": new_phase or "processing"},
+                            )
+                except Exception:
+                    pass
 
     def _register_proc(self, job_id: str, proc: subprocess.Popen) -> None:
         with self._proc_lock:
@@ -267,14 +317,37 @@ class JobManager:
                 return
 
             if success and output_path.exists():
+                curr_job = self.get_job(job_id)
+                final_status = getattr(curr_job, "status", "completed") if curr_job and curr_job.status in ("completed", "completed_partial") else "completed"
+                if curr_job and curr_job.benchmark:
+                    has_failed_lines = any(r.get("status") == "failed" for r in curr_job.benchmark.get("lines_results", []))
+                    if has_failed_lines:
+                        final_status = "completed_partial"
+
                 self._update_job_status(
                     job_id,
-                    status="completed",
+                    status=final_status,
                     phase="completed",
                     progress_percent=100,
                     completed_at=now_iso(),
                     output_path=str(output_path),
                 )
+                final_job = self.get_job(job_id)
+                if final_job and final_job.benchmark:
+                    bm = final_job.benchmark
+                    if "realtime_factor" in bm and "total_seconds" in bm:
+                        try:
+                            self.store.record_benchmark(
+                                job_id=job_id,
+                                model=bm.get("model_type", final_job.type),
+                                device=bm.get("device", self.device),
+                                total_seconds=bm.get("total_seconds", 0.0),
+                                audio_duration_seconds=bm.get("audio_duration_seconds", final_job.duration_seconds or 0.0),
+                                realtime_factor=bm.get("realtime_factor", 0.0),
+                                faster_than_realtime=bm.get("faster_than_realtime", 0.0),
+                            )
+                        except Exception:
+                            pass
             else:
                 self._update_job_status(
                     job_id,

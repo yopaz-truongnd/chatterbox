@@ -1,0 +1,197 @@
+/* ========================================================================= */
+/* CHATTERBOX TTS STUDIO - MATERIAL 3 CSS THEME & CUSTOM STYLES              */
+/* ========================================================================= */
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3F3A46; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #7C3AED; }
+
+input[type=range] { -webkit-appearance: none; background: transparent; }
+input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #3F3A46; border-radius: 9999px; }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
+  background: #7C3AED; border: 2px solid #FFFFFF; margin-top: -6px; cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5); transition: transform 0.15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+.tab-panel { display: none; animation: fadeIn 0.2s ease-in-out; }
+.tab-panel.active { display: block; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Drag & Drop Over Highlight */
+.drag-over {
+  border-color: #7C3AED !important;
+  background-color: rgba(124, 58, 237, 0.08) !important;
+  outline: 2px dashed #7C3AED !important;
+}
+
+/* Toast animation */
+.toast-enter {
+  animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.toast-leave {
+  animation: toastSlideOut 0.25s ease-in forwards;
+}
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(100%) scale(0.9); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to { opacity: 0; transform: translateX(100%) scale(0.9); }
+}
+
+/* Base Theme Definitions */
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark, html.dark body {
+  background-color: #0E0C12 !important;
+  color: #FFFFFF !important;
+}
+
+html:not(.dark), html:not(.dark) body {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+/* ==================== LIGHT MODE OVERRIDES ==================== */
+html:not(.dark) ::-webkit-scrollbar-thumb { background: #CBD5E1; }
+html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #7C3AED; }
+html:not(.dark) input[type=range]::-webkit-slider-runnable-track { background: #CBD5E1; }
+
+html:not(.dark) header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) aside#navRail {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+
+html:not(.dark) main {
+  background-color: #F8FAFC !important;
+}
+
+html:not(.dark) .bg-\[\#0E0C12\] { background-color: #F8FAFC !important; }
+html:not(.dark) .bg-\[\#141218\] { background-color: #FFFFFF !important; }
+html:not(.dark) .bg-\[\#18151E\] {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+html:not(.dark) .bg-\[\#231F2A\] {
+  background-color: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+}
+html:not(.dark) .bg-\[\#26222C\] { background-color: #E2E8F0 !important; }
+html:not(.dark) .bg-\[\#2D2836\] { background-color: #E2E8F0 !important; }
+
+html:not(.dark) .border-\[\#3F3A46\],
+html:not(.dark) .border-\[\#3F3A46\]\/50,
+html:not(.dark) .border-\[\#3F3A46\]\/40,
+html:not(.dark) .border-\[\#3F3A46\]\/30 {
+  border-color: #E2E8F0 !important;
+}
+html:not(.dark) .border-\[\#2D2836\] { border-color: #E2E8F0 !important; }
+
+html:not(.dark) .text-white { color: #0F172A !important; }
+html:not(.dark) .text-slate-100 { color: #0F172A !important; }
+html:not(.dark) .text-slate-200 { color: #1E293B !important; }
+html:not(.dark) .text-slate-300 { color: #334155 !important; }
+html:not(.dark) .text-slate-400 { color: #64748B !important; }
+
+html:not(.dark) textarea,
+html:not(.dark) input[type="text"],
+html:not(.dark) input[type="number"],
+html:not(.dark) select {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+html:not(.dark) textarea:focus,
+html:not(.dark) input[type="text"]:focus,
+html:not(.dark) input[type="number"]:focus,
+html:not(.dark) select:focus {
+  border-color: #7C3AED !important;
+  box-shadow: 0 0 0 1px #7C3AED !important;
+}
+html:not(.dark) textarea::placeholder,
+html:not(.dark) input::placeholder {
+  color: #94A3B8 !important;
+}
+
+html:not(.dark) .bg-purple-950\/40,
+html:not(.dark) .bg-purple-950\/30,
+html:not(.dark) .bg-purple-950\/20 {
+  background-color: #FAF5FF !important;
+  border-color: #E9D5FF !important;
+}
+html:not(.dark) .bg-purple-900\/40 {
+  background-color: #F3E8FF !important;
+  border-color: #D8B4FE !important;
+}
+html:not(.dark) .text-purple-300 { color: #6B21A8 !important; }
+html:not(.dark) .text-purple-400 { color: #7C3AED !important; }
+
+html:not(.dark) .bg-amber-950\/40,
+html:not(.dark) .bg-amber-950\/60 {
+  background-color: #FEF3C7 !important;
+  border-color: #FDE68A !important;
+}
+html:not(.dark) .text-amber-200 { color: #92400E !important; }
+html:not(.dark) .text-amber-300 { color: #78350F !important; }
+
+html:not(.dark) .bg-emerald-950\/40,
+html:not(.dark) .bg-emerald-950\/30 {
+  background-color: #ECFDF5 !important;
+  border-color: #A7F3D0 !important;
+}
+html:not(.dark) .text-emerald-300 { color: #047857 !important; }
+html:not(.dark) .text-emerald-400 { color: #059669 !important; }
+
+html:not(.dark) .bg-blue-950\/40,
+html:not(.dark) .bg-blue-950\/30 {
+  background-color: #EFF6FF !important;
+  border-color: #BFDBFE !important;
+}
+html:not(.dark) .text-blue-300 { color: #1D4ED8 !important; }
+html:not(.dark) .text-blue-400 { color: #2563EB !important; }
+
+html:not(.dark) .bg-black\/75,
+html:not(.dark) .bg-black\/60,
+html:not(.dark) .bg-black\/50 {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+}
+
+html:not(.dark) #navRail button:not(.active) {
+  color: #475569 !important;
+}
+html:not(.dark) #navRail button:not(.active):hover {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+/* Preserve high-contrast white text on solid buttons like purple-600, emerald-600, red-600, blue-600 */
+html:not(.dark) .bg-purple-600,
+html:not(.dark) .bg-emerald-600,
+html:not(.dark) .bg-red-600,
+html:not(.dark) .bg-blue-600,
+html:not(.dark) .bg-purple-600 *,
+html:not(.dark) .bg-emerald-600 *,
+html:not(.dark) .bg-red-600 *,
+html:not(.dark) .bg-blue-600 * {
+  color: #FFFFFF !important;
+}

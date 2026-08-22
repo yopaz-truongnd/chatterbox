@@ -74,9 +74,13 @@ console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-# File handler ghi ra file logs cục bộ
+# File handler ghi ra file logs cục bộ (tmp/logs)
 try:
-    file_handler = logging.FileHandler("chatterbox_studio.log", encoding="utf-8")
+    import os
+    from pathlib import Path
+    log_dir = Path(os.getenv("CHATTERBOX_LOG_DIR", "tmp/logs"))
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(str(log_dir / "chatterbox_studio.log"), encoding="utf-8")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 except Exception as e:

@@ -66,202 +66,7 @@
       } catch (e) {}
     })();
   </script>
-
-  <style>
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #3F3A46; border-radius: 9999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #7C3AED; }
-    
-    input[type=range] { -webkit-appearance: none; background: transparent; }
-    input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #3F3A46; border-radius: 9999px; }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
-      background: #7C3AED; border: 2px solid #FFFFFF; margin-top: -6px; cursor: pointer;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.5); transition: transform 0.15s;
-    }
-    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
-
-    .tab-panel { display: none; animation: fadeIn 0.2s ease-in-out; }
-    .tab-panel.active { display: block; }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Drag & Drop Over Highlight */
-    .drag-over {
-      border-color: #7C3AED !important;
-      background-color: rgba(124, 58, 237, 0.08) !important;
-      outline: 2px dashed #7C3AED !important;
-    }
-
-    /* Toast animation */
-    .toast-enter {
-      animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    .toast-leave {
-      animation: toastSlideOut 0.25s ease-in forwards;
-    }
-    @keyframes toastSlideIn {
-      from { opacity: 0; transform: translateX(100%) scale(0.9); }
-      to { opacity: 1; transform: translateX(0) scale(1); }
-    }
-    @keyframes toastSlideOut {
-      from { opacity: 1; transform: translateX(0) scale(1); }
-      to { opacity: 0; transform: translateX(100%) scale(0.9); }
-    }
-
-    /* Base Theme Definitions */
-    html, body {
-      margin: 0;
-      padding: 0;
-      min-height: 100vh;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      transition: background-color 0.2s ease, color 0.2s ease;
-    }
-
-    html.dark, html.dark body {
-      background-color: #0E0C12 !important;
-      color: #FFFFFF !important;
-    }
-
-    html:not(.dark), html:not(.dark) body {
-      background-color: #F8FAFC !important;
-      color: #0F172A !important;
-    }
-
-    /* ==================== LIGHT MODE OVERRIDES ==================== */
-    html:not(.dark) ::-webkit-scrollbar-thumb { background: #CBD5E1; }
-    html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #7C3AED; }
-    html:not(.dark) input[type=range]::-webkit-slider-runnable-track { background: #CBD5E1; }
-
-    html:not(.dark) header {
-      background-color: rgba(255, 255, 255, 0.95) !important;
-      border-color: #E2E8F0 !important;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
-    }
-
-    html:not(.dark) aside#navRail {
-      background-color: #FFFFFF !important;
-      border-color: #E2E8F0 !important;
-    }
-
-    html:not(.dark) main {
-      background-color: #F8FAFC !important;
-    }
-
-    html:not(.dark) .bg-\[\#0E0C12\] { background-color: #F8FAFC !important; }
-    html:not(.dark) .bg-\[\#141218\] { background-color: #FFFFFF !important; }
-    html:not(.dark) .bg-\[\#18151E\] {
-      background-color: #FFFFFF !important;
-      border-color: #E2E8F0 !important;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
-    }
-    html:not(.dark) .bg-\[\#231F2A\] {
-      background-color: #F1F5F9 !important;
-      border-color: #E2E8F0 !important;
-    }
-    html:not(.dark) .bg-\[\#26222C\] { background-color: #E2E8F0 !important; }
-    html:not(.dark) .bg-\[\#2D2836\] { background-color: #E2E8F0 !important; }
-
-    html:not(.dark) .border-\[\#3F3A46\],
-    html:not(.dark) .border-\[\#3F3A46\]\/50,
-    html:not(.dark) .border-\[\#3F3A46\]\/40,
-    html:not(.dark) .border-\[\#3F3A46\]\/30 {
-      border-color: #E2E8F0 !important;
-    }
-    html:not(.dark) .border-\[\#2D2836\] { border-color: #E2E8F0 !important; }
-
-    html:not(.dark) .text-white { color: #0F172A !important; }
-    html:not(.dark) .text-slate-100 { color: #0F172A !important; }
-    html:not(.dark) .text-slate-200 { color: #1E293B !important; }
-    html:not(.dark) .text-slate-300 { color: #334155 !important; }
-    html:not(.dark) .text-slate-400 { color: #64748B !important; }
-
-    html:not(.dark) textarea,
-    html:not(.dark) input[type="text"],
-    html:not(.dark) input[type="number"],
-    html:not(.dark) select {
-      background-color: #FFFFFF !important;
-      color: #0F172A !important;
-      border-color: #CBD5E1 !important;
-    }
-    html:not(.dark) textarea:focus,
-    html:not(.dark) input[type="text"]:focus,
-    html:not(.dark) input[type="number"]:focus,
-    html:not(.dark) select:focus {
-      border-color: #7C3AED !important;
-      box-shadow: 0 0 0 1px #7C3AED !important;
-    }
-    html:not(.dark) textarea::placeholder,
-    html:not(.dark) input::placeholder {
-      color: #94A3B8 !important;
-    }
-
-    html:not(.dark) .bg-purple-950\/40,
-    html:not(.dark) .bg-purple-950\/30,
-    html:not(.dark) .bg-purple-950\/20 {
-      background-color: #FAF5FF !important;
-      border-color: #E9D5FF !important;
-    }
-    html:not(.dark) .bg-purple-900\/40 {
-      background-color: #F3E8FF !important;
-      border-color: #D8B4FE !important;
-    }
-    html:not(.dark) .text-purple-300 { color: #6B21A8 !important; }
-    html:not(.dark) .text-purple-400 { color: #7C3AED !important; }
-
-    html:not(.dark) .bg-amber-950\/40,
-    html:not(.dark) .bg-amber-950\/60 {
-      background-color: #FEF3C7 !important;
-      border-color: #FDE68A !important;
-    }
-    html:not(.dark) .text-amber-200 { color: #92400E !important; }
-    html:not(.dark) .text-amber-300 { color: #78350F !important; }
-
-    html:not(.dark) .bg-emerald-950\/40,
-    html:not(.dark) .bg-emerald-950\/30 {
-      background-color: #ECFDF5 !important;
-      border-color: #A7F3D0 !important;
-    }
-    html:not(.dark) .text-emerald-300 { color: #047857 !important; }
-    html:not(.dark) .text-emerald-400 { color: #059669 !important; }
-
-    html:not(.dark) .bg-blue-950\/40,
-    html:not(.dark) .bg-blue-950\/30 {
-      background-color: #EFF6FF !important;
-      border-color: #BFDBFE !important;
-    }
-    html:not(.dark) .text-blue-300 { color: #1D4ED8 !important; }
-    html:not(.dark) .text-blue-400 { color: #2563EB !important; }
-
-    html:not(.dark) .bg-black\/75,
-    html:not(.dark) .bg-black\/60,
-    html:not(.dark) .bg-black\/50 {
-      background-color: rgba(15, 23, 42, 0.45) !important;
-    }
-
-    html:not(.dark) #navRail button:not(.active) {
-      color: #475569 !important;
-    }
-    html:not(.dark) #navRail button:not(.active):hover {
-      background-color: #F1F5F9 !important;
-      color: #0F172A !important;
-    }
-
-    /* Preserve high-contrast white text on solid buttons like purple-600, emerald-600, red-600, blue-600 */
-    html:not(.dark) .bg-purple-600,
-    html:not(.dark) .bg-emerald-600,
-    html:not(.dark) .bg-red-600,
-    html:not(.dark) .bg-blue-600,
-    html:not(.dark) .bg-purple-600 *,
-    html:not(.dark) .bg-emerald-600 *,
-    html:not(.dark) .bg-red-600 *,
-    html:not(.dark) .bg-blue-600 * {
-      color: #FFFFFF !important;
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="bg-[#0E0C12] text-white font-sans min-h-screen flex flex-col antialiased selection:bg-purple-600 selection:text-white relative">
 
@@ -308,13 +113,45 @@
         </select>
       </div>
 
+      <!-- Notifications Button & Dropdown -->
+      <div class="relative">
+        <button id="notificationsToggle" onclick="toggleNotificationsPanel()" class="relative p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Thông báo sự kiện (Real-time Events)">
+          <span class="material-symbols-outlined text-[18px]">notifications</span>
+          <span id="notificationsBadge" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500 animate-ping"></span>
+          <span id="notificationsCount" class="hidden absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 text-[9px] font-bold bg-purple-600 text-white rounded-full flex items-center justify-center border border-[#18151E]">0</span>
+        </button>
+
+        <!-- Floating Notifications Panel Dropdown -->
+        <div id="notificationsPanel" class="hidden absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#18151E] border border-[#3F3A46] rounded-xl shadow-m3-3 z-50 overflow-hidden text-xs">
+          <div class="px-3.5 py-2.5 bg-[#231F2A] border-b border-[#3F3A46] flex items-center justify-between">
+            <div class="flex items-center gap-1.5 font-bold text-white">
+              <span class="material-symbols-outlined text-purple-400 text-[18px]">notifications_active</span>
+              <span>Sự kiện & Thông báo</span>
+              <span id="notifTotalBadge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-600/30 text-purple-300 border border-purple-500/40 font-mono">0</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="clearAllNotifications()" class="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-[#18151E] transition-colors cursor-pointer">Xóa hết</button>
+              <button onclick="toggleNotificationsPanel()" class="p-1 text-slate-400 hover:text-white rounded hover:bg-[#18151E] cursor-pointer">
+                <span class="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+          </div>
+          <div id="notificationsList" class="max-h-80 overflow-y-auto divide-y divide-[#3F3A46]/40 p-1">
+            <div id="notificationsEmpty" class="py-8 text-center text-slate-500 space-y-1">
+              <span class="material-symbols-outlined text-[28px] text-slate-600">notifications_paused</span>
+              <p class="text-xs">Chưa có thông báo sự kiện nào</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Theme Switcher -->
-      <button id="themeToggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors" title="Chuyển chế độ Sáng/Tối">
+      <button id="themeToggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Chuyển chế độ Sáng/Tối">
         <span id="themeIcon" class="material-symbols-outlined text-[18px]">dark_mode</span>
       </button>
 
       <!-- Help / Shortcuts -->
-      <button onclick="openShortcutsModal()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors" title="Bảng phím tắt (F1)">
+      <button onclick="openShortcutsModal()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Bảng phím tắt (F1)">
         <span class="material-symbols-outlined text-[18px]">keyboard</span>
       </button>
     </div>
@@ -352,7 +189,13 @@
           <span>Voice Clone (VC)</span>
         </button>
 
-        <!-- 5. Characters -->
+        <!-- 5. Projects Planner (Two-Stage Confirmation Flow) -->
+        <button onclick="switchTab('projects')" data-tab="projects" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[19px]">assignment_turned_in</span>
+          <span>Dự án âm thanh</span>
+        </button>
+
+        <!-- 6. Characters -->
         <button onclick="switchTab('characters')" data-tab="characters" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
           <span class="material-symbols-outlined text-[19px]">face</span>
           <span>Nhân vật (Voices)</span>
@@ -1319,7 +1162,254 @@
       </section>
 
       <!-- ========================================================================= -->
-      <!-- TAB 5: CHARACTERS (VOICES)                                                -->
+      <!-- TAB 5: AUDIO PROJECTS PLANNER (TWO-STAGE CONFIRMATION FLOW)               -->
+      <!-- ========================================================================= -->
+      <section id="panel-projects" class="tab-panel space-y-3.5">
+        
+        <!-- Header Card -->
+        <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 rounded-lg bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+              <span class="material-symbols-outlined text-[22px]">assignment_turned_in</span>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>Quản lý Dự án & Quy trình Xác nhận 2 Trạng thái</span>
+                <span class="px-2 py-0.5 rounded-full bg-indigo-600/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/20">Two-Stage Flow</span>
+              </h2>
+              <p class="text-[11px] text-slate-400">Phân tích ý tưởng → Gom câu hỏi 1 lượt → Tóm tắt cấu hình → Bắt buộc duyệt (Approved) trước khi Render.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 self-end sm:self-auto">
+            <button onclick="resetProjectPlannerForm()" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1.5 shadow-m3-1 cursor-pointer transition-all">
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span>Dự án mới</span>
+            </button>
+            <button onclick="loadProjects()" class="p-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2C2735] text-slate-300 border border-[#3F3A46] cursor-pointer" title="Làm mới danh sách">
+              <span class="material-symbols-outlined text-[18px]">refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Split Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          
+          <!-- LEFT COLUMN: Active Project Interactive Flow (7 Cols) -->
+          <div class="lg:col-span-7 space-y-4">
+            
+            <!-- STEP 1: PREPARE PROJECT INPUT CARD -->
+            <div id="projectStep1Card" class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-3">
+              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center">1</span>
+                  <h3 class="text-xs font-bold text-white uppercase tracking-wider">Khởi tạo Dự án & Ý tưởng</h3>
+                </div>
+                <span class="text-[11px] text-purple-400 font-mono" id="projectActiveIdBadge">Mới</span>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1.5">Chủ đề hoặc mô tả yêu cầu sản phẩm:</label>
+                <textarea id="projectTopicInput" rows="3" class="w-full bg-[#0E0C12] border border-[#3F3A46] focus:border-purple-500 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-hidden transition-all resize-none" placeholder="Ví dụ: Tạo podcast 5 phút bằng tiếng Việt về Lịch sử Trí tuệ Nhân tạo cho người mới tìm hiểu, giọng nữ nhẹ nhàng, có nhạc nền êm dịu, xuất file WAV kèm phụ đề SRT..."></textarea>
+              </div>
+
+              <!-- Quick Prompt Suggestions -->
+              <div class="space-y-1">
+                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Gợi ý chủ đề mẫu:</span>
+                <div class="flex flex-wrap gap-1.5">
+                  <button onclick="setProjectTopicPrompt('Tạo podcast 5 phút bằng tiếng Việt về Lịch sử Trí tuệ Nhân tạo cho người mới, giọng kể nhẹ nhàng, nhạc nền nhẹ')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">🎙️ Podcast 5 phút về AI</button>
+                  <button onclick="setProjectTopicPrompt('Video narration 3 phút giới thiệu sản phẩm công nghệ, giọng nam chuyên nghiệp, kịch tính, kèm nhạc nền')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">🎬 Video thuyết minh 3 phút</button>
+                  <button onclick="setProjectTopicPrompt('Sách nói truyện thiếu nhi 10 phút, giọng đọc ấm áp, không cần hiệu ứng sound effect')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">📖 Audiobook truyện 10 phút</button>
+                  <button onclick="setProjectTopicPrompt('Quảng cáo 1 phút bằng tiếng Việt cho ứng dụng học tập, giọng sôi nổi năng động')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">📢 Quảng cáo ngắn 1 phút</button>
+                </div>
+              </div>
+
+              <div class="pt-2 border-t border-[#3F3A46]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="projectAutoDefaultsCheck" class="w-4 h-4 rounded border-[#3F3A46] text-purple-600 focus:ring-purple-500 bg-[#0E0C12]">
+                  <span class="text-xs text-slate-300">Tự động điền mặc định cho mục không quan trọng</span>
+                </label>
+                <button id="projectPrepareBtn" onclick="prepareProjectAction()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-m3-1 cursor-pointer transition-all">
+                  <span class="material-symbols-outlined text-[16px]">psychology</span>
+                  <span>Phân tích & Khởi tạo</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- STEP 2: AWAITING ANSWERS CARD (QUESTIONS BATCH) -->
+            <div id="projectStep2Card" class="hidden bg-[#18151E] rounded-xl p-4 border border-amber-500/40 shadow-m3-2 space-y-3.5">
+              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-amber-600 text-white text-[11px] font-bold flex items-center justify-center">2</span>
+                  <h3 class="text-xs font-bold text-amber-300 uppercase tracking-wider">Thu thập thông tin còn thiếu (Gom 1 lượt)</h3>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-amber-600/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">Awaiting Answers</span>
+              </div>
+
+              <!-- Recognized parameters tags -->
+              <div>
+                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Thông tin AI đã nhận diện được:</span>
+                <div id="projectRecognizedTags" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+              </div>
+
+              <!-- Questions dynamic form -->
+              <div id="projectQuestionsContainer" class="space-y-3 pt-2"></div>
+
+              <!-- Freeform answer text input -->
+              <div class="pt-2">
+                <label class="block text-[11px] font-medium text-slate-400 mb-1">Hoặc nhập câu trả lời tổng hợp bằng lời nói tự nhiên:</label>
+                <input type="text" id="projectFreeformAnswersInput" class="w-full bg-[#0E0C12] border border-[#3F3A46] focus:border-purple-500 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-hidden" placeholder="Ví dụ: Podcast, 5 phút, người mới, nhạc nền nhẹ...">
+              </div>
+
+              <div class="pt-2 border-t border-[#3F3A46]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="projectAnswersAutoDefaultsCheck" checked class="w-4 h-4 rounded border-[#3F3A46] text-purple-600 focus:ring-purple-500 bg-[#0E0C12]">
+                  <span class="text-xs text-slate-300">Tự động chọn mặc định các mục còn lại</span>
+                </label>
+                <button id="projectSubmitAnswersBtn" onclick="submitProjectAnswersAction()" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-m3-1 cursor-pointer transition-all">
+                  <span class="material-symbols-outlined text-[16px]">send</span>
+                  <span>Gửi câu trả lời & Tóm tắt</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- STEP 3: AWAITING CONFIRMATION SUMMARY CARD -->
+            <div id="projectStep3Card" class="hidden bg-[#18151E] rounded-xl p-4 border border-blue-500/40 shadow-m3-2 space-y-3.5">
+              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">3</span>
+                  <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider">Xác nhận phương án cuối (Final Confirmation)</h3>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 text-[10px] font-bold border border-blue-500/30">Awaiting Confirmation</span>
+              </div>
+
+              <!-- Summary Card Content -->
+              <div id="projectSummaryBox" class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] text-xs leading-relaxed text-slate-200 space-y-2"></div>
+
+              <!-- Confirmation Prompt Banner -->
+              <div class="p-3 rounded-lg bg-blue-950/40 border border-blue-500/30 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-blue-400 text-[20px]">help</span>
+                  <span class="text-xs text-blue-200 font-medium">Đây có phải cấu hình bạn muốn triển khai không?</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="confirmProjectAction(false)" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-red-950/40 text-red-300 border border-red-500/30 text-xs font-bold cursor-pointer transition-all">
+                    Từ chối / Hủy
+                  </button>
+                  <button onclick="confirmProjectAction(true)" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-m3-1 flex items-center gap-1 cursor-pointer transition-all">
+                    <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                    <span>Xác nhận & Phê duyệt</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- STEP 4: APPROVED & RENDER EXECUTION CARD -->
+            <div id="projectStep4Card" class="hidden bg-[#18151E] rounded-xl p-4 border border-emerald-500/40 shadow-m3-2 space-y-3.5">
+              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center">4</span>
+                  <h3 class="text-xs font-bold text-emerald-300 uppercase tracking-wider">Sản xuất Audio & Sinh giọng nói (Render)</h3>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">✅ Approved</span>
+              </div>
+
+              <!-- Narration Script Editor -->
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="text-xs font-medium text-slate-300">Kịch bản phân đoạn giọng nói (Script):</label>
+                  <button onclick="generateProjectSampleScript()" class="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer">
+                    <span class="material-symbols-outlined text-[14px]">auto_fix_high</span>
+                    <span>Tự tạo kịch bản mẫu</span>
+                  </button>
+                </div>
+                <textarea id="projectScriptInput" rows="4" class="w-full bg-[#0E0C12] border border-[#3F3A46] focus:border-emerald-500 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-hidden resize-none"></textarea>
+              </div>
+
+              <!-- Overrides Row -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-400 mb-1">Giọng đọc / Nhân vật:</label>
+                  <select id="projectCharacterSelect" class="w-full bg-[#0E0C12] border border-[#3F3A46] text-xs text-white rounded-lg p-2 focus:outline-hidden">
+                    <option value="">Tự động tối ưu theo chủ đề</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-400 mb-1">Chất lượng Preset:</label>
+                  <select id="projectPresetSelect" class="w-full bg-[#0E0C12] border border-[#3F3A46] text-xs text-white rounded-lg p-2 focus:outline-hidden">
+                    <option value="balanced">⚖️ Cân bằng (Balanced - Chuẩn)</option>
+                    <option value="fast">⚡ Siêu nhanh (Fast - Nano)</option>
+                    <option value="expressive">🎭 Biểu cảm cao (Expressive - Turbo)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="pt-2 border-t border-[#3F3A46]/40 flex items-center justify-between">
+                <span class="text-[11px] text-slate-400">Đã phê duyệt an toàn • Sẵn sàng tổng hợp</span>
+                <button id="projectRenderBtn" onclick="renderProjectAction()" class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-m3-2 cursor-pointer transition-all">
+                  <span class="material-symbols-outlined text-[18px]">play_circle</span>
+                  <span>Bắt đầu Render Audio</span>
+                </button>
+              </div>
+
+              <!-- Realtime Job Player & Result Box -->
+              <div id="projectJobResultBox" class="hidden p-3.5 rounded-xl bg-[#0E0C12] border border-[#3F3A46] space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="projectJobStatusTitle">Đang tổng hợp...</span>
+                  </span>
+                  <span id="projectJobIdText" class="text-[10px] font-mono text-purple-400">Job: ...</span>
+                </div>
+                <div class="w-full bg-[#231F2A] rounded-full h-2 overflow-hidden">
+                  <div id="projectJobProgressBar" class="bg-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <!-- Audio Player -->
+                <div id="projectAudioPlayerContainer" class="hidden space-y-2 pt-2 border-t border-[#3F3A46]/40">
+                  <audio id="projectAudioEl" controls class="w-full h-9 rounded-lg"></audio>
+                  <div class="flex items-center justify-end gap-2">
+                    <a id="projectDownloadWavBtn" href="#" download class="px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[14px]">download</span>
+                      <span>Tải WAV</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN: Saved Projects History & Switcher (5 Cols) -->
+          <div class="lg:col-span-5 space-y-3">
+            <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-3">
+              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px] text-indigo-400">folder_open</span>
+                  <span>Danh sách Dự án</span>
+                </h3>
+                <span id="projectsCountBadge" class="px-2 py-0.5 rounded-full bg-[#231F2A] text-slate-300 text-[10px] font-bold">0 dự án</span>
+              </div>
+
+              <!-- Status Filters -->
+              <div class="flex flex-wrap gap-1">
+                <button onclick="filterProjectsList('all')" data-pfilter="all" class="pfilter-btn active px-2.5 py-1 rounded-md bg-purple-600 text-white text-[10px] font-bold cursor-pointer">Tất cả</button>
+                <button onclick="filterProjectsList('awaiting_answers')" data-pfilter="awaiting_answers" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Chờ trả lời</button>
+                <button onclick="filterProjectsList('awaiting_confirmation')" data-pfilter="awaiting_confirmation" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Chờ duyệt</button>
+                <button onclick="filterProjectsList('approved')" data-pfilter="approved" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Đã duyệt</button>
+                <button onclick="filterProjectsList('rendering')" data-pfilter="rendering" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Đang tạo</button>
+              </div>
+
+              <!-- Projects List Box -->
+              <div id="projectsListContainer" class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                <div class="text-xs text-slate-500 py-8 text-center">Chưa có dự án nào. Hãy nhập ý tưởng bên trái để khởi tạo!</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 6: CHARACTERS (VOICES)                                                -->
       <!-- ========================================================================= -->
       <section id="panel-characters" class="tab-panel space-y-3.5">
         <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-3.5">
@@ -1630,10 +1720,10 @@
             <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs">
               <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
                 <span class="material-symbols-outlined text-purple-400 text-[16px]">build</span>
-                <span>Danh sách Công cụ MCP Hỗ trợ (5 Tools)</span>
+                <span>Danh sách Công cụ MCP Hỗ trợ (10 Tools)</span>
               </h3>
               <p class="text-slate-400 text-[11px]">
-                Các AI Assistant sau khi kết nối MCP sẽ được cấp quyền sử dụng các công cụ sau để tương tác với hệ thống Chatterbox:
+                Các AI Assistant sau khi kết nối MCP sẽ được cấp quyền sử dụng 10 công cụ sau để tương tác và tối ưu quy trình với hệ thống Chatterbox:
               </p>
               
               <div class="space-y-2 mt-2">
@@ -1664,18 +1754,58 @@
                 <!-- Tool 4 -->
                 <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
                   <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_download_audio</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Tải file âm thanh đã sinh về máy an toàn (confinement vào outputs/mcp, atomic replace, integrity check).</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-cyan-600/20 text-cyan-300 text-[9px] font-bold border border-cyan-500/20 self-start md:self-center">Safe Download</span>
+                </div>
+                <!-- Tool 5 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
                     <span class="text-purple-300 font-mono font-bold">chatterbox_voice_conversion</span>
                     <p class="text-[10px] text-slate-400 mt-0.5">Chuyển đổi âm sắc (Voice Conversion) của file âm thanh nguồn sang giọng đọc của nhân vật đích.</p>
                   </div>
                   <span class="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/20 self-start md:self-center">Voice Clone</span>
                 </div>
-                <!-- Tool 5 -->
+                <!-- Tool 6 -->
                 <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
                   <div>
                     <span class="text-purple-300 font-mono font-bold">chatterbox_evaluate_voice</span>
                     <p class="text-[10px] text-slate-400 mt-0.5">Đánh giá chất lượng đọc (âm lượng, độ diễn cảm, tốc độ, độ khớp chữ) và đọc to lời nhận xét của AI Coach.</p>
                   </div>
                   <span class="px-2 py-0.5 rounded bg-amber-600/20 text-amber-300 text-[9px] font-bold border border-amber-500/20 self-start md:self-center">AI Critic</span>
+                </div>
+                <!-- Tool 7 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_prepare_project</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Khởi tạo kế hoạch dự án từ chủ đề, bóc tách NLP các yêu cầu và gom câu hỏi thiếu trong 1 lượt.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-indigo-600/20 text-indigo-300 text-[9px] font-bold border border-indigo-500/20 self-start md:self-center">Project Plan</span>
+                </div>
+                <!-- Tool 8 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_answer_project_questions</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Nhận câu trả lời của người dùng, cập nhật cấu hình dự án và xuất bản tóm tắt phương án cuối.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-amber-600/20 text-amber-300 text-[9px] font-bold border border-amber-500/20 self-start md:self-center">Project Q&A</span>
+                </div>
+                <!-- Tool 9 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_confirm_project</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Xác nhận phê duyệt cấu hình cuối của dự án. Chuyển trạng thái sang approved.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/20 self-start md:self-center">Approval</span>
+                </div>
+                <!-- Tool 10 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_render_project</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Khởi chạy tổng hợp âm thanh thực tế cho dự án đã được phê duyệt. Từ chối dự án chưa approved.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-purple-600/20 text-purple-300 text-[9px] font-bold border border-purple-500/20 self-start md:self-center">Render Exec</span>
                 </div>
               </div>
             </div>
@@ -1999,3202 +2129,17 @@
     </div>
   </div>
 
-  <!-- ==================== JAVASCRIPT CONTROLLER ==================== -->
-  <script>
-    const audioElement = new Audio();
-    let currentAudioUrl = null;
-    let isPlaying = false;
-    let selectedMtlLanguage = 'en';
-    let uploadedRefFile = null;
-    let currentTab = 'tts';
-    let systemRecommendedModel = 'nano';
-    let userManuallyChangedModel = false;
-    let currentActiveJobId = null;
-
-    // Batch studio state
-    let parsedBatchLines = [];
-    let parsedBatchVoiceOverrides = {};
-    let parsedBatchPauseOverrides = {}; // { [idx]: pause_seconds }
-    let batchRowData = {}; // { [idx]: { jobId, audioUrl, status, error, duration, start_s, end_s } }
-    let isBatchRunning = false;
-    let cancelBatchRequested = false;
-    let currentBatchJobId = null;
-    let batchCurrentFilter = 'all';
-    let batchUndoBuffer = null;
-    let batchSearchIndex = -1;
-
-    // URL Mapping for tabs
-    const TAB_URL_MAP = {
-      'tts': 'tts-studio',
-      'batch': 'batch-studio',
-      'multilingual': 'multilingual-tts',
-      'vc': 'voice-clone',
-      'characters': 'characters',
-      'history': 'history',
-      'settings': 'settings',
-      'mcp': 'connect-mcp'
-    };
-
-    const URL_TAB_MAP = {
-      'tts-studio': 'tts',
-      'tts': 'tts',
-      'batch-studio': 'batch',
-      'batch': 'batch',
-      'multilingual-tts': 'multilingual',
-      'multilingual': 'multilingual',
-      'voice-clone': 'vc',
-      'vc': 'vc',
-      'characters': 'characters',
-      'characters-studio': 'characters',
-      'history': 'history',
-      'history-studio': 'history',
-      'settings': 'settings',
-      'settings-studio': 'settings',
-      'connect-mcp': 'mcp',
-      'mcp': 'mcp'
-    };
-
-    // A/B Comparison Slots
-    let slotA = null;
-    let slotB = null;
-
-    // MediaRecorder for live microphone recording
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let isRecordingMic = false;
-
-    // ==================== MATERIAL 3 TOAST POPUP SYSTEM ====================
-    function showToast(type, message, title = '') {
-      const container = document.getElementById('toastContainer');
-      if (!container) return;
-
-      const toast = document.createElement('div');
-      toast.className = 'pointer-events-auto p-4 rounded-xl border shadow-m3-2 flex items-start gap-3 text-xs toast-enter transition-all';
-      
-      let icon = 'info';
-      let borderClass = 'border-purple-500/50 bg-[#18151E] text-white';
-      let iconColor = 'text-purple-400';
-
-      if (type === 'error') {
-        icon = 'error';
-        borderClass = 'border-red-500/50 bg-[#1F1215] text-white';
-        iconColor = 'text-red-400';
-        title = title || 'Lỗi xử lý';
-      } else if (type === 'success') {
-        icon = 'check_circle';
-        borderClass = 'border-emerald-500/50 bg-[#0F1B16] text-white';
-        iconColor = 'text-emerald-400';
-        title = title || 'Thành công';
-      } else if (type === 'warning') {
-        icon = 'warning';
-        borderClass = 'border-amber-500/50 bg-[#1F1912] text-white';
-        iconColor = 'text-amber-400';
-        title = title || 'Cảnh báo';
-      } else {
-        title = title || 'Thông báo';
-      }
-
-      toast.className += ` ${borderClass}`;
-      toast.innerHTML = `
-        <span class="material-symbols-outlined text-[20px] ${iconColor} flex-shrink-0 mt-0.5">${icon}</span>
-        <div class="flex-1">
-          <div class="font-bold text-sm mb-0.5">${title}</div>
-          <div class="text-slate-300 leading-relaxed">${message}</div>
-        </div>
-        <button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-white cursor-pointer flex-shrink-0">
-          <span class="material-symbols-outlined text-[16px]">close</span>
-        </button>
-      `;
-
-      container.appendChild(toast);
-
-      // Auto dismiss after 4 seconds
-      setTimeout(() => {
-        if (toast && toast.parentElement) {
-          toast.classList.remove('toast-enter');
-          toast.classList.add('toast-leave');
-          setTimeout(() => toast.remove(), 250);
-        }
-      }, 4000);
-    }
-
-    // ==================== TAB SWITCHING & URL ROUTING ====================
-    function switchTab(tabId, updateUrl = true) {
-      if (!tabId) return;
-      currentTab = tabId;
-
-      // Update Active Navigation Button Styling
-      document.querySelectorAll('.nav-btn').forEach(btn => {
-        if (btn.getAttribute('data-tab') === tabId) {
-          btn.classList.add('active', 'bg-purple-600', 'text-white', 'font-bold', 'shadow-m3-1');
-          btn.classList.remove('text-slate-400', 'hover:bg-[#231F2A]');
-        } else {
-          btn.classList.remove('active', 'bg-purple-600', 'text-white', 'font-bold', 'shadow-m3-1');
-          btn.classList.add('text-slate-400', 'hover:bg-[#231F2A]');
-        }
-      });
-
-      // Switch Active Section Panel
-      document.querySelectorAll('.tab-panel').forEach(panel => {
-        panel.classList.remove('active');
-      });
-      const targetPanel = document.getElementById(`panel-${tabId}`);
-      if (targetPanel) targetPanel.classList.add('active');
-
-      // Update URL Hash / Path
-      if (updateUrl) {
-        const slug = TAB_URL_MAP[tabId] || tabId;
-        window.history.pushState({ tab: tabId }, '', `#${slug}`);
-      }
-
-      // Close Mobile Nav if open
-      const navRail = document.getElementById('navRail');
-      const overlay = document.getElementById('mobileOverlay');
-      if (navRail && overlay) {
-        navRail.classList.add('-translate-x-full');
-        overlay.classList.add('hidden');
-      }
-
-      // Tab specific initializers
-      if (tabId === 'characters') loadCharacters();
-      if (tabId === 'history') refreshHistory();
-      if (tabId === 'settings') loadSettings();
-    }
-
-    function initUrlRoute() {
-      // Check window.location.hash or pathname
-      let raw = window.location.hash.replace(/^#\/?/, '').trim();
-      if (!raw) {
-        const pathname = window.location.pathname.replace(/^\//, '').trim();
-        if (pathname && pathname !== 'gui') raw = pathname;
-      }
-      if (raw && URL_TAB_MAP[raw]) {
-        switchTab(URL_TAB_MAP[raw], false);
-      } else {
-        switchTab('tts', false);
-      }
-    }
-
-    window.addEventListener('hashchange', () => {
-      const raw = window.location.hash.replace(/^#\/?/, '').trim();
-      if (raw && URL_TAB_MAP[raw]) {
-        switchTab(URL_TAB_MAP[raw], false);
-      }
-    });
-
-    window.addEventListener('popstate', (e) => {
-      if (e.state && e.state.tab) {
-        switchTab(e.state.tab, false);
-      } else {
-        initUrlRoute();
-      }
-    });
-
-    function toggleMobileNav() {
-      const navRail = document.getElementById('navRail');
-      const overlay = document.getElementById('mobileOverlay');
-      const isOpen = !navRail.classList.contains('-translate-x-full');
-      if (isOpen) {
-        navRail.classList.add('-translate-x-full');
-        overlay.classList.add('hidden');
-      } else {
-        navRail.classList.remove('-translate-x-full');
-        overlay.classList.remove('hidden');
-      }
-    }
-
-    // ==================== SYSTEM HEALTH ====================
-    async function checkSystemHealth() {
-      const statusEl = document.getElementById('deviceStatus');
-      const indicator = document.getElementById('deviceIndicator');
-      try {
-        const res = await fetch('/api/v1/health');
-        if (res.ok) {
-          const data = await res.json();
-          const ramInfo = data.total_ram_gb ? ` • ${data.total_ram_gb}GB RAM` : '';
-          let devText = 'CPU Ready';
-          if (data.device === 'cuda') {
-            devText = `CUDA (${data.gpu_info?.gpu_name || 'NVIDIA'}${ramInfo})`;
-          } else if (data.device === 'mps') {
-            devText = `Apple Metal MPS${ramInfo}`;
-          } else {
-            devText = `CPU (${data.cpu_threads || 2} Threads${ramInfo})`;
-          }
-          if (statusEl) statusEl.textContent = devText;
-          if (indicator) indicator.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-
-          if (data.recommended_model) {
-            systemRecommendedModel = data.recommended_model;
-          }
-
-          // Auto-select recommended model (e.g. Nano for <=16GB RAM) if user hasn't manually switched
-          if (!userManuallyChangedModel && data.recommended_model) {
-            const selectEl = document.getElementById('ttsModelSelect');
-            if (selectEl && selectEl.value !== data.recommended_model) {
-              selectEl.value = data.recommended_model;
-              handleModelChange(data.recommended_model);
-            }
-          }
-          if (data.models_cached) {
-            const mtlNotice = document.getElementById('mtlModelNotCachedNotice');
-            if (mtlNotice) {
-              if (data.models_cached.multilingual === false) {
-                mtlNotice.classList.remove('hidden');
-              } else {
-                mtlNotice.classList.add('hidden');
-              }
-            }
-          }
-
-          if (typeof updateBatchEstimation === 'function') {
-            updateBatchEstimation();
-          }
-        } else {
-          if (statusEl) statusEl.textContent = 'Server Online';
-          if (indicator) indicator.className = 'w-2 h-2 rounded-full bg-emerald-400';
-        }
-      } catch (e) {
-        if (statusEl) statusEl.textContent = 'Web GUI Local';
-        if (indicator) indicator.className = 'w-2 h-2 rounded-full bg-amber-400';
-      }
-    }
-
-    function handleModelChange(val) {
-      userManuallyChangedModel = true;
-      const hint = document.getElementById('modelDescHint');
-      if (val === 'turbo') {
-        hint.textContent = 'Chatterbox Turbo (350M - Tốc độ cao, hỗ trợ Tags cảm xúc)';
-      } else if (val === 'standard') {
-        hint.textContent = 'Chatterbox Standard (500M - Chất lượng âm thanh chuẩn cao nhất)';
-      } else {
-        hint.textContent = 'Chatterbox Nano (110M - Siêu nhẹ, an toàn tuyệt đối cho RAM ≤ 16GB)';
-      }
-    }
-
-    function applyPreset(val) {
-      if (val === 'news') {
-        setSlider('sliderExaggeration', 'valExaggeration', 0.3);
-        setSlider('sliderPace', 'valPace', 0.7);
-        setSlider('sliderTemp', 'valTemp', 0.6);
-      } else if (val === 'story') {
-        setSlider('sliderExaggeration', 'valExaggeration', 0.8);
-        setSlider('sliderPace', 'valPace', 0.5);
-        setSlider('sliderTemp', 'valTemp', 0.8);
-      } else if (val === 'expressive') {
-        setSlider('sliderExaggeration', 'valExaggeration', 1.2);
-        setSlider('sliderPace', 'valPace', 0.5);
-        setSlider('sliderTemp', 'valTemp', 1.0);
-      } else if (val === 'whisper') {
-        setSlider('sliderExaggeration', 'valExaggeration', 0.2);
-        setSlider('sliderPace', 'valPace', 0.8);
-        setSlider('sliderTemp', 'valTemp', 0.7);
-      } else {
-        resetSliders();
-      }
-      showToast('info', `Đã áp dụng cấu hình: ${val}`);
-    }
-
-    function setSlider(sliderId, valId, val) {
-      const el = document.getElementById(sliderId);
-      const valEl = document.getElementById(valId);
-      if (el && valEl) {
-        el.value = val;
-        valEl.textContent = parseFloat(val).toFixed(2);
-      }
-    }
-
-    function updateParamsSummaryBadge() {
-      const badge = document.getElementById('paramsSummaryBadge');
-      if (!badge) return;
-      const exag = parseFloat(document.getElementById('sliderExaggeration')?.value || 0.5).toFixed(2);
-      const pace = parseFloat(document.getElementById('sliderPace')?.value || 0.5).toFixed(2);
-      const temp = parseFloat(document.getElementById('sliderTemp')?.value || 0.8).toFixed(2);
-      badge.textContent = `Exag ${exag} · Pace ${pace} · Temp ${temp}`;
-    }
-
-    function toggleExtraTags() {
-      const extra = document.getElementById('extraTagsContainer');
-      const btn = document.getElementById('btnToggleExtraTags');
-      if (!extra || !btn) return;
-      const isHidden = extra.classList.contains('hidden');
-      if (isHidden) {
-        extra.classList.remove('hidden');
-        btn.textContent = '- Ẩn';
-      } else {
-        extra.classList.add('hidden');
-        btn.textContent = '+ Thêm';
-      }
-    }
-
-    function previewCurrentVoice() {
-      if (uploadedRefFile) {
-        const url = URL.createObjectURL(uploadedRefFile);
-        const a = new Audio(url);
-        a.play();
-        showToast('info', 'Đang phát file giọng đọc mẫu đã tải...');
-        return;
-      }
-      const ttsSelect = document.getElementById('ttsCharacterSelect');
-      const val = ttsSelect ? ttsSelect.value : '';
-      if (val.startsWith('char:')) {
-        const charId = val.replace('char:', '');
-        const char = allCharactersCache.find(c => c.id === charId);
-        if (char && char.has_reference_audio) {
-          const a = new Audio(`/api/v1/characters/${char.id}/reference-audio`);
-          a.play();
-          showToast('info', `Đang phát giọng mẫu của "${char.name}"...`);
-          return;
-        }
-      }
-      showToast('info', 'Giọng mẫu sẵn có — Nhấn "SINH GIỌNG NÓI" để bắt đầu trải nghiệm!');
-    }
-
-    function resetSliders() {
-      setSlider('sliderExaggeration', 'valExaggeration', 0.5);
-      setSlider('sliderPace', 'valPace', 0.5);
-      setSlider('sliderTemp', 'valTemp', 0.8);
-      setSlider('sliderMinP', 'valMinP', 0.05);
-      document.getElementById('sliderSpeed').value = 1.0;
-      document.getElementById('valSpeed').textContent = '1.0x';
-      updateParamsSummaryBadge();
-    }
-
-    function handleSpeedChange(val) {
-      document.getElementById('valSpeed').textContent = parseFloat(val).toFixed(1) + 'x';
-      audioElement.playbackRate = parseFloat(val);
-    }
-
-    function randomizeSeed() {
-      const s = Math.floor(Math.random() * 999999);
-      document.getElementById('seedInput').value = s;
-      showToast('info', `Đã tạo Random Seed: ${s}`);
-    }
-
-    ['sliderExaggeration', 'sliderPace', 'sliderTemp', 'sliderMinP'].forEach(id => {
-      const el = document.getElementById(id);
-      const valEl = document.getElementById(id.replace('slider', 'val'));
-      if (el && valEl) {
-        el.addEventListener('input', () => {
-          valEl.textContent = parseFloat(el.value).toFixed(2);
-          updateParamsSummaryBadge();
-        });
-      }
-    });
-
-    // ==================== DRAG & DROP ON TEXTAREAS ====================
-    function setupDragAndDropTextarea(textareaId, counterId = null) {
-      const textarea = document.getElementById(textareaId);
-      if (!textarea) return;
-
-      ['dragenter', 'dragover'].forEach(eventName => {
-        textarea.addEventListener(eventName, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          textarea.classList.add('drag-over');
-        });
-      });
-
-      ['dragleave', 'drop'].forEach(eventName => {
-        textarea.addEventListener(eventName, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          textarea.classList.remove('drag-over');
-        });
-      });
-
-      textarea.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files && files.length > 0) {
-          const file = files[0];
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            textarea.value = event.target.result;
-            if (counterId) {
-              const counter = document.getElementById(counterId);
-              if (counter) counter.textContent = `${textarea.value.length} / 4000 ký tự`;
-            }
-            showToast('success', `Đã nạp văn bản từ file "${file.name}"!`);
-            if (textareaId === 'batchTextarea') parseBatchLines();
-          };
-          reader.onerror = () => {
-            showToast('error', `Không thể đọc nội dung file "${file.name}"`);
-          };
-          reader.readAsText(file);
-        }
-      });
-    }
-
-    const promptInput = document.getElementById('promptInput');
-    const charCount = document.getElementById('charCount');
-    if (promptInput && charCount) {
-      promptInput.addEventListener('input', () => {
-        charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
-      });
-    }
-
-    function insertTag(tag) {
-      if (!promptInput) return;
-      const start = promptInput.selectionStart;
-      const end = promptInput.selectionEnd;
-      const text = promptInput.value;
-      if (start !== end) {
-        const selected = text.substring(start, end);
-        promptInput.value = text.substring(0, start) + `${selected} ${tag}` + text.substring(end);
-        promptInput.selectionStart = promptInput.selectionEnd = start + selected.length + tag.length + 1;
-      } else {
-        promptInput.value = text.substring(0, start) + ' ' + tag + ' ' + text.substring(end);
-        promptInput.selectionStart = promptInput.selectionEnd = start + tag.length + 2;
-      }
-      promptInput.focus();
-      charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
-      showToast('info', `Đã chèn thẻ cảm xúc: ${tag}`);
-    }
-
-    function cleanPromptText() {
-      if (!promptInput) return;
-      promptInput.value = promptInput.value.replace(/\s+/g, ' ').trim();
-      charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
-      showToast('info', 'Đã làm sạch khoảng trắng trong văn bản.');
-    }
-
-    function clearPromptText() {
-      if (!promptInput) return;
-      promptInput.value = '';
-      charCount.textContent = '0 / 4000 ký tự';
-    }
-
-    function handleImportTextFile(input) {
-      if (input.files && input.files[0]) {
-        const file = input.files[0];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          promptInput.value = e.target.result;
-          charCount.textContent = `${promptInput.value.length} / 4000 ký tự`;
-          showToast('success', `Đã nhập file "${file.name}"`);
-        };
-        reader.readAsText(file);
-      }
-    }
-
-    function sendToBatchStudio() {
-      const text = promptInput.value.trim();
-      if (!text) return showToast('warning', 'Vui lòng nhập văn bản trước khi chuyển sang Batch.');
-      document.getElementById('batchTextarea').value = text;
-      switchTab('batch');
-      parseBatchLines();
-      showToast('success', 'Đã chuyển văn bản sang Batch Studio!');
-    }
-
-    function handleAudioUpload(input) {
-      if (input.files && input.files[0]) {
-        uploadedRefFile = input.files[0];
-        document.getElementById('refAudioName').textContent = uploadedRefFile.name;
-        document.getElementById('dropZone').classList.add('hidden');
-        document.getElementById('refAudioCard').classList.remove('hidden');
-        showToast('success', `Đã chọn file mẫu "${uploadedRefFile.name}"`);
-      }
-    }
-
-    function removeRefAudio() {
-      uploadedRefFile = null;
-      document.getElementById('refAudioInput').value = '';
-      document.getElementById('dropZone').classList.remove('hidden');
-      document.getElementById('refAudioCard').classList.add('hidden');
-      showToast('info', 'Đã hủy chọn file mẫu.');
-    }
-
-    // Microphone live recording
-    async function toggleMicRecording() {
-      const btn = document.getElementById('micRecordBtn');
-      const icon = document.getElementById('micIcon');
-      const label = document.getElementById('micLabel');
-
-      if (!isRecordingMic) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
-          audioChunks = [];
-
-          mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-          };
-
-          mediaRecorder.onstop = () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            uploadedRefFile = new File([audioBlob], "recorded_voice.wav", { type: "audio/wav" });
-            document.getElementById('refAudioName').textContent = "recorded_voice.wav (Từ Microphone)";
-            document.getElementById('dropZone').classList.add('hidden');
-            document.getElementById('refAudioCard').classList.remove('hidden');
-            showToast('success', 'Đã lưu bản ghi âm làm giọng mẫu!');
-          };
-
-          mediaRecorder.start();
-          isRecordingMic = true;
-          btn.className = 'px-3 py-1 rounded-full bg-red-600 text-xs text-white border border-red-500 flex items-center gap-1 cursor-pointer animate-pulse';
-          icon.textContent = 'stop';
-          label.textContent = 'Dừng ghi';
-          showToast('info', 'Đang ghi âm từ Microphone...');
-        } catch (e) {
-          showToast('error', 'Không thể truy cập Microphone: ' + e.message);
-        }
-      } else {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-          mediaRecorder.stop();
-        }
-        isRecordingMic = false;
-        btn.className = 'px-3 py-1 rounded-full bg-[#231F2A] hover:bg-red-600 text-xs text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer transition-colors';
-        icon.textContent = 'mic';
-        label.textContent = 'Ghi âm Mic';
-      }
-    }
-
-    function openTrimmerModal() { document.getElementById('trimmerModal').classList.remove('hidden'); }
-    function closeTrimmerModal() { document.getElementById('trimmerModal').classList.add('hidden'); }
-    function applyAudioTrim() {
-      const s = document.getElementById('trimStart').value;
-      const e = document.getElementById('trimEnd').value;
-      showToast('success', `Đã thiết lập đoạn cắt từ ${s}s đến ${e}s.`);
-      closeTrimmerModal();
-    }
-
-    const canvas = document.getElementById('waveformCanvas');
-    const placeholder = document.getElementById('waveformPlaceholder');
-
-    const volSlider = document.getElementById('volSlider');
-    if (volSlider) {
-      volSlider.addEventListener('input', (e) => {
-        audioElement.volume = parseFloat(e.target.value);
-      });
-    }
-
-    function formatTime(seconds) {
-      if (isNaN(seconds) || seconds < 0) return '00:00';
-      const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-      const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-      return `${m}:${s}`;
-    }
-
-    audioElement.addEventListener('timeupdate', () => {
-      if (audioElement.duration) {
-        const cur = audioElement.currentTime;
-        const dur = audioElement.duration;
-        document.getElementById('playbackTimer').textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
-        drawWaveform(cur / dur);
-      }
-    });
-
-    audioElement.addEventListener('ended', () => {
-      stopAudio();
-    });
-
-    function drawWaveform(progressPct = 0) {
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width = canvas.offsetWidth;
-      const h = canvas.height = canvas.offsetHeight;
-      ctx.clearRect(0, 0, w, h);
-
-      const numBars = 55;
-      const barWidth = Math.max(2, (w - numBars * 3) / numBars);
-
-      for (let i = 0; i < numBars; i++) {
-        const x = i * (barWidth + 3);
-        const norm = Math.sin((i / numBars) * Math.PI * 4) * 0.4 + 0.5;
-        const barHeight = Math.max(6, norm * (h - 20));
-        const y = (h - barHeight) / 2;
-
-        const isPast = (x / w) <= progressPct;
-        ctx.fillStyle = isPast ? '#A855F7' : '#3F3A46';
-        ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, barHeight, 3);
-        ctx.fill();
-      }
-
-      if (progressPct > 0) {
-        ctx.strokeStyle = '#D0BCFF';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(progressPct * w, 0);
-        ctx.lineTo(progressPct * w, h);
-        ctx.stroke();
-      }
-    }
-
-    function seekWaveform(e) {
-      if (!audioElement.duration) return;
-      const rect = canvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const pct = Math.max(0, Math.min(1, clickX / rect.width));
-      audioElement.currentTime = pct * audioElement.duration;
-    }
-
-    function togglePlayPause() {
-      const btn = document.getElementById('btnPlayPause');
-      if (audioElement.src && !audioElement.paused) {
-        audioElement.pause();
-        isPlaying = false;
-        btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
-      } else if (audioElement.src) {
-        audioElement.play().catch(() => {});
-        isPlaying = true;
-        btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
-      }
-    }
-
-    function stopAudio() {
-      isPlaying = false;
-      if (audioElement.src) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
-      }
-      document.getElementById('btnPlayPause').innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
-      document.getElementById('playbackTimer').textContent = '00:00 / 00:00';
-      drawWaveform(0);
-    }
-
-    function playAudioUrl(url, title = "Generated Audio") {
-      currentAudioUrl = url;
-      audioElement.src = url;
-      audioElement.load();
-      if (placeholder) placeholder.classList.add('hidden');
-      document.getElementById('btnPlayPause').disabled = false;
-      document.getElementById('btnStop').disabled = false;
-      document.getElementById('btnDownload').disabled = false;
-
-      audioElement.play().catch(() => {});
-      isPlaying = true;
-      document.getElementById('btnPlayPause').innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
-    }
-
-    function downloadCurrentWav() {
-      if (currentAudioUrl) {
-        const fmt = document.getElementById('exportFormatSelect').value;
-        const a = document.createElement('a');
-        a.href = currentAudioUrl;
-        a.download = `chatterbox-${Date.now()}.${fmt}`;
-        a.click();
-        showToast('success', `Đang tải file âm thanh (${fmt.toUpperCase()})...`);
-      } else {
-        showToast('warning', 'Chưa có file âm thanh để tải về.');
-      }
-    }
-
-    // A/B Comparison Logic
-    function saveSlotA() {
-      if (!currentAudioUrl) return showToast('warning', 'Chưa có audio để lưu vào Bản A.');
-      slotA = currentAudioUrl;
-      const btn = document.getElementById('btnPlayA');
-      btn.disabled = false;
-      btn.className = 'px-2.5 py-1 rounded bg-purple-600 text-white border border-purple-500 cursor-pointer font-bold';
-      showToast('success', 'Đã lưu audio hiện tại vào Bản A!');
-    }
-    function saveSlotB() {
-      if (!currentAudioUrl) return showToast('warning', 'Chưa có audio để lưu vào Bản B.');
-      slotB = currentAudioUrl;
-      const btn = document.getElementById('btnPlayB');
-      btn.disabled = false;
-      btn.className = 'px-2.5 py-1 rounded bg-blue-600 text-white border border-blue-500 cursor-pointer font-bold';
-      showToast('success', 'Đã lưu audio hiện tại vào Bản B!');
-    }
-    function playSlotA() {
-      if (slotA) {
-        playAudioUrl(slotA);
-        showToast('info', 'Đang phát Bản A');
-      }
-    }
-    function playSlotB() {
-      if (slotB) {
-        playAudioUrl(slotB);
-        showToast('info', 'Đang phát Bản B');
-      }
-    }
-
-    // Quality Presets & Cancellation Logic
-    function applyQualityPreset(val) {
-      if (!val) return;
-      const modelSelect = document.getElementById('ttsModelSelect');
-      if (val === 'fast') {
-        modelSelect.value = 'nano';
-        handleModelChange('nano');
-        setSlider('sliderTemp', 'valTemp', 0.50);
-        setSlider('sliderPace', 'valPace', 0.60);
-        showToast('info', 'Đã áp dụng Preset: Siêu Nhanh (Nano / Low Latency)');
-      } else if (val === 'balanced') {
-        setSlider('sliderTemp', 'valTemp', 0.65);
-        setSlider('sliderPace', 'valPace', 0.50);
-        showToast('info', 'Đã áp dụng Preset: Cân Bằng (Tự nhiên / Mượt mà)');
-      } else if (val === 'expressive') {
-        modelSelect.value = 'turbo';
-        handleModelChange('turbo');
-        setSlider('sliderTemp', 'valTemp', 0.85);
-        setSlider('sliderExaggeration', 'valExaggeration', 1.0);
-        showToast('info', 'Đã áp dụng Preset: Biểu Cảm Cao (Turbo / Expressive)');
-      }
-    }
-
-    async function cancelCurrentJob() {
-      if (!currentActiveJobId) return;
-      try {
-        const res = await fetch(`/api/v1/jobs/${currentActiveJobId}/cancel`, { method: 'POST' });
-        if (res.ok) {
-          showToast('warning', 'Đã gửi lệnh hủy tác vụ tới server!');
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi khi gửi yêu cầu hủy: ' + e.message);
-      }
-    }
-
-    function resetTtsUi(btn, origIcon, origText) {
-      if (btn) {
-        btn.innerHTML = `${origIcon}<span>${origText}</span>`;
-        btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-        btn.disabled = false;
-      }
-      const progressBox = document.getElementById('ttsProgressContainer');
-      if (progressBox) progressBox.classList.add('hidden');
-      currentActiveJobId = null;
-    }
-
-    async function triggerSynthesis() {
-      const btn = document.getElementById('generateBtn');
-      const text = promptInput.value.trim();
-      if (!text) return showToast('warning', 'Vui lòng nhập văn bản cần phát âm.');
-
-      const isLongText = document.getElementById('chkLongTextMode')?.checked;
-      const progressBox = document.getElementById('ttsProgressContainer');
-      const progressFill = document.getElementById('ttsProgressFill');
-      const progressPercent = document.getElementById('ttsProgressPercent');
-      const stageMsg = document.getElementById('ttsStageMessage');
-
-      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang xử lý...</span>';
-      btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-      btn.disabled = true;
-
-      if (progressBox) {
-        progressBox.classList.remove('hidden');
-        progressFill.style.width = '5%';
-        progressPercent.textContent = '5%';
-        stageMsg.textContent = isLongText ? '📖 Đang phân đoạn & chuẩn bị render...' : '⏳ Đang khởi chạy tiến trình...';
-      }
-
-      try {
-        const formData = new FormData();
-        formData.append('text', text);
-        const selectedModel = document.getElementById('ttsModelSelect').value;
-        formData.append('model', selectedModel);
-        formData.append('temperature', document.getElementById('sliderTemp').value);
-        formData.append('repetition_penalty', '1.2');
-        if (uploadedRefFile) {
-          formData.append('audio_prompt', uploadedRefFile);
-        }
-
-        let endpoint = '/api/v1/tts/turbo';
-        if (isLongText) {
-          endpoint = '/api/v1/tts/long-text';
-          formData.append('pause_duration', '0.6');
-        } else if (selectedModel === 'standard') {
-          endpoint = '/api/v1/tts/standard';
-        }
-
-        const response = await fetch(endpoint, { method: 'POST', body: formData });
-
-        if (response.ok) {
-          const job = await response.json();
-          currentActiveJobId = job.id;
-          await pollJob(job.id, btn, 'SINH GIỌNG NÓI (Ctrl + Enter)', '<span class="material-symbols-outlined text-[22px]">play_circle</span>');
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          showToast('error', 'Lỗi khi gửi yêu cầu tới server API: ' + (errData.detail || response.statusText));
-          resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
-        }
-      } catch (err) {
-        showToast('error', 'Không thể kết nối tới server API: ' + err.message);
-        resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
-      }
-    }
-
-    async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + Enter)', origIcon = '<span class="material-symbols-outlined text-[22px]">play_circle</span>') {
-      const generateBtn = btn || document.getElementById('generateBtn');
-      const progressFill = document.getElementById('ttsProgressFill');
-      const progressPercent = document.getElementById('ttsProgressPercent');
-      const stageMsg = document.getElementById('ttsStageMessage');
-      currentActiveJobId = jobId;
-
-      const phaseLabels = {
-        'queued': '⏳ Đang chờ trong hàng đợi...',
-        'loading_model': '🧠 Đang nạp mô hình vào bộ nhớ...',
-        'generating_tokens': '⚡ Đang sinh ngữ điệu & mã âm thanh...',
-        'generating_audio': '🔊 Đang giải mã sóng âm thanh (WAV)...',
-        'merging_audio': '✂️ Đang nối ghép các đoạn hoàn chỉnh...',
-        'completed': '✅ Hoàn tất thành công!',
-        'failed': '❌ Thất bại',
-        'cancelled': '⚠️ Đã hủy tác vụ'
-      };
-
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/v1/jobs/${jobId}`);
-          if (res.ok) {
-            const data = await res.json();
-            
-            // Update live progress bar & stage message
-            if (progressFill && progressPercent && stageMsg) {
-              const pct = Math.max(5, data.progress_percent || 0);
-              progressFill.style.width = `${pct}%`;
-              progressPercent.textContent = `${pct}%`;
-              stageMsg.textContent = phaseLabels[data.phase] || (data.phase ? `⏳ Đang xử lý (${data.phase})...` : '⏳ Đang xử lý...');
-            }
-
-            if (data.status === 'completed' && data.audio_url) {
-              clearInterval(interval);
-              resetTtsUi(generateBtn, origIcon, origText);
-
-              // Render benchmark badge
-              const bmBadge = document.getElementById('benchmarkBadge');
-              if (bmBadge) {
-                if (data.benchmark) {
-                  const bm = data.benchmark;
-                  document.getElementById('bmSpeedText').textContent = bm.faster_than_realtime ? `Nhanh hơn thời gian thực ${bm.faster_than_realtime}x` : 'Hoàn tất';
-                  document.getElementById('bmRtfText').textContent = `RTF: ${bm.realtime_factor || 'N/A'}`;
-                  document.getElementById('bmInferTime').textContent = `Inference: ${bm.inference_seconds || 0}s`;
-                  document.getElementById('bmAudioDur').textContent = `Thời lượng: ${bm.audio_duration_seconds || 0}s`;
-                  bmBadge.classList.remove('hidden');
-                } else {
-                  bmBadge.classList.add('hidden');
-                }
-              }
-
-              playAudioUrl(data.audio_url);
-              refreshHistory();
-              showToast('success', 'Sinh giọng nói hoàn tất thành công!');
-            } else if (data.status === 'failed') {
-              clearInterval(interval);
-              resetTtsUi(generateBtn, origIcon, origText);
-              showToast('error', 'Quá trình sinh giọng bị lỗi: ' + (data.error || "Lỗi không xác định"));
-            } else if (data.status === 'cancelled') {
-              clearInterval(interval);
-              resetTtsUi(generateBtn, origIcon, origText);
-              showToast('info', 'Tác vụ đã được hủy theo yêu cầu.');
-            }
-          }
-        } catch (e) {}
-      }, 400);
-    }
-
-    // ==================== BATCH STUDIO CONTROLLERS ====================
-    function handleBatchSplitRuleChange(val) {
-      const box = document.getElementById('batchCustomDelimiterBox');
-      if (box) {
-        if (val === 'custom') box.classList.remove('hidden');
-        else box.classList.add('hidden');
-      }
-    }
-
-    function handleBatchTextareaInput() {
-      const text = document.getElementById('batchTextarea')?.value || '';
-      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-      const chars = text.length;
-      const countEl = document.getElementById('batchTextareaWordCount');
-      if (countEl) countEl.textContent = `${words} từ • ${chars} ký tự`;
-      updateBatchEstimation();
-    }
-
-    function loadBatchSampleScript() {
-      const sample = `[Narrator]: Chào mừng quý vị thính giả đang theo dõi bản tin công nghệ hôm nay.
-[Sarah]: Hôm nay chúng tôi xin giới thiệu bản cập nhật Batch Studio hoàn toàn mới của Chatterbox.
-[John]: Hệ thống đã chính thức hỗ trợ nạp model một lần, nhận dạng nhân vật và tự động hòa âm BGM.
-[Sarah]: Tốc độ xử lý giờ đây nhanh hơn gấp nhiều lần và tiết kiệm tài nguyên bộ nhớ tối đa.
-[Narrator]: Hãy cùng bắt đầu trải nghiệm ngay bây giờ!`;
-      const txt = document.getElementById('batchTextarea');
-      if (txt) txt.value = sample;
-      handleBatchTextareaInput();
-      parseBatchLines();
-      showToast('success', 'Đã nạp kịch bản mẫu đối thoại đa nhân vật!');
-    }
-
-    function toggleBatchSearchReplace() {
-      const bar = document.getElementById('batchSearchReplaceBar');
-      if (bar) {
-        bar.classList.toggle('hidden');
-        if (!bar.classList.contains('hidden')) {
-          document.getElementById('batchFindInput')?.focus();
-        }
-      }
-    }
-
-    function batchFindNext() {
-      const query = document.getElementById('batchFindInput')?.value.trim();
-      const statusEl = document.getElementById('batchSearchStatus');
-      if (!query) return showToast('warning', 'Vui lòng nhập từ khóa cần tìm.');
-
-      if (parsedBatchLines.length === 0) return showToast('warning', 'Chưa có dòng kịch bản nào.');
-
-      const total = parsedBatchLines.length;
-      let foundIdx = -1;
-      for (let i = 1; i <= total; i++) {
-        const checkIdx = (batchSearchIndex + i) % total;
-        if (parsedBatchLines[checkIdx].toLowerCase().includes(query.toLowerCase())) {
-          foundIdx = checkIdx;
-          break;
-        }
-      }
-
-      if (foundIdx !== -1) {
-        batchSearchIndex = foundIdx;
-        const inputEl = document.getElementById(`batchLineText-${foundIdx}`);
-        if (inputEl) {
-          inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          inputEl.focus();
-          inputEl.select();
-        }
-        if (statusEl) statusEl.textContent = `Đã tìm thấy tại dòng #${foundIdx + 1}`;
-      } else {
-        if (statusEl) statusEl.textContent = 'Không tìm thấy kết quả phù hợp.';
-        showToast('info', 'Không tìm thấy thêm kết quả.');
-      }
-    }
-
-    function batchReplaceCurrent() {
-      const query = document.getElementById('batchFindInput')?.value.trim();
-      const replaceVal = document.getElementById('batchReplaceInput')?.value || '';
-      if (!query) return showToast('warning', 'Vui lòng nhập từ khóa cần tìm.');
-
-      if (batchSearchIndex >= 0 && batchSearchIndex < parsedBatchLines.length) {
-        const currentText = parsedBatchLines[batchSearchIndex];
-        const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-        if (regex.test(currentText)) {
-          parsedBatchLines[batchSearchIndex] = currentText.replace(regex, replaceVal);
-          const inputEl = document.getElementById(`batchLineText-${batchSearchIndex}`);
-          if (inputEl) inputEl.value = parsedBatchLines[batchSearchIndex];
-          showToast('success', `Đã thay thế tại dòng #${batchSearchIndex + 1}`);
-          batchFindNext();
-          return;
-        }
-      }
-      batchFindNext();
-    }
-
-    function batchReplaceAll() {
-      const query = document.getElementById('batchFindInput')?.value.trim();
-      const replaceVal = document.getElementById('batchReplaceInput')?.value || '';
-      const statusEl = document.getElementById('batchSearchStatus');
-      if (!query) return showToast('warning', 'Vui lòng nhập từ khóa cần tìm.');
-
-      let replaceCount = 0;
-      const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-      parsedBatchLines = parsedBatchLines.map(line => {
-        const matches = (line.match(regex) || []).length;
-        replaceCount += matches;
-        return line.replace(regex, replaceVal);
-      });
-
-      renderBatchTable();
-      if (statusEl) statusEl.textContent = `Đã thay thế ${replaceCount} vị trí trong toàn bộ kịch bản.`;
-      showToast('success', `Đã thay thế thành công ${replaceCount} vị trí!`);
-    }
-
-    function autoMatchSpeakerToCharacter(speakerName) {
-      if (!speakerName || !allCharactersCache || allCharactersCache.length === 0) return null;
-      const clean = speakerName.trim().toLowerCase();
-      const exact = allCharactersCache.find(c => c.name.toLowerCase() === clean);
-      if (exact) return `char:${exact.id}`;
-      const partial = allCharactersCache.find(c => c.name.toLowerCase().includes(clean) || clean.includes(c.name.toLowerCase()));
-      if (partial) return `char:${partial.id}`;
-      return null;
-    }
-
-    function handleBatchFileUpload(input) {
-      if (input.files && input.files[0]) {
-        const file = input.files[0];
-        const fname = file.name.toLowerCase();
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          let content = e.target.result || '';
-          let extractedLines = [];
-          let voiceOverrides = {};
-          let pauseOverrides = {};
-
-          if (fname.endsWith('.srt') || fname.endsWith('.vtt')) {
-            // SRT / VTT Parser
-            const lines = content.split('\n');
-            let currentTextLines = [];
-            for (let line of lines) {
-              line = line.trim();
-              if (!line) {
-                if (currentTextLines.length > 0) {
-                  const combined = currentTextLines.join(' ').replace(/<\/?[^>]+(>|$)/g, '').trim();
-                  if (combined) extractedLines.push(combined);
-                  currentTextLines = [];
-                }
-                continue;
-              }
-              if (/^\d+$/.test(line)) continue; // sequence number
-              if (/-->/.test(line)) continue; // timestamp
-              if (/^WEBVTT/i.test(line) || /^NOTE/i.test(line)) continue;
-              currentTextLines.push(line);
-            }
-            if (currentTextLines.length > 0) {
-              const combined = currentTextLines.join(' ').replace(/<\/?[^>]+(>|$)/g, '').trim();
-              if (combined) extractedLines.push(combined);
-            }
-          } else if (fname.endsWith('.csv')) {
-            // CSV Parser
-            const rows = content.split('\n').map(r => r.trim()).filter(r => r.length > 0);
-            if (rows.length > 0) {
-              const hasHeader = /speaker|text|dialogue|voice|thoai/i.test(rows[0]);
-              const dataRows = hasHeader ? rows.slice(1) : rows;
-              dataRows.forEach((row, idx) => {
-                // simple CSV column extraction
-                const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
-                if (cols.length >= 2) {
-                  const spk = cols[0];
-                  const txt = cols[1];
-                  if (txt) {
-                    extractedLines.push(txt);
-                    const matchedChar = autoMatchSpeakerToCharacter(spk);
-                    if (matchedChar) voiceOverrides[idx] = matchedChar;
-                  }
-                } else if (cols.length === 1 && cols[0]) {
-                  extractedLines.push(cols[0]);
-                }
-              });
-            }
-          } else if (fname.endsWith('.md')) {
-            // Markdown Parser
-            const lines = content.split('\n');
-            for (let line of lines) {
-              line = line.trim();
-              if (!line || line.startsWith('```') || line.startsWith('![')) continue;
-              // strip markdown syntax
-              line = line.replace(/^#{1,6}\s+/, '').replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, '').replace(/^>\s+/, '');
-              line = line.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_~]{1,3}/g, '').trim();
-              if (line) extractedLines.push(line);
-            }
-          } else {
-            // Plain text or multi-character dialog script
-            const rawLines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            const dialogRegex = /^(?:\[(?<spk>[^\]]+)\]|(?<raw_spk>[A-Za-z0-9_\u00C0-\u1EF9\s\.\-]+?))\s*(?:\([^)]*\))?\s*[:：]\s*(?<diag>.*)$/;
-
-            rawLines.forEach((line, idx) => {
-              const match = line.match(dialogRegex);
-              if (match && match.groups && match.groups.diag && match.groups.diag.trim()) {
-                const spk = (match.groups.spk || match.groups.raw_spk || '').trim();
-                const diag = match.groups.diag.trim();
-                extractedLines.push(diag);
-                const matchedChar = autoMatchSpeakerToCharacter(spk);
-                if (matchedChar) voiceOverrides[idx] = matchedChar;
-              } else {
-                extractedLines.push(line);
-              }
-            });
-          }
-
-          if (extractedLines.length > 0) {
-            document.getElementById('batchTextarea').value = extractedLines.join('\n');
-            parsedBatchLines = extractedLines;
-            parsedBatchVoiceOverrides = voiceOverrides;
-            parsedBatchPauseOverrides = pauseOverrides;
-            batchRowData = {};
-            renderBatchTable();
-            updateBatchEstimation();
-            showToast('success', `Đã phân tích thành công ${extractedLines.length} dòng từ file "${file.name}"!`);
-          } else {
-            showToast('warning', 'Không tìm thấy nội dung văn bản hợp lệ trong file.');
-          }
-        };
-        reader.onerror = () => {
-          showToast('error', `Không thể đọc file "${file.name}"`);
-        };
-        reader.readAsText(file);
-      }
-    }
-
-    function parseBatchLines() {
-      const text = document.getElementById('batchTextarea')?.value || '';
-      if (!text.trim()) {
-        parsedBatchLines = [];
-        parsedBatchVoiceOverrides = {};
-        parsedBatchPauseOverrides = {};
-        batchRowData = {};
-        renderBatchTable();
-        updateBatchEstimation();
-        return showToast('warning', 'Vui lòng nhập hoặc dán nội dung kịch bản.');
-      }
-
-      const rule = document.getElementById('batchSplitRule')?.value || 'line';
-      let rawPieces = [];
-
-      if (rule === 'sentence') {
-        // Robust sentence split: preserves punctuation with sentence, never creates orphan punctuation lines
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        for (const line of lines) {
-          const parts = line.split(/(?<=[.?!…])\s+/);
-          for (const part of parts) {
-            const p = part.trim();
-            if (!p) continue;
-            // If part has no alphanumeric characters, merge with previous
-            if (!/[A-Za-z0-9\u00C0-\u1EF9]/.test(p)) {
-              if (rawPieces.length > 0) {
-                rawPieces[rawPieces.length - 1] = (rawPieces[rawPieces.length - 1] + ' ' + p).trim();
-              }
-            } else {
-              rawPieces.push(p);
-            }
-          }
-        }
-      } else if (rule === 'paragraph') {
-        rawPieces = text.split(/\n\s*\n/).map(l => l.trim()).filter(l => l.length > 0);
-      } else if (rule === 'custom') {
-        const delim = document.getElementById('batchCustomDelimiter')?.value || '|';
-        rawPieces = text.split(delim).map(l => l.trim()).filter(l => l.length > 0);
-      } else {
-        rawPieces = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      }
-
-      // Check dialogue markers [Speaker]: Text or Speaker: Text
-      const dialogRegex = /^(?:\[(?<spk>[^\]]+)\]|(?<raw_spk>[A-Za-z0-9_\u00C0-\u1EF9\s\.\-]+?))\s*(?:\([^)]*\))?\s*[:：]\s*(?<diag>.*)$/;
-      const finalLines = [];
-      const newVoiceOverrides = {};
-
-      rawPieces.forEach((piece, idx) => {
-        const match = piece.match(dialogRegex);
-        if (match && match.groups && match.groups.diag && match.groups.diag.trim()) {
-          const spk = (match.groups.spk || match.groups.raw_spk || '').trim();
-          const diag = match.groups.diag.trim();
-          finalLines.push(diag);
-          const matchedChar = autoMatchSpeakerToCharacter(spk);
-          if (matchedChar) {
-            newVoiceOverrides[finalLines.length - 1] = matchedChar;
-          }
-        } else {
-          finalLines.push(piece);
-        }
-      });
-
-      parsedBatchLines = finalLines;
-      parsedBatchVoiceOverrides = newVoiceOverrides;
-      parsedBatchPauseOverrides = {};
-      batchRowData = {};
-      renderBatchTable();
-      updateBatchEstimation();
-      showToast('info', `Đã tách thành công ${parsedBatchLines.length} dòng kịch bản.`);
-    }
-
-    function getVoiceOptionsHtml(selectedVal = '', rowIdx = null) {
-      let html = '<option value="">-- Mặc định --</option>';
-      html += '<optgroup label="🎭 Style Presets (Bộ chỉnh phong cách)">';
-      for (const [k, v] of Object.entries(BUILTIN_VOICES)) {
-        html += `<option value="builtin:${k}" ${selectedVal === 'builtin:' + k ? 'selected' : ''}>🎙️ ${v.name}</option>`;
-      }
-      html += '</optgroup>';
-      if (allCharactersCache.length > 0) {
-        html += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
-        allCharactersCache.forEach(c => {
-          const val = `char:${c.id}`;
-          const star = c.is_default ? '⭐ ' : '';
-          const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
-          html += `<option value="${val}" ${selectedVal === val ? 'selected' : ''}>${hasAudio}${star}${c.name} (${c.language || 'vi'})</option>`;
-        });
-        html += '</optgroup>';
-      }
-      return html;
-    }
-
-    function playGlobalVoicePreview() {
-      const globalVoice = document.getElementById('batchGlobalVoiceSelect')?.value || '';
-      playVoiceValuePreview(globalVoice);
-    }
-
-    function playLineVoicePreview(idx) {
-      const globalVoice = document.getElementById('batchGlobalVoiceSelect')?.value || '';
-      const voice = parsedBatchVoiceOverrides[idx] !== undefined ? parsedBatchVoiceOverrides[idx] : globalVoice;
-      playVoiceValuePreview(voice);
-    }
-
-    function playVoiceValuePreview(voiceVal) {
-      if (!voiceVal) {
-        return showToast('info', 'Giọng mặc định theo cấu hình model.');
-      }
-      if (voiceVal.startsWith('char:')) {
-        const charId = voiceVal.replace('char:', '');
-        const char = allCharactersCache.find(c => c.id === charId);
-        if (char && char.reference_audio_url) {
-          playAudioUrl(char.reference_audio_url);
-          showToast('info', `Đang nghe thử mẫu giọng nhân vật "${char.name}"`);
-        } else {
-          showToast('warning', `Nhân vật "${char?.name || charId}" chưa có file reference audio mẫu.`);
-        }
-      } else if (voiceVal.startsWith('builtin:')) {
-        const key = voiceVal.replace('builtin:', '');
-        const v = BUILTIN_VOICES[key];
-        showToast('info', `Style Preset: ${v ? v.name : key} (Điều chỉnh phong cách đọc)`);
-      }
-    }
-
-    function applyGlobalVoiceToAllBatchLines() {
-      const globalVoice = document.getElementById('batchGlobalVoiceSelect')?.value || '';
-      parsedBatchLines.forEach((_, idx) => {
-        parsedBatchVoiceOverrides[idx] = globalVoice;
-        const sel = document.getElementById(`batchLineVoice-${idx}`);
-        if (sel) sel.value = globalVoice;
-      });
-      const name = document.getElementById('batchGlobalVoiceSelect')?.selectedOptions[0]?.text || 'Mặc định';
-      showToast('success', `Đã gán giọng "${name}" cho tất cả ${parsedBatchLines.length} dòng!`);
-    }
-
-    function updateBatchLineVoice(idx, val) {
-      parsedBatchVoiceOverrides[idx] = val;
-    }
-
-    function updateBatchLineText(idx, val) {
-      parsedBatchLines[idx] = val;
-      updateBatchEstimation();
-    }
-
-    function updateBatchLinePause(idx, val) {
-      const p = parseFloat(val);
-      if (!isNaN(p) && p >= 0) {
-        parsedBatchPauseOverrides[idx] = p;
-      }
-    }
-
-    function handleGlobalPauseChange(val) {
-      const el = document.getElementById('valBatchPause');
-      if (el) el.textContent = parseFloat(val).toFixed(1) + 's';
-    }
-
-    function addBatchEmptyLine() {
-      parsedBatchLines.push("Dòng kịch bản mới...");
-      renderBatchTable();
-      updateBatchEstimation();
-    }
-
-    function deleteBatchLine(idx) {
-      // Save state to undo buffer
-      batchUndoBuffer = {
-        deletedLine: parsedBatchLines[idx],
-        deletedVoice: parsedBatchVoiceOverrides[idx],
-        deletedPause: parsedBatchPauseOverrides[idx],
-        deletedRowData: batchRowData[idx],
-        deletedIdx: idx,
-        lines: [...parsedBatchLines],
-        voices: { ...parsedBatchVoiceOverrides },
-        pauses: { ...parsedBatchPauseOverrides },
-        rowData: { ...batchRowData },
-      };
-
-      parsedBatchLines.splice(idx, 1);
-      const newOverrides = {};
-      const newPauses = {};
-      const newRowData = {};
-      let newIdx = 0;
-      for (let i = 0; i <= parsedBatchLines.length; i++) {
-        if (i === idx) continue;
-        if (parsedBatchVoiceOverrides[i] !== undefined) newOverrides[newIdx] = parsedBatchVoiceOverrides[i];
-        if (parsedBatchPauseOverrides[i] !== undefined) newPauses[newIdx] = parsedBatchPauseOverrides[i];
-        if (batchRowData[i] !== undefined) newRowData[newIdx] = batchRowData[i];
-        newIdx++;
-      }
-      parsedBatchVoiceOverrides = newOverrides;
-      parsedBatchPauseOverrides = newPauses;
-      batchRowData = newRowData;
-
-      renderBatchTable();
-      updateBatchEstimation();
-
-      // Show toast with Undo action
-      showToastWithUndo(`Đã xóa dòng #${idx + 1}`, () => undoBatchDelete());
-    }
-
-    function undoBatchDelete() {
-      if (!batchUndoBuffer) return;
-      parsedBatchLines = [...batchUndoBuffer.lines];
-      parsedBatchVoiceOverrides = { ...batchUndoBuffer.voices };
-      parsedBatchPauseOverrides = { ...batchUndoBuffer.pauses };
-      batchRowData = { ...batchUndoBuffer.rowData };
-      batchUndoBuffer = null;
-      renderBatchTable();
-      updateBatchEstimation();
-      showToast('success', 'Đã hoàn tác khôi phục dòng kịch bản!');
-    }
-
-    function showToastWithUndo(message, undoFn) {
-      const container = document.getElementById('toastContainer');
-      if (!container) return;
-      const toast = document.createElement('div');
-      toast.className = 'pointer-events-auto flex items-center justify-between gap-2 p-3 rounded-xl bg-[#18151E] border border-purple-500/50 shadow-m3-2 text-xs text-white toast-enter';
-      toast.innerHTML = `
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-purple-400 text-[18px]">info</span>
-          <span>${message}</span>
-        </div>
-        <button type="button" id="undoBtnToast" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 font-bold text-white text-xs cursor-pointer shadow-m3-1">Hoàn tác</button>
-      `;
-      const undoBtn = toast.querySelector('#undoBtnToast');
-      undoBtn.addEventListener('click', () => {
-        undoFn();
-        toast.remove();
-      });
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.classList.add('toast-leave');
-        setTimeout(() => toast.remove(), 250);
-      }, 6000);
-    }
-
-    function clearBatchAll() {
-      if (parsedBatchLines.length === 0) return;
-      batchUndoBuffer = {
-        lines: [...parsedBatchLines],
-        voices: { ...parsedBatchVoiceOverrides },
-        pauses: { ...parsedBatchPauseOverrides },
-        rowData: { ...batchRowData },
-      };
-      parsedBatchLines = [];
-      parsedBatchVoiceOverrides = {};
-      parsedBatchPauseOverrides = {};
-      batchRowData = {};
-      const txt = document.getElementById('batchTextarea');
-      if (txt) txt.value = '';
-      renderBatchTable();
-      updateBatchEstimation();
-      showToastWithUndo('Đã xóa toàn bộ danh sách kịch bản.', () => undoBatchDelete());
-    }
-
-    function toggleSelectAllBatch(master) {
-      document.querySelectorAll('.batch-row-chk').forEach(c => c.checked = master.checked);
-    }
-
-    function toggleBgmControls(enabled) {
-      const el = document.getElementById('bgmControls');
-      if (enabled) {
-        el.className = 'space-y-2 transition-opacity';
-      } else {
-        el.className = 'space-y-2 opacity-40 pointer-events-none transition-opacity';
-      }
-    }
-
-    function handleBgmUpload(input) {
-      if (input.files && input.files[0]) {
-        document.getElementById('bgmFileName').textContent = input.files[0].name;
-        showToast('success', `Đã chọn file nhạc nền "${input.files[0].name}"`);
-      }
-    }
-
-    function filterBatchStatus(status) {
-      batchCurrentFilter = status;
-      document.querySelectorAll('.batch-filter-btn').forEach(b => {
-        b.className = 'batch-filter-btn px-2.5 py-0.5 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 text-xs cursor-pointer';
-      });
-      const activeBtn = document.getElementById(`batchFilter-${status}`);
-      if (activeBtn) {
-        activeBtn.className = 'batch-filter-btn active px-2.5 py-0.5 rounded-full bg-purple-600 text-white font-medium text-xs cursor-pointer';
-      }
-
-      parsedBatchLines.forEach((_, idx) => {
-        const row = document.getElementById(`batchRow-${idx}`);
-        if (!row) return;
-        const rowInfo = batchRowData[idx];
-        const rowStatus = rowInfo ? rowInfo.status : 'ready';
-
-        if (status === 'all' || rowStatus === status) {
-          row.classList.remove('hidden');
-        } else {
-          row.classList.add('hidden');
-        }
-      });
-    }
-
-    function updateBatchFilterCounts() {
-      let readyCount = 0;
-      let procCount = 0;
-      let compCount = 0;
-      let failCount = 0;
-
-      parsedBatchLines.forEach((_, idx) => {
-        const r = batchRowData[idx];
-        if (!r || r.status === 'ready') readyCount++;
-        else if (r.status === 'processing') procCount++;
-        else if (r.status === 'completed') compCount++;
-        else if (r.status === 'failed') failCount++;
-      });
-
-      const elAll = document.getElementById('cntFilterAll');
-      const elReady = document.getElementById('cntFilterReady');
-      const elProc = document.getElementById('cntFilterProcessing');
-      const elComp = document.getElementById('cntFilterCompleted');
-      const elFail = document.getElementById('cntFilterFailed');
-
-      if (elAll) elAll.textContent = parsedBatchLines.length;
-      if (elReady) elReady.textContent = readyCount;
-      if (elProc) elProc.textContent = procCount;
-      if (elComp) elComp.textContent = compCount;
-      if (elFail) elFail.textContent = failCount;
-    }
-
-    function updateBatchEstimation() {
-      const card = document.getElementById('batchEstimationCard');
-      const totalLines = parsedBatchLines.length;
-      if (totalLines === 0) {
-        if (card) card.classList.add('hidden');
-        return;
-      }
-      if (card) card.classList.remove('hidden');
-
-      let totalWords = 0;
-      parsedBatchLines.forEach(l => {
-        totalWords += l.trim().split(/\s+/).length;
-      });
-
-      const selectedModel = document.getElementById('batchModelSelect')?.value || 'auto';
-      const effModel = (selectedModel === 'auto') ? systemRecommendedModel : selectedModel;
-
-      // Estimate time: ~1.2s/line for nano, ~2.5s for turbo
-      const timePerLine = (effModel === 'nano') ? 1.2 : 2.5;
-      const totalSecsEst = Math.round(totalLines * timePerLine);
-      const estMin = Math.ceil(totalSecsEst / 60);
-
-      // Estimate size: ~150KB/sec, ~3s audio per line
-      const estMb = Math.max(1, Math.round((totalLines * 3 * 150) / 1024));
-
-      const linesEl = document.getElementById('batchEstLinesCount');
-      const wordsEl = document.getElementById('batchEstWordsCount');
-      const durEl = document.getElementById('batchEstDuration');
-      const sizeEl = document.getElementById('batchEstAudioSize');
-      const hwEl = document.getElementById('batchEstHardwareProfile');
-
-      if (linesEl) linesEl.textContent = `${totalLines} dòng`;
-      if (wordsEl) wordsEl.textContent = `(~${totalWords} từ)`;
-      if (durEl) durEl.textContent = estMin <= 1 ? `~${totalSecsEst}s` : `~${estMin} phút`;
-      if (sizeEl) sizeEl.textContent = `~${estMb} MB`;
-      if (hwEl) hwEl.textContent = `Model ${effModel.toUpperCase()} (Nạp 1 lần)`;
-    }
-
-    // ==================== BUILTIN VOICES CONTROLLER ====================
-    const BUILTIN_VOICES = {
-      'mc_male': { name: 'MC Nam Thời Sự', exag: 0.35, pace: 0.55, temp: 0.65 },
-      'editor_female': { name: 'Nữ Biên Tập Viên', exag: 0.45, pace: 0.50, temp: 0.70 },
-      'story_night': { name: 'Kể Chuyện Đêm Khuya', exag: 0.85, pace: 0.45, temp: 0.85 },
-      'review_fast': { name: 'Review & Recap', exag: 0.60, pace: 0.75, temp: 0.80 },
-      'anime_fun': { name: 'Hoạt Hình / Anime', exag: 1.25, pace: 0.60, temp: 0.95 },
-      'ai_assistant': { name: 'Trợ Lý Ảo AI', exag: 0.40, pace: 0.50, temp: 0.60 }
-    };
-
-    function applyBuiltinVoice(key, btnEl) {
-      const v = BUILTIN_VOICES[key];
-      if (!v) return;
-
-      document.getElementById('sliderExaggeration').value = v.exag;
-      document.getElementById('valExaggeration').textContent = v.exag.toFixed(2);
-      document.getElementById('sliderPace').value = v.pace;
-      document.getElementById('valPace').textContent = v.pace.toFixed(2);
-      document.getElementById('sliderTemp').value = v.temp;
-      document.getElementById('valTemp').textContent = v.temp.toFixed(2);
-      updateParamsSummaryBadge();
-
-      const ttsSelect = document.getElementById('ttsCharacterSelect');
-      if (ttsSelect) ttsSelect.value = `builtin:${key}`;
-
-      showToast('success', `Đã kích hoạt phong cách đọc "${v.name}"!`);
-    }
-
-    function renderBatchTable() {
-      const container = document.getElementById('batchTableContainer');
-      const tbody = document.getElementById('batchTableBody');
-      const badge = document.getElementById('batchCountBadge');
-      const globalVoice = document.getElementById('batchGlobalVoiceSelect')?.value || '';
-      const defaultGlobalPause = parseFloat(document.getElementById('batchPauseDuration')?.value) || 0.8;
-
-      if (badge) badge.textContent = `${parsedBatchLines.length} dòng`;
-      if (!tbody) return;
-      tbody.innerHTML = '';
-
-      if (parsedBatchLines.length > 0) {
-        if (container) container.classList.remove('hidden');
-        parsedBatchLines.forEach((line, idx) => {
-          const selectedVoice = parsedBatchVoiceOverrides[idx] !== undefined ? parsedBatchVoiceOverrides[idx] : globalVoice;
-          const linePause = parsedBatchPauseOverrides[idx] !== undefined ? parsedBatchPauseOverrides[idx] : defaultGlobalPause;
-          const tr = document.createElement('tr');
-          tr.id = `batchRow-${idx}`;
-          tr.className = 'hover:bg-[#18151E] transition-colors border-b border-[#3F3A46]/30';
-
-          const rowInfo = batchRowData[idx];
-          let statusHtml = '<span class="px-2 py-0.5 rounded bg-[#231F2A] text-slate-400 text-[11px]">Sẵn sàng</span>';
-          let playBtnStyle = 'hidden';
-          let dlBtnStyle = 'hidden';
-          let durText = '--';
-
-          if (rowInfo && rowInfo.status === 'completed') {
-            statusHtml = '<span class="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-[11px] font-bold">✓ Hoàn tất</span>';
-            playBtnStyle = '';
-            dlBtnStyle = '';
-            durText = rowInfo.duration ? `${rowInfo.duration.toFixed(1)}s` : '--';
-          } else if (rowInfo && rowInfo.status === 'processing') {
-            statusHtml = '<span class="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800 text-[11px] animate-pulse">⏳ Đang sinh...</span>';
-          } else if (rowInfo && rowInfo.status === 'failed') {
-            statusHtml = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Lỗi</span>';
-          }
-
-          tr.innerHTML = `
-            <td class="p-2.5 w-8 text-center"><input type="checkbox" class="batch-row-chk w-4 h-4 rounded text-purple-600 cursor-pointer" data-idx="${idx}" checked></td>
-            <td class="p-2.5 w-10 font-mono text-purple-400 font-bold text-center">${idx + 1}</td>
-            <td class="p-2.5 font-medium text-white max-w-sm">
-              <input type="text" id="batchLineText-${idx}" value="${line.replace(/"/g, '&quot;')}" onchange="updateBatchLineText(${idx}, this.value)" class="w-full bg-[#14101A] border border-[#3F3A46]/70 focus:border-purple-500 rounded p-1.5 text-xs text-white focus:outline-none transition-colors">
-            </td>
-            <td class="p-2.5 w-52">
-              <div class="flex items-center gap-1">
-                <select id="batchLineVoice-${idx}" onchange="updateBatchLineVoice(${idx}, this.value)" class="bg-[#231F2A] border border-[#3F3A46] rounded-lg px-2 py-1.5 text-xs text-white cursor-pointer w-full focus:border-purple-500">
-                  ${getVoiceOptionsHtml(selectedVoice, idx)}
-                </select>
-                <button type="button" onclick="playLineVoicePreview(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white cursor-pointer" title="Nghe thử giọng dòng này">
-                  <span class="material-symbols-outlined text-[13px]">volume_up</span>
-                </button>
-              </div>
-            </td>
-            <td class="p-2.5 w-24 text-center">
-              <div class="flex items-center justify-center gap-1">
-                <input type="number" step="0.1" min="0" max="5" value="${linePause.toFixed(1)}" onchange="updateBatchLinePause(${idx}, this.value)" class="w-14 bg-[#14101A] border border-[#3F3A46] rounded px-1.5 py-1 text-xs text-purple-300 text-center font-mono focus:outline-none focus:border-purple-500">
-                <span class="text-slate-500 text-[10px]">s</span>
-              </div>
-            </td>
-            <td class="p-2.5 w-20 text-center font-mono text-slate-300 text-[11px]" id="batchDur-${idx}">${durText}</td>
-            <td class="p-2.5 w-28 text-center" id="batchStatus-${idx}">${statusHtml}</td>
-            <td class="p-2.5 w-28 text-right">
-              <div class="flex items-center justify-end gap-1">
-                <button type="button" onclick="runSingleBatchLine(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white cursor-pointer transition-colors" title="Sinh audio dòng này">
-                  <span class="material-symbols-outlined text-[16px]">play_arrow</span>
-                </button>
-                <button type="button" id="batchPlayBtn-${idx}" onclick="playBatchLineAudio(${idx})" class="${playBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-emerald-600 text-emerald-300 hover:text-white cursor-pointer transition-colors" title="Phát audio">
-                  <span class="material-symbols-outlined text-[16px]">volume_up</span>
-                </button>
-                <button type="button" id="batchDownloadBtn-${idx}" onclick="downloadBatchLineAudio(${idx})" class="${dlBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-blue-600 text-blue-300 hover:text-white cursor-pointer transition-colors" title="Tải audio dòng này">
-                  <span class="material-symbols-outlined text-[16px]">download</span>
-                </button>
-                <button type="button" onclick="deleteBatchLine(${idx})" class="p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer transition-colors" title="Xóa dòng">
-                  <span class="material-symbols-outlined text-[16px]">delete</span>
-                </button>
-              </div>
-            </td>
-          `;
-          tbody.appendChild(tr);
-        });
-        updateBatchFilterCounts();
-      } else {
-        if (container) container.classList.add('hidden');
-      }
-    }
-
-    async function pollJobAsync(jobId) {
-      return new Promise((resolve) => {
-        const interval = setInterval(async () => {
-          try {
-            const res = await fetch(`/api/v1/jobs/${jobId}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
-                clearInterval(interval);
-                resolve(data);
-              }
-            }
-          } catch (e) {
-            clearInterval(interval);
-            resolve(null);
-          }
-        }, 400);
-      });
-    }
-
-    async function runSingleBatchLine(idx) {
-      const line = parsedBatchLines[idx];
-      if (!line || !line.trim()) return null;
-
-      const statusEl = document.getElementById(`batchStatus-${idx}`);
-      const playBtn = document.getElementById(`batchPlayBtn-${idx}`);
-      const dlBtn = document.getElementById(`batchDownloadBtn-${idx}`);
-      const durEl = document.getElementById(`batchDur-${idx}`);
-      if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800 text-[11px] animate-pulse">⏳ Đang sinh...</span>';
-
-      const voice = parsedBatchVoiceOverrides[idx] !== undefined ? parsedBatchVoiceOverrides[idx] : (document.getElementById('batchGlobalVoiceSelect')?.value || '');
-      const selectedModelRaw = document.getElementById('batchModelSelect')?.value || 'auto';
-      const effModel = (selectedModelRaw === 'auto') ? systemRecommendedModel : selectedModelRaw;
-
-      const formData = new FormData();
-      formData.append('text', line);
-      formData.append('model', effModel);
-
-      if (voice.startsWith('char:')) {
-        const charId = voice.replace('char:', '');
-        const char = allCharactersCache.find(c => c.id === charId);
-        if (char && !char.has_reference_audio) {
-          showToast('warning', `Nhân vật "${char.name}" chưa có reference audio, đang dùng giọng mặc định.`);
-        }
-        formData.append('character_id', charId);
-      } else if (voice.startsWith('builtin:')) {
-        const key = voice.replace('builtin:', '');
-        const v = BUILTIN_VOICES[key];
-        if (v) {
-          formData.append('temperature', v.temp.toString());
-        }
-      }
-
-      batchRowData[idx] = { status: 'processing' };
-      updateBatchFilterCounts();
-
-      try {
-        let endpoint = '/api/v1/tts/turbo';
-        if (effModel === 'nano') endpoint = '/api/v1/tts/nano';
-        else if (effModel === 'standard') endpoint = '/api/v1/tts/standard';
-        else if (effModel === 'multilingual') {
-          endpoint = '/api/v1/tts/multilingual';
-          formData.append('language_id', selectedMtlLanguage || 'en');
-        }
-
-        const res = await fetch(endpoint, { method: 'POST', body: formData });
-        if (res.ok) {
-          const job = await res.json();
-          const jobId = job.id;
-
-          const resultJob = await pollJobAsync(jobId);
-          if (resultJob && resultJob.status === 'completed') {
-            const dur = resultJob.duration_seconds || 0.0;
-            batchRowData[idx] = { jobId: jobId, audioUrl: resultJob.audio_url, status: 'completed', duration: dur };
-            if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-[11px] font-bold">✓ Hoàn tất</span>';
-            if (durEl) durEl.textContent = `${dur.toFixed(1)}s`;
-            if (playBtn) playBtn.classList.remove('hidden');
-            if (dlBtn) dlBtn.classList.remove('hidden');
-            updateBatchFilterCounts();
-            return jobId;
-          } else {
-            batchRowData[idx] = { status: 'failed', error: resultJob?.error || 'Lỗi sinh audio' };
-            if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Thất bại</span>';
-            updateBatchFilterCounts();
-            return null;
-          }
-        } else {
-          batchRowData[idx] = { status: 'failed' };
-          if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Lỗi API</span>';
-          updateBatchFilterCounts();
-        }
-      } catch (e) {
-        batchRowData[idx] = { status: 'failed', error: e.message };
-        if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Lỗi mạng</span>';
-        updateBatchFilterCounts();
-      }
-      return null;
-    }
-
-    function playBatchLineAudio(idx) {
-      const info = batchRowData[idx];
-      if (info && info.audioUrl) {
-        playAudioUrl(info.audioUrl);
-        showToast('info', `Đang phát âm thanh dòng #${idx + 1}`);
-      } else {
-        showToast('warning', 'Chưa có audio cho dòng này.');
-      }
-    }
-
-    function downloadBatchLineAudio(idx) {
-      const info = batchRowData[idx];
-      if (info && info.audioUrl) {
-        const a = document.createElement('a');
-        a.href = info.audioUrl;
-        a.download = `chatterbox_line_${idx + 1}.wav`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        showToast('info', `Đang tải xuống audio dòng #${idx + 1}...`);
-      } else {
-        showToast('warning', 'Chưa có audio cho dòng này.');
-      }
-    }
-
-    async function cancelBatchAll() {
-      cancelBatchRequested = true;
-      if (currentBatchJobId) {
-        try {
-          const res = await fetch(`/api/v1/jobs/${currentBatchJobId}/cancel`, { method: 'POST' });
-          if (res.ok) {
-            showToast('warning', 'Đã gửi lệnh hủy tiến trình Batch tới server!');
-          }
-        } catch (e) {
-          showToast('error', 'Lỗi khi gửi yêu cầu hủy: ' + e.message);
-        }
-      } else {
-        showToast('info', 'Đã dừng tiến trình Batch.');
-      }
-    }
-
-    let lastBatchJobId = null;
-
-    function runBatchRetryFailed() {
-      const failedIndices = [];
-      parsedBatchLines.forEach((_, idx) => {
-        if (batchRowData[idx] && batchRowData[idx].status === 'failed') {
-          failedIndices.push(idx);
-        }
-      });
-      if (failedIndices.length === 0) {
-        return showToast('info', 'Không có dòng nào bị lỗi cần thử lại.');
-      }
-      document.querySelectorAll('.batch-row-chk').forEach(c => {
-        const idx = parseInt(c.getAttribute('data-idx'));
-        c.checked = failedIndices.includes(idx);
-      });
-      runBatchAll({ parentBatchId: lastBatchJobId, retryOfIndices: failedIndices });
-    }
-
-    function runBatchResumeUnfinished() {
-      const unfinishedIndices = [];
-      parsedBatchLines.forEach((_, idx) => {
-        if (!batchRowData[idx] || batchRowData[idx].status !== 'completed') {
-          unfinishedIndices.push(idx);
-        }
-      });
-      if (unfinishedIndices.length === 0) {
-        return showToast('success', 'Toàn bộ các dòng đã hoàn tất!');
-      }
-      document.querySelectorAll('.batch-row-chk').forEach(c => {
-        const idx = parseInt(c.getAttribute('data-idx'));
-        c.checked = unfinishedIndices.includes(idx);
-      });
-      runBatchAll({ parentBatchId: lastBatchJobId, retryOfIndices: unfinishedIndices });
-    }
-
-    async function runBatchAll(retryContext = {}) {
-      if (isBatchRunning) return;
-      const btn = document.getElementById('batchRunAllBtn');
-      const progressBox = document.getElementById('batchProgressBar');
-      const progressFill = document.getElementById('batchProgressFill');
-      const progressStage = document.getElementById('batchProgressStage');
-      const progressCount = document.getElementById('batchProgressCount');
-      const progressPercent = document.getElementById('batchProgressPercent');
-
-      const checkboxes = Array.from(document.querySelectorAll('.batch-row-chk:checked'));
-      if (checkboxes.length === 0) return showToast('warning', 'Vui lòng chọn ít nhất 1 dòng để chạy batch.');
-
-      isBatchRunning = true;
-      cancelBatchRequested = false;
-      if (progressBox) progressBox.classList.remove('hidden');
-
-      if (btn) {
-        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang chạy Batch...</span>';
-        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-        btn.disabled = true;
-      }
-
-      const selectedModelRaw = document.getElementById('batchModelSelect')?.value || 'auto';
-      const selectedModel = (selectedModelRaw === 'auto') ? systemRecommendedModel : selectedModelRaw;
-      const pauseDur = parseFloat(document.getElementById('batchPauseDuration')?.value) || 0.8;
-      const bgmInput = document.getElementById('bgmFileInput');
-      const bgmVol = parseFloat(document.getElementById('bgmVolSlider')?.value) || 0.15;
-      const chkBgm = document.getElementById('chkEnableBGM');
-      const chkDucking = document.getElementById('chkEnableDucking')?.checked ?? true;
-      const chkNormalize = document.getElementById('chkNormalizeLoudness')?.checked ?? true;
-      const chkCrossfade = document.getElementById('chkCrossfade')?.checked ?? true;
-      const exportSrt = document.getElementById('chkExportSrt')?.checked ?? true;
-
-      // Prepare batch lines payload & check missing voice references
-      const linesPayload = [];
-      let missingAudioChars = [];
-
-      checkboxes.forEach((c) => {
-        const idx = parseInt(c.getAttribute('data-idx'));
-        const text = parsedBatchLines[idx];
-        const voice = parsedBatchVoiceOverrides[idx] !== undefined ? parsedBatchVoiceOverrides[idx] : (document.getElementById('batchGlobalVoiceSelect')?.value || '');
-        const linePause = parsedBatchPauseOverrides[idx] !== undefined ? parsedBatchPauseOverrides[idx] : pauseDur;
-        const item = { idx: idx, text: text, pause_duration: linePause };
-
-        if (voice.startsWith('char:')) {
-          const charId = voice.replace('char:', '');
-          item.character_id = charId;
-          const char = allCharactersCache.find(ch => ch.id === charId);
-          if (char && !char.has_reference_audio && !missingAudioChars.includes(char.name)) {
-            missingAudioChars.push(char.name);
-          }
-        } else if (voice.startsWith('builtin:')) {
-          const key = voice.replace('builtin:', '');
-          const v = BUILTIN_VOICES[key];
-          if (v) {
-            item.temperature = v.temp;
-            item.exaggeration = v.exag;
-            item.cfg_weight = v.pace;
-          }
-        }
-        linesPayload.push(item);
-        batchRowData[idx] = { status: 'processing' };
-        const statusEl = document.getElementById(`batchStatus-${idx}`);
-        if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800 text-[11px] animate-pulse">⏳ Đang sinh...</span>';
-      });
-
-      if (missingAudioChars.length > 0) {
-        showToast('warning', `Lưu ý: Các nhân vật (${missingAudioChars.join(', ')}) chưa có file reference audio mẫu, sẽ áp dụng giọng mặc định.`);
-      }
-
-      updateBatchFilterCounts();
-
-      const formData = new FormData();
-      formData.append('lines_json', JSON.stringify(linesPayload));
-      formData.append('model', selectedModel);
-      formData.append('pause_duration', pauseDur.toString());
-      formData.append('export_srt', exportSrt.toString());
-      formData.append('normalize_loudness', chkNormalize.toString());
-      formData.append('crossfade_ms', chkCrossfade ? '30' : '0');
-      formData.append('bgm_ducking', chkDucking.toString());
-
-      if (retryContext.parentBatchId) {
-        formData.append('parent_batch_id', retryContext.parentBatchId);
-      }
-      if (retryContext.retryOfIndices && retryContext.retryOfIndices.length > 0) {
-        formData.append('retry_of_indices', JSON.stringify(retryContext.retryOfIndices));
-      }
-
-      if (chkBgm && chkBgm.checked && bgmInput && bgmInput.files && bgmInput.files[0]) {
-        formData.append('bgm_file', bgmInput.files[0]);
-        formData.append('bgm_volume', bgmVol.toString());
-      }
-
-      showToast('info', `Bắt đầu xử lý ${checkboxes.length} dòng kịch bản với model ${selectedModel.toUpperCase()} (nạp 1 lần duy nhất)...`);
-
-      try {
-        const res = await fetch('/api/v1/tts/batch', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || 'Không thể tạo batch job');
-        }
-
-        const jobData = await res.json();
-        currentBatchJobId = jobData.id;
-        lastBatchJobId = jobData.id;
-
-        // Poll batch job until complete
-        await new Promise((resolve) => {
-          const interval = setInterval(async () => {
-            if (cancelBatchRequested) {
-              clearInterval(interval);
-              resolve();
-              return;
-            }
-            try {
-              const jres = await fetch(`/api/v1/jobs/${currentBatchJobId}`);
-              if (jres.ok) {
-                const jdata = await jres.json();
-                const pct = jdata.progress_percent || 0;
-                if (progressFill) progressFill.style.width = `${pct}%`;
-                if (progressPercent) progressPercent.textContent = `${pct}%`;
-                if (progressStage) {
-                  let msg = jdata.phase;
-                  if (msg === 'loading_model') msg = `Đang nạp mô hình ${selectedModel.toUpperCase()} một lần...`;
-                  else if (msg === 'generating_tokens') msg = `Đang sinh ngữ điệu các dòng thoại...`;
-                  else if (msg === 'merging_audio') msg = `Đang hòa âm & ghép nối toàn bộ...`;
-                  else if (msg === 'completed') msg = `Hoàn tất toàn bộ kịch bản!`;
-                  progressStage.textContent = msg;
-                }
-
-                // Update per-line results in real time
-                if (jdata.lines_results && Array.isArray(jdata.lines_results)) {
-                  let compCount = 0;
-                  jdata.lines_results.forEach(r => {
-                    const rowIdx = r.idx;
-                    const dur = r.duration_seconds || 0.0;
-                    if (r.status === 'failed') {
-                      batchRowData[rowIdx] = {
-                        jobId: currentBatchJobId,
-                        status: 'failed',
-                        error: r.error || 'Lỗi sinh âm thanh',
-                      };
-                      const statusEl = document.getElementById(`batchStatus-${rowIdx}`);
-                      if (statusEl) statusEl.innerHTML = `<span class="px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-800 text-[11px] font-bold" title="${r.error || ''}">✗ Thất bại</span>`;
-                      const playBtn = document.getElementById(`batchPlayBtn-${rowIdx}`);
-                      if (playBtn) playBtn.classList.add('hidden');
-                      const dlBtn = document.getElementById(`batchDownloadBtn-${rowIdx}`);
-                      if (dlBtn) dlBtn.classList.add('hidden');
-                    } else {
-                      compCount++;
-                      batchRowData[rowIdx] = {
-                        jobId: currentBatchJobId,
-                        audioUrl: r.audio_url || `/api/v1/jobs/${currentBatchJobId}/lines/${rowIdx}`,
-                        status: 'completed',
-                        duration: dur,
-                        start_s: r.start_seconds,
-                        end_s: r.end_seconds,
-                      };
-                      const statusEl = document.getElementById(`batchStatus-${rowIdx}`);
-                      if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-[11px] font-bold">✓ Hoàn tất</span>';
-                      const durEl = document.getElementById(`batchDur-${rowIdx}`);
-                      if (durEl) durEl.textContent = `${dur.toFixed(1)}s`;
-                      const playBtn = document.getElementById(`batchPlayBtn-${rowIdx}`);
-                      if (playBtn) playBtn.classList.remove('hidden');
-                      const dlBtn = document.getElementById(`batchDownloadBtn-${rowIdx}`);
-                      if (dlBtn) dlBtn.classList.remove('hidden');
-                    }
-                  });
-                  if (progressCount) progressCount.textContent = `${compCount} / ${checkboxes.length}`;
-                  updateBatchFilterCounts();
-                }
-
-                if (jdata.status === 'completed' || jdata.status === 'failed' || jdata.status === 'cancelled') {
-                  clearInterval(interval);
-
-                  if (jdata.benchmark && jdata.benchmark.realtime_factor) {
-                    try {
-                      localStorage.setItem(`chatterbox_rtf_${jdata.benchmark.device}_${jdata.benchmark.model_type}`, jdata.benchmark.realtime_factor.toString());
-                    } catch(e) {}
-                  }
-
-                  if (jdata.status === 'completed') {
-                    const card = document.getElementById('batchMergedResultCard');
-                    const player = document.getElementById('batchMergedAudioPlayer');
-                    const dlLink = document.getElementById('batchMergedDownloadLink');
-                    const srtLink = document.getElementById('batchSrtDownloadLink');
-                    const zipLink = document.getElementById('batchZipDownloadLink');
-                    const title = document.getElementById('batchMergedTitle');
-                    const meta = document.getElementById('batchMergedMeta');
-
-                    if (card) card.classList.remove('hidden');
-                    if (title) title.textContent = `Batch_Merged_${checkboxes.length}_lines_${selectedModel}.wav`;
-                    if (meta) meta.textContent = `Thời lượng: ${jdata.duration_seconds || '0'}s • ${checkboxes.length} dòng thoại`;
-                    if (player && jdata.audio_url) {
-                      player.src = jdata.audio_url;
-                    }
-                    if (dlLink && jdata.audio_url) {
-                      dlLink.href = jdata.audio_url;
-                      dlLink.download = `chatterbox_batch_${currentBatchJobId}.wav`;
-                    }
-                    if (srtLink) {
-                      if (jdata.srt_url) {
-                        srtLink.href = jdata.srt_url;
-                        srtLink.download = `chatterbox_subtitles_${currentBatchJobId}.srt`;
-                        srtLink.classList.remove('hidden');
-                      } else {
-                        srtLink.classList.add('hidden');
-                      }
-                    }
-                    if (zipLink) {
-                      if (jdata.zip_url) {
-                        zipLink.href = jdata.zip_url;
-                        zipLink.download = `chatterbox_batch_package_${currentBatchJobId}.zip`;
-                        zipLink.classList.remove('hidden');
-                      } else {
-                        zipLink.classList.add('hidden');
-                      }
-                    }
-
-                    const failedLinesCount = jdata.benchmark?.failed_lines || (jdata.lines_results ? jdata.lines_results.filter(r => r.status === 'failed').length : 0);
-                    const compLinesCount = jdata.benchmark?.completed_lines || (jdata.lines_results ? jdata.lines_results.filter(r => r.status === 'completed').length : checkboxes.length);
-                    if (failedLinesCount > 0) {
-                      showToast('warning', `Hoàn tất một phần: ${compLinesCount} thành công, ${failedLinesCount} lỗi.`);
-                    } else {
-                      showToast('success', `Đã hoàn tất xử lý Batch ${checkboxes.length} dòng thành công!`);
-                    }
-                  } else if (jdata.status === 'cancelled') {
-                    showToast('warning', 'Tiến trình Batch đã được hủy.');
-                  } else {
-                    showToast('error', `Lỗi xử lý Batch: ${jdata.error || 'Lỗi không xác định'}`);
-                  }
-                  resolve();
-                }
-              }
-            } catch (e) {
-              clearInterval(interval);
-              resolve();
-            }
-          }, 400);
-        });
-
-        refreshHistory();
-      } catch (err) {
-        showToast('error', `Lỗi Batch: ${err.message}`);
-      } finally {
-        isBatchRunning = false;
-        currentBatchJobId = null;
-        if (btn) {
-          btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">play_arrow</span><span>Chạy Batch tất cả</span>';
-          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-          btn.disabled = false;
-        }
-        updateBatchFilterCounts();
-      }
-    }
-
-    async function runBatchMergeAll() {
-      const btn = document.getElementById('batchMergeAllBtn');
-      const completedJobIds = [];
-
-      const checkboxes = Array.from(document.querySelectorAll('.batch-row-chk:checked'));
-      const targetIndices = checkboxes.length > 0 ? checkboxes.map(c => parseInt(c.getAttribute('data-idx'))) : parsedBatchLines.map((_, i) => i);
-
-      for (const idx of targetIndices) {
-        if (batchRowData[idx] && batchRowData[idx].jobId && batchRowData[idx].status === 'completed') {
-          completedJobIds.push(batchRowData[idx].jobId);
-        }
-      }
-
-      if (completedJobIds.length === 0) {
-        return showToast('warning', 'Chưa có dòng nào hoàn tất để ghép. Hãy nhấn "Chạy Batch tất cả" trước!');
-      }
-
-      if (btn) {
-        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang hòa âm ghép nối...</span>';
-        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-        btn.disabled = true;
-      }
-
-      const pauseDur = parseFloat(document.getElementById('batchPauseDuration')?.value) || 0.8;
-      const bgmInput = document.getElementById('bgmFileInput');
-      const bgmVol = parseFloat(document.getElementById('bgmVolSlider')?.value) || 0.15;
-      const chkBgm = document.getElementById('chkEnableBGM');
-
-      const formData = new FormData();
-      formData.append('job_ids', completedJobIds.join(','));
-      formData.append('pause_duration', pauseDur.toString());
-      if (chkBgm && chkBgm.checked && bgmInput && bgmInput.files && bgmInput.files[0]) {
-        formData.append('bgm_file', bgmInput.files[0]);
-        formData.append('bgm_volume', bgmVol.toString());
-      }
-
-      showToast('info', `Đang tiến hành ghép ${completedJobIds.length} đoạn audio...`);
-
-      try {
-        const res = await fetch('/api/v1/batch/merge', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const card = document.getElementById('batchMergedResultCard');
-          const player = document.getElementById('batchMergedAudioPlayer');
-          const dlLink = document.getElementById('batchMergedDownloadLink');
-          const title = document.getElementById('batchMergedTitle');
-          const meta = document.getElementById('batchMergedMeta');
-
-          if (card) card.classList.remove('hidden');
-          if (title) title.textContent = `Batch_Merged_${completedJobIds.length}_lines.wav`;
-          if (meta) meta.textContent = `Thời lượng: ${data.duration_seconds || '0'}s • Ghép từ ${data.chunks_count || completedJobIds.length} đoạn`;
-          if (player) {
-            player.src = data.audio_url;
-            player.play();
-          }
-          if (dlLink) {
-            dlLink.href = data.audio_url;
-            dlLink.download = `chatterbox_merged_${Date.now()}.wav`;
-          }
-
-          refreshHistory();
-          showToast('success', data.message || 'Ghép audio hoàn tất thành công!');
-        } else {
-          const err = await res.json();
-          showToast('error', 'Lỗi khi ghép audio: ' + (err.detail || 'Không thể ghép'));
-        }
-      } catch (err) {
-        showToast('error', 'Lỗi kết nối máy chủ: ' + err.message);
-      } finally {
-        if (btn) {
-          btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">merge</span><span>Ghép toàn bộ (Merge All)</span>';
-          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-          btn.disabled = false;
-        }
-      }
-    }
-
-    // ==================== BATCH PROJECT MANAGEMENT ====================
-    function openBatchProjectModal() {
-      renderBatchSavedProjects();
-      document.getElementById('batchProjectModal')?.classList.remove('hidden');
-    }
-
-    function closeBatchProjectModal() {
-      document.getElementById('batchProjectModal')?.classList.add('hidden');
-    }
-
-    function getSavedBatchProjects() {
-      try {
-        const raw = localStorage.getItem('chatterbox_batch_projects');
-        return raw ? JSON.parse(raw) : [];
-      } catch (e) {
-        return [];
-      }
-    }
-
-    function saveBatchCurrentProject() {
-      const nameInput = document.getElementById('batchProjectNameInput');
-      const name = nameInput?.value.trim() || `Dự án Batch ${new Date().toLocaleDateString('vi-VN')}`;
-      if (parsedBatchLines.length === 0) {
-        return showToast('warning', 'Không có nội dung kịch bản để lưu dự án.');
-      }
-
-      const projects = getSavedBatchProjects();
-      const projId = 'proj_' + Date.now();
-      const newProj = {
-        id: projId,
-        name: name,
-        created_at: new Date().toISOString(),
-        lines: parsedBatchLines,
-        voiceOverrides: parsedBatchVoiceOverrides,
-        pauseOverrides: parsedBatchPauseOverrides,
-        rowData: batchRowData,
-        model: document.getElementById('batchModelSelect')?.value || 'auto',
-        pauseDuration: document.getElementById('batchPauseDuration')?.value || '0.8',
-      };
-
-      projects.unshift(newProj);
-      localStorage.setItem('chatterbox_batch_projects', JSON.stringify(projects.slice(0, 30)));
-      renderBatchSavedProjects();
-      if (nameInput) nameInput.value = '';
-      showToast('success', `Đã lưu dự án "${name}" thành công!`);
-    }
-
-    function loadBatchProject(projId) {
-      const projects = getSavedBatchProjects();
-      const p = projects.find(item => item.id === projId);
-      if (!p) return showToast('error', 'Không tìm thấy dự án đã chọn.');
-
-      parsedBatchLines = p.lines || [];
-      parsedBatchVoiceOverrides = p.voiceOverrides || {};
-      parsedBatchPauseOverrides = p.pauseOverrides || {};
-      batchRowData = p.rowData || {};
-
-      if (p.model) {
-        const mSel = document.getElementById('batchModelSelect');
-        if (mSel) mSel.value = p.model;
-      }
-      if (p.pauseDuration) {
-        const pSel = document.getElementById('batchPauseDuration');
-        if (pSel) {
-          pSel.value = p.pauseDuration;
-          handleGlobalPauseChange(p.pauseDuration);
-        }
-      }
-
-      document.getElementById('batchTextarea').value = parsedBatchLines.join('\n');
-      renderBatchTable();
-      updateBatchEstimation();
-      closeBatchProjectModal();
-      showToast('success', `Đã mở dự án "${p.name}" (${parsedBatchLines.length} dòng)!`);
-    }
-
-    function deleteBatchProject(projId) {
-      let projects = getSavedBatchProjects();
-      projects = projects.filter(item => item.id !== projId);
-      localStorage.setItem('chatterbox_batch_projects', JSON.stringify(projects));
-      renderBatchSavedProjects();
-      showToast('info', 'Đã xóa dự án khỏi danh sách.');
-    }
-
-    function renderBatchSavedProjects() {
-      const container = document.getElementById('batchSavedProjectsList');
-      if (!container) return;
-      const projects = getSavedBatchProjects();
-      container.innerHTML = '';
-      if (projects.length === 0) {
-        container.innerHTML = '<div class="p-3 text-center text-slate-500 text-xs">Chưa có dự án nào được lưu.</div>';
-        return;
-      }
-
-      projects.forEach(p => {
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'p-2 flex items-center justify-between hover:bg-[#18151E] transition-colors border-b border-[#2D2836] last:border-b-0';
-
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'min-w-0 pr-2';
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'font-bold text-white text-xs truncate max-w-[200px]';
-        nameDiv.textContent = p.name || 'Dự án không tên';
-
-        const metaDiv = document.createElement('div');
-        metaDiv.className = 'text-[10px] text-slate-400 font-mono';
-        const lineCount = (p.lines || []).length;
-        const dateStr = p.created_at ? new Date(p.created_at).toLocaleString('vi-VN') : '';
-        metaDiv.textContent = `${lineCount} dòng • ${dateStr}`;
-
-        infoDiv.appendChild(nameDiv);
-        infoDiv.appendChild(metaDiv);
-
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'flex items-center gap-1.5 shrink-0';
-
-        const openBtn = document.createElement('button');
-        openBtn.type = 'button';
-        openBtn.className = 'px-2 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white text-xs font-medium cursor-pointer';
-        openBtn.textContent = 'Mở';
-        openBtn.addEventListener('click', () => loadBatchProject(p.id));
-
-        const delBtn = document.createElement('button');
-        delBtn.type = 'button';
-        delBtn.className = 'p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer';
-        delBtn.title = 'Xóa';
-        delBtn.innerHTML = '<span class="material-symbols-outlined text-[15px]">delete</span>';
-        delBtn.addEventListener('click', () => deleteBatchProject(p.id));
-
-        actionsDiv.appendChild(openBtn);
-        actionsDiv.appendChild(delBtn);
-
-        itemDiv.appendChild(infoDiv);
-        itemDiv.appendChild(actionsDiv);
-        container.appendChild(itemDiv);
-      });
-    }
-
-    // Page leave warning
-    window.addEventListener('beforeunload', (e) => {
-      if (isBatchRunning) {
-        e.preventDefault();
-        e.returnValue = 'Tác vụ Batch đang chạy. Bạn có chắc muốn rời khỏi trang?';
-        return e.returnValue;
-      }
-    });
-
-
-    // ==================== MULTILINGUAL TTS CONTROLLER ====================
-    const MTL_SAMPLE_TEXTS = {
-      'en': 'Last month, we reached a new milestone with two billion views on our YouTube channel.',
-      'es': 'El mes pasado alcanzamos un nuevo hito: dos mil millones de visualizaciones en nuestro canal de YouTube.',
-      'fr': 'Le mois dernier, nous avons atteint un nouveau jalon avec deux milliards de vues sur notre chaîne YouTube.',
-      'de': 'Letzten Monat haben wir einen neuen Meilenstein erreicht: zwei Milliarden Aufrufe auf unserem YouTube-Kanal.',
-      'it': 'Il mese scorso abbiamo raggiunto un nuovo traguardo: due miliardi di visualizzazioni sul nostro canale YouTube.',
-      'ja': '先月、私たちのYouTubeチャンネルで二十億回の再生回数という新たなマイルストーンに到達しました。',
-      'zh': '上个月，我们达到了一个新的里程碑。我们的YouTube频道观看次数达到了二十亿次。',
-      'ko': '지난달 우리는 유튜브 채널에서 이십억 조회수라는 새로운 이정표에 도달했습니다.',
-      'ru': 'В прошлом месяце мы достигли нового рубежа: два миллиарда просмотров на нашем YouTube-канале.',
-      'ar': 'في الشهر الماضي، وصلنا إلى معلم جديد بمليارين من المشاهدات على قناتنا على يوتيوب.',
-      'hi': 'पिछले महीने हमने एक नया मील का पत्थर छुआ: हमारे YouTube चैनल पर दो अरब व्यूज़।',
-      'pt': 'No mês passado, alcançámos um novo marco: dois mil milhões de visualizações no nosso canal do YouTube.',
-      'nl': 'Vorige maand bereikten we een nieuwe mijlpaal met twee miljard weergaven op ons YouTube-kanaal.',
-      'pl': 'W zeszłym miesiącu osiągnęliśmy nowy kamień milowy z dwoma miliardami wyświetleń na naszym kanale YouTube.',
-      'tr': 'Geçen ay YouTube kanalımızda iki milyar görüntüleme ile yeni bir dönüm noktasına ulaştık.',
-      'sw': 'Mwezi uliopita, tulifika hatua mpya ya maoni ya bilioni mbili kweny kituo chetu cha YouTube.',
-      'sv': 'Förra månaden nådde vi en ny milstolpe med två miljarder visningar på vår YouTube-kanal.',
-      'da': 'Sidste måned nåede vi en ny milepæl med to milliarder visninger på vores YouTube-kanal.',
-      'fi': 'Viime kuussa saavutimme uuden virstanpylvään kahden miljardin katselukerran kanssa YouTube-kanavallamme.',
-      'el': 'Τον περασμένο μήνα, φτάσαμε σε ένα νέο ορόσημο με δύο δισεκατομμύρια προβολές στο κανάλι μας στο YouTube.',
-      'he': 'בחודש שעבר הגענו לאבן דרך חדשה עם שני מיליארד צפיות בערוץ היוטיוב שלנו.',
-      'ms': 'Bulan lepas, kami mencapai pencapaian baru dengan dua bilion tontonan di saluran YouTube kami.',
-      'no': 'Forrige måned nådde vi en ny milepæl med to milliarder visninger på YouTube-kanalen vår.'
-    };
-
-    function selectMtlLang(code, btnEl, updateSample = false) {
-      selectedMtlLanguage = code;
-      document.querySelectorAll('.mtl-lang-btn').forEach(b => {
-        b.className = 'mtl-lang-btn p-2 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-1.5 cursor-pointer';
-      });
-      if (btnEl) {
-        btnEl.className = 'mtl-lang-btn active p-2 rounded-lg bg-purple-600 text-white border border-purple-500 text-xs font-medium flex items-center gap-1.5 cursor-pointer';
-      }
-      if (updateSample) {
-        loadMtlSampleText();
-      }
-    }
-
-    function loadMtlSampleText() {
-      const input = document.getElementById('mtlPromptInput');
-      if (input && MTL_SAMPLE_TEXTS[selectedMtlLanguage]) {
-        input.value = MTL_SAMPLE_TEXTS[selectedMtlLanguage];
-        updateMtlCharCount();
-        showToast('info', `Đã nạp văn bản mẫu cho tiếng ${selectedMtlLanguage.toUpperCase()}`);
-      }
-    }
-
-    function updateMtlCharCount() {
-      const input = document.getElementById('mtlPromptInput');
-      const countEl = document.getElementById('mtlCharCount');
-      if (input && countEl) {
-        countEl.textContent = `${input.value.length} / 4000 ký tự`;
-      }
-    }
-
-    function updateMtlPromptFileLabel(input) {
-      const label = document.getElementById('mtlAudioPromptLabel');
-      if (input.files && input.files[0]) {
-        if (label) label.textContent = `✓ ${input.files[0].name}`;
-        showToast('success', `Đã chọn file mẫu "${input.files[0].name}"`);
-      }
-    }
-
-    function clearMtlPromptFile() {
-      const input = document.getElementById('mtlAudioPromptInput');
-      const label = document.getElementById('mtlAudioPromptLabel');
-      if (input) input.value = '';
-      if (label) label.textContent = 'Chọn file WAV/MP3...';
-      showToast('info', 'Đã xóa file mẫu âm thanh.');
-    }
-
-    async function triggerMtlSynthesis() {
-      const btn = document.getElementById('mtlGenerateBtn');
-      const text = document.getElementById('mtlPromptInput').value.trim();
-      if (!text) return showToast('warning', 'Vui lòng nhập văn bản.');
-
-      if (btn) {
-        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
-        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-        btn.disabled = true;
-      }
-
-      const formData = new FormData();
-      formData.append('text', text);
-      formData.append('language_id', selectedMtlLanguage || 'en');
-
-      // Character selection
-      const charSelect = document.getElementById('mtlCharacterSelect');
-      if (charSelect && charSelect.value) {
-        const val = charSelect.value;
-        if (val.startsWith('char:')) {
-          formData.append('character_id', val.replace('char:', ''));
-        }
-      }
-
-      // Audio prompt file upload
-      const refInput = document.getElementById('mtlAudioPromptInput');
-      if (refInput && refInput.files && refInput.files[0]) {
-        formData.append('audio_prompt', refInput.files[0]);
-      }
-
-      // Parameters
-      const exag = document.getElementById('mtlExaggeration');
-      if (exag) formData.append('exaggeration', exag.value);
-
-      const temp = document.getElementById('mtlTemperature');
-      if (temp) formData.append('temperature', temp.value);
-
-      const cfg = document.getElementById('mtlCfgWeight');
-      if (cfg) formData.append('cfg_weight', cfg.value);
-
-      try {
-        const res = await fetch('/api/v1/tts/multilingual', { method: 'POST', body: formData });
-        if (res.ok) {
-          const job = await res.json();
-          showToast('info', 'Đã gửi tác vụ đa ngôn ngữ vào hàng đợi!');
-          await pollJob(job.id, btn, 'Sinh giọng nói Đa ngôn ngữ', '<span class="material-symbols-outlined text-[22px]">record_voice_over</span>');
-        } else {
-          let errDetail = 'Lỗi khi gửi tác vụ đa ngôn ngữ.';
-          try {
-            const errData = await res.json();
-            if (errData && errData.detail) {
-              if (Array.isArray(errData.detail)) {
-                errDetail = errData.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join('; ');
-              } else if (typeof errData.detail === 'string') {
-                errDetail = errData.detail;
-              } else {
-                errDetail = JSON.stringify(errData.detail);
-              }
-            }
-          } catch (_) {}
-          showToast('error', errDetail);
-          if (btn) {
-            btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
-            btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-            btn.disabled = false;
-          }
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi kết nối: ' + e.message);
-        if (btn) {
-          btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
-          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-          btn.disabled = false;
-        }
-      }
-    }
-
-    function updateVcLabel(input, labelId) {
-      if (input.files && input.files[0]) {
-        document.getElementById(labelId).textContent = `✓ ${input.files[0].name}`;
-        showToast('success', `Đã chọn file "${input.files[0].name}"`);
-      }
-    }
-
-    async function triggerVcConversion() {
-      const btn = document.getElementById('vcGenerateBtn');
-      const src = document.getElementById('vcSourceInput').files[0];
-      const tgt = document.getElementById('vcTargetInput').files[0];
-      if (!src || !tgt) return showToast('warning', 'Vui lòng chọn cả File Nguồn và File Mẫu Đích.');
-
-      if (btn) {
-        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang chuyển đổi âm sắc...</span>';
-        btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-        btn.disabled = true;
-      }
-
-      const formData = new FormData();
-      formData.append('source_audio', src);
-      formData.append('target_voice', tgt);
-
-      try {
-        const res = await fetch('/api/v1/voice-conversion', { method: 'POST', body: formData });
-        if (res.ok) {
-          const job = await res.json();
-          showToast('info', 'Đã bắt đầu chuyển đổi âm sắc giọng!');
-          await pollJob(job.id, btn, 'Chuyển đổi âm sắc giọng nói', '<span class="material-symbols-outlined text-[22px]">sync</span>');
-        } else {
-          showToast('error', 'Lỗi Voice Conversion.');
-          if (btn) {
-            btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
-            btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-            btn.disabled = false;
-          }
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi Voice Conversion: ' + e.message);
-        if (btn) {
-          btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
-          btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
-          btn.disabled = false;
-        }
-      }
-    }
-
-    // ==================== PRESET STYLES CONTROLLER ====================
-    function applyPresetStyle(key, exag, pace, temp, btnEl) {
-      document.getElementById('sliderExaggeration').value = exag;
-      document.getElementById('valExaggeration').textContent = parseFloat(exag).toFixed(2);
-      document.getElementById('sliderPace').value = pace;
-      document.getElementById('valPace').textContent = parseFloat(pace).toFixed(2);
-      document.getElementById('sliderTemp').value = temp;
-      document.getElementById('valTemp').textContent = parseFloat(temp).toFixed(2);
-      updateParamsSummaryBadge();
-
-      document.querySelectorAll('#presetPillsContainer .preset-pill').forEach(b => {
-        b.className = 'preset-pill px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs text-slate-200 hover:text-white font-medium cursor-pointer transition-all';
-      });
-      if (btnEl) {
-        btnEl.className = 'preset-pill active px-2.5 py-1 rounded-md bg-purple-600 border border-purple-500 text-xs text-white font-medium cursor-pointer transition-all';
-      }
-      showToast('info', `Đã chọn kiểu giọng: ${btnEl ? btnEl.innerText.trim() : key}`);
-    }
-
-    // ==================== CHARACTERS CONTROLLER ====================
-    const SAMPLE_TEST_TEXTS = {
-      "vi": "Xin chào, đây là câu đọc thử nghiệm trước khi tạo Character.",
-      "en": "Hello, this is a sample voice preview before creating the character.",
-      "ja": "こんにちは、これはキャラクターを作成する前の音声サンプルです。",
-      "zh": "你好，这是创建角色前的语音测试示例。",
-      "ko": "안녕하세요, 캐릭터를 생성하기 전 음성 테스트 샘플입니다.",
-      "fr": "Bonjour, ceci est un exemple de voix avant de créer le personnage.",
-      "de": "Hallo, dies ist eine Sprachprobe vor der Erstellung des Charakters.",
-      "es": "Hola, este es un fragmento de prueba antes de crear el personaje.",
-      "ru": "Здравствуйте, это образец голоса перед созданием персонажа.",
-      "it": "Ciao, questo è un esempio di voce prima di creare il personnage.",
-      "hi": "नमस्ते, पात्र बनाने से पहले यह एक ध्वनि परीक्षण नमूना है।",
-      "ar": "مرحبا، هذا نموذج صوتي اختباري قبل إنشاء الشخصية.",
-      "pt": "Olá, esta é uma amostra de voz antes de criar o personagem.",
-      "nl": "Hallo, dit is een spraakvoorbeeld voordat het personage wordt gemaakt.",
-      "pl": "Cześć, to jest próbka głosu przed utworzeniem postaci.",
-      "tr": "Merhaba, bu karakter oluşturulmadan önceki ses test örneğidir."
-    };
-
-    let allCharactersCache = [];
-
-    async function loadCharacters() {
-      const grid = document.getElementById('charactersGrid');
-      const ttsSelect = document.getElementById('ttsCharacterSelect');
-      const defaultLabel = document.getElementById('useDefaultCharLabel');
-
-      try {
-        const res = await fetch('/api/v1/characters');
-        if (res.ok) {
-          const data = await res.json();
-          allCharactersCache = data.characters || [];
-
-          // Populate TTS Dropdown
-          if (ttsSelect) {
-            const currentVal = ttsSelect.value;
-            let optionsHtml = `
-              <option value="">-- Mặc định (Default Speaker) --</option>
-              <optgroup label="🎭 Style Presets (Bộ chỉnh phong cách)">
-                <option value="builtin:mc_male">🎙️ MC Nam Thời Sự (Trầm ấm)</option>
-                <option value="builtin:editor_female">🎙️ Nữ Biên Tập Viên (Truyền cảm)</option>
-                <option value="builtin:story_night">🎙️ Kể Chuyện Đêm (Trầm lắng)</option>
-                <option value="builtin:review_fast">🎙️ Review & Recap (Nhanh)</option>
-                <option value="builtin:anime_fun">🎙️ Hoạt Hình / Anime (Biểu cảm)</option>
-                <option value="builtin:ai_assistant">🎙️ Trợ Lý Ảo AI (Tự nhiên)</option>
-              </optgroup>
-            `;
-            if (allCharactersCache.length > 0) {
-              optionsHtml += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
-              allCharactersCache.forEach(c => {
-                const star = c.is_default ? '⭐ ' : '';
-                const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
-                optionsHtml += `<option value="char:${c.id}">${hasAudio}${star}${c.name} (${c.language || 'vi'})</option>`;
-              });
-              optionsHtml += '</optgroup>';
-            }
-            ttsSelect.innerHTML = optionsHtml;
-            if (currentVal) ttsSelect.value = currentVal;
-          }
-
-          // Populate Batch Global Dropdown
-          const batchGlobalSelect = document.getElementById('batchGlobalVoiceSelect');
-          if (batchGlobalSelect) {
-            const currentGlobal = batchGlobalSelect.value;
-            let batchOpts = `
-              <option value="">-- Mặc định --</option>
-              <optgroup label="🎭 Style Presets (Bộ chỉnh phong cách)">
-                <option value="builtin:mc_male">🎙️ MC Nam Thời Sự</option>
-                <option value="builtin:editor_female">🎙️ Nữ Biên Tập Viên</option>
-                <option value="builtin:story_night">🎙️ Kể Chuyện Đêm</option>
-                <option value="builtin:review_fast">🎙️ Review & Recap</option>
-                <option value="builtin:anime_fun">🎙️ Hoạt Hình / Anime</option>
-                <option value="builtin:ai_assistant">🎙️ Trợ Lý Ảo AI</option>
-              </optgroup>
-            `;
-            if (allCharactersCache.length > 0) {
-              batchOpts += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
-              allCharactersCache.forEach(c => {
-                const star = c.is_default ? '⭐ ' : '';
-                const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
-                batchOpts += `<option value="char:${c.id}">${hasAudio}${star}${c.name} (${c.language || 'vi'})</option>`;
-              });
-              batchOpts += '</optgroup>';
-            }
-            batchGlobalSelect.innerHTML = batchOpts;
-            if (currentGlobal) batchGlobalSelect.value = currentGlobal;
-          }
-
-          // Populate Multilingual Character Dropdown
-          const mtlCharSelect = document.getElementById('mtlCharacterSelect');
-          if (mtlCharSelect) {
-            const currentMtlChar = mtlCharSelect.value;
-            let mtlCharOpts = '<option value="">-- Mặc định (Default Speaker) --</option>';
-            if (allCharactersCache.length > 0) {
-              mtlCharOpts += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
-              allCharactersCache.forEach(c => {
-                const star = c.is_default ? '⭐ ' : '';
-                const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
-                mtlCharOpts += `<option value="char:${c.id}">${hasAudio}${star}${c.name} (${c.language || 'en'})</option>`;
-              });
-              mtlCharOpts += '</optgroup>';
-            }
-            mtlCharSelect.innerHTML = mtlCharOpts;
-            if (currentMtlChar) mtlCharSelect.value = currentMtlChar;
-          }
-
-          if (parsedBatchLines && parsedBatchLines.length > 0) {
-            renderBatchTable();
-          }
-
-          // Check default character
-          const defChar = allCharactersCache.find(c => c.is_default);
-          if (defaultLabel) {
-            defaultLabel.textContent = defChar ? `⭐ Sử dụng Character mặc định (${defChar.name})` : `⭐ Sử dụng Character mặc định (Chưa đặt)`;
-          }
-
-          // Populate Character Management Grid
-          if (grid) {
-            if (allCharactersCache.length === 0) {
-              grid.innerHTML = '<div class="text-xs text-slate-500 py-8 text-center col-span-full">Chưa có nhân vật nào. Nhấn "Tạo Nhân vật mới" để thêm!</div>';
-              return;
-            }
-            grid.innerHTML = allCharactersCache.map(c => `
-              <div class="p-4 rounded-xl bg-[#0E0C12] border ${c.is_default ? 'border-amber-500/50 bg-[#14101A]' : 'border-[#3F3A46]'} hover:border-purple-500 transition-colors space-y-3 flex flex-col justify-between">
-                <div class="space-y-2">
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2.5">
-                      <div class="w-9 h-9 rounded-full ${c.is_default ? 'bg-amber-600/30 text-amber-300' : 'bg-purple-600/30 text-purple-300'} flex items-center justify-center font-bold text-xs">
-                        ${c.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div class="font-bold text-sm text-white flex items-center gap-1.5">
-                          <span>${c.name}</span>
-                          ${c.is_default ? '<span class="material-symbols-outlined text-amber-400 text-[16px]" title="Nhân vật mặc định">star</span>' : ''}
-                        </div>
-                        <div class="text-[10px] text-slate-400 uppercase font-mono">${c.language || 'vi'} • ${c.has_reference_audio ? '🎙️ Giọng mẫu độc quyền' : '⚡ Mặc định'}</div>
-                      </div>
-                    </div>
-                    ${c.is_default ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">Mặc định</span>' : ''}
-                  </div>
-                  <div class="text-xs text-slate-300 line-clamp-2">${c.description || 'Không có mô tả chi tiết'}</div>
-                  <div class="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-lg bg-[#18151E] border border-[#3F3A46]/60 text-[10px] font-mono text-slate-300">
-                    <div>Exag: <span class="text-purple-300">${c.voice?.expressiveness ?? 0.5}</span></div>
-                    <div>Pace: <span class="text-purple-300">${c.voice?.pace ?? 0.5}</span></div>
-                    <div>Seed: <span class="text-purple-300">${c.voice?.seed ?? 0}</span></div>
-                  </div>
-                </div>
-
-                <div class="flex justify-between items-center pt-2.5 border-t border-[#3F3A46]/50 gap-2">
-                  <button onclick="useCharacterInTts('${c.id}')" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer">
-                    <span class="material-symbols-outlined text-[14px]">record_voice_over</span>
-                    <span>Dùng trong TTS</span>
-                  </button>
-                  <div class="flex items-center gap-1">
-                    <button onclick="toggleDefaultCharacter('${c.id}', ${!c.is_default})" class="p-1 rounded text-slate-300 hover:text-amber-400 hover:bg-[#231F2A] cursor-pointer" title="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}">
-                      <span class="material-symbols-outlined text-[16px]">${c.is_default ? 'star' : 'star_border'}</span>
-                    </button>
-                    <button onclick="deleteCharacter('${c.id}')" class="p-1 rounded text-red-400 hover:bg-red-900/30 cursor-pointer" title="Xóa nhân vật">
-                      <span class="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            `).join('');
-          }
-        }
-      } catch (e) {
-        if (grid) grid.innerHTML = '<div class="text-xs text-slate-500 py-8 text-center col-span-full">Không tải được danh sách nhân vật.</div>';
-      }
-    }
-
-    function openCreateCharacterModal(prefillFromTts = false) {
-      if (prefillFromTts) {
-        document.getElementById('charExagInput').value = document.getElementById('sliderExaggeration').value;
-        document.getElementById('valCharExag').textContent = parseFloat(document.getElementById('sliderExaggeration').value).toFixed(2);
-        document.getElementById('charPaceInput').value = document.getElementById('sliderPace').value;
-        document.getElementById('valCharPace').textContent = parseFloat(document.getElementById('sliderPace').value).toFixed(2);
-        document.getElementById('charSeedInput').value = document.getElementById('seedInput').value;
-      }
-      document.getElementById('characterModal').classList.remove('hidden');
-    }
-
-    function closeCreateCharacterModal() {
-      document.getElementById('characterModal').classList.add('hidden');
-    }
-
-    function handleCharLangChange(lang) {
-      const txt = SAMPLE_TEST_TEXTS[lang] || SAMPLE_TEST_TEXTS['vi'];
-      document.getElementById('charTestTextInput').value = txt;
-    }
-
-    function handleCharAudioFileSelected(input) {
-      if (input.files && input.files[0]) {
-        const file = input.files[0];
-        document.getElementById('charAudioFileName').textContent = file.name;
-        document.getElementById('charAudioBtnLabel').textContent = 'Đổi file mẫu...';
-        document.getElementById('charAudioClearBtn').classList.remove('hidden');
-        showToast('info', `Đã chọn file mẫu "${file.name}"`);
-      }
-    }
-
-    function clearCharAudioFile() {
-      document.getElementById('charAudioFileInput').value = '';
-      document.getElementById('charAudioFileName').textContent = 'Chưa chọn file mẫu (sử dụng âm sắc mặc định)';
-      document.getElementById('charAudioBtnLabel').textContent = 'Chọn file audio mẫu...';
-      document.getElementById('charAudioClearBtn').classList.add('hidden');
-    }
-
-    async function testCharacterVoice() {
-      const btn = document.getElementById('charTestVoiceBtn');
-      const text = document.getElementById('charTestTextInput').value.trim();
-      if (!text) return showToast('warning', 'Vui lòng nhập văn bản đọc thử.');
-
-      btn.disabled = true;
-      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang tạo...</span>';
-
-      try {
-        const formData = new FormData();
-        formData.append('text', text);
-        formData.append('model', 'turbo');
-        formData.append('temperature', '0.8');
-        formData.append('repetition_penalty', '1.2');
-
-        const audioInput = document.getElementById('charAudioFileInput');
-        if (audioInput.files && audioInput.files[0]) {
-          formData.append('audio_prompt', audioInput.files[0]);
-        }
-
-        const res = await fetch('/api/v1/tts/turbo', { method: 'POST', body: formData });
-        if (res.ok) {
-          const job = await res.json();
-          await pollJob(job.id, btn, 'Nghe thử', '<span class="material-symbols-outlined text-[16px]">volume_up</span>');
-        } else {
-          showToast('error', 'Lỗi khi sinh giọng thử nghiệm.');
-          btn.disabled = false;
-          btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
-        }
-      } catch (err) {
-        showToast('error', 'Lỗi đọc thử: ' + err.message);
-        btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
-      }
-    }
-
-    async function saveNewCharacter() {
-      const btn = document.getElementById('charSaveBtn');
-      const name = document.getElementById('charNameInput').value.trim();
-      const desc = document.getElementById('charDescInput').value.trim();
-      const lang = document.getElementById('charLangSelect').value;
-      const exag = parseFloat(document.getElementById('charExagInput').value) || 0.5;
-      const pace = parseFloat(document.getElementById('charPaceInput').value) || 0.5;
-      const stab = parseFloat(document.getElementById('charStabInput').value) || 0.7;
-      const seed = parseInt(document.getElementById('charSeedInput').value) || 0;
-      const isDefault = document.getElementById('charIsDefaultInput').checked;
-
-      if (!name) return showToast('warning', 'Vui lòng nhập tên nhân vật.');
-
-      btn.disabled = true;
-      btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang lưu...</span>';
-
-      try {
-        const formData = new FormData();
-        formData.append('name', name);
-        formData.append('description', desc);
-        formData.append('language', lang);
-        formData.append('is_default', isDefault ? 'true' : 'false');
-        formData.append('expressiveness', exag);
-        formData.append('pace', pace);
-        formData.append('stability', stab);
-        formData.append('seed', seed);
-
-        const audioInput = document.getElementById('charAudioFileInput');
-        if (audioInput.files && audioInput.files[0]) {
-          formData.append('reference_audio', audioInput.files[0]);
-        }
-
-        const res = await fetch('/api/v1/characters', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (res.ok) {
-          closeCreateCharacterModal();
-          // Reset form
-          document.getElementById('charNameInput').value = '';
-          document.getElementById('charDescInput').value = '';
-          clearCharAudioFile();
-          loadCharacters();
-          showToast('success', `Đã lưu thành công nhân vật "${name}"!`);
-        } else {
-          const err = await res.json();
-          showToast('error', 'Lỗi lưu nhân vật: ' + (err.detail || 'Không thể tạo'));
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi khi lưu nhân vật: ' + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Lưu Nhân vật';
-      }
-    }
-
-    function handleTtsCharacterSelect(val) {
-      if (!val) {
-        uploadedRefFile = null;
-        document.getElementById('refAudioCard')?.classList.add('hidden');
-        showToast('info', 'Đã chuyển về giọng mặc định AI');
-        return;
-      }
-      if (val.startsWith('builtin:')) {
-        const key = val.replace('builtin:', '');
-        applyBuiltinVoice(key);
-        return;
-      }
-      const charId = val.replace('char:', '');
-      const char = allCharactersCache.find(c => c.id === charId);
-      if (char) {
-        if (char.voice) {
-          if (char.voice.expressiveness !== undefined) {
-            document.getElementById('sliderExaggeration').value = char.voice.expressiveness;
-            document.getElementById('valExaggeration').textContent = parseFloat(char.voice.expressiveness).toFixed(2);
-          }
-          if (char.voice.pace !== undefined) {
-            document.getElementById('sliderPace').value = char.voice.pace;
-            document.getElementById('valPace').textContent = parseFloat(char.voice.pace).toFixed(2);
-          }
-          if (char.voice.seed !== undefined) {
-            document.getElementById('seedInput').value = char.voice.seed;
-          }
-          updateParamsSummaryBadge();
-        }
-        if (char.has_reference_audio) {
-          fetch(`/api/v1/characters/${char.id}/reference-audio`)
-            .then(res => res.blob())
-            .then(blob => {
-              uploadedRefFile = new File([blob], `${char.name}_voice.wav`, { type: 'audio/wav' });
-              const nameEl = document.getElementById('refAudioName');
-              if (nameEl) nameEl.textContent = `Giọng Nhân vật: ${char.name}`;
-              document.getElementById('refAudioCard')?.classList.remove('hidden');
-            }).catch(() => {});
-        } else {
-          uploadedRefFile = null;
-          document.getElementById('refAudioCard')?.classList.add('hidden');
-        }
-        showToast('success', `Đã áp dụng hồ sơ nhân vật "${char.name}" vào TTS Studio!`);
-      }
-    }
-
-    function useCharacterInTts(charId) {
-      switchTab('tts');
-      const ttsSelect = document.getElementById('ttsCharacterSelect');
-      if (ttsSelect) {
-        const val = `char:${charId}`;
-        ttsSelect.value = val;
-        handleTtsCharacterSelect(val);
-      }
-    }
-
-    async function toggleDefaultCharacter(id, isDefault) {
-      try {
-        const res = await fetch(`/api/v1/characters/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ is_default: isDefault })
-        });
-        if (res.ok) {
-          loadCharacters();
-          showToast('success', isDefault ? 'Đã đặt làm nhân vật mặc định!' : 'Đã bỏ mặc định.');
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi cập nhật mặc định: ' + e.message);
-      }
-    }
-
-    function toggleUseDefaultChar(checked) {
-      if (checked) {
-        const def = allCharactersCache.find(c => c.is_default);
-        if (def) {
-          const val = `char:${def.id}`;
-          document.getElementById('ttsCharacterSelect').value = val;
-          handleTtsCharacterSelect(val);
-        } else {
-          showToast('warning', 'Chưa có nhân vật nào được đặt làm mặc định.');
-          document.getElementById('useDefaultCharChk').checked = false;
-        }
-      } else {
-        document.getElementById('ttsCharacterSelect').value = '';
-        handleTtsCharacterSelect('');
-      }
-    }
-
-    async function deleteCharacter(id) {
-      if (!confirm("Bạn có chắc muốn xóa nhân vật này?")) return;
-      try {
-        await fetch(`/api/v1/characters/${id}`, { method: 'DELETE' });
-        loadCharacters();
-        showToast('info', 'Đã xóa nhân vật.');
-      } catch (e) {
-        showToast('error', 'Lỗi xóa nhân vật: ' + e.message);
-      }
-    }
-
-    // ==================== HISTORY CONTROLLER ====================
-    async function refreshHistory() {
-      const miniList = document.getElementById('miniHistoryList');
-      const fullTbody = document.getElementById('fullHistoryTableBody');
-
-      try {
-        const res = await fetch('/api/v1/jobs');
-        if (res.ok) {
-          const data = await res.json();
-          const jobs = data.jobs || [];
-
-          if (jobs.length === 0) {
-            if (miniList) miniList.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">Chưa có bản ghi âm nào</div>';
-            if (fullTbody) fullTbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-500">Chưa có bản ghi âm nào trong lịch sử</td></tr>';
-            return;
-          }
-
-          if (miniList) {
-            miniList.innerHTML = jobs.slice(0, 6).map(j => `
-              <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0E0C12] hover:bg-[#231F2A] border border-[#3F3A46]/50 transition-colors group">
-                <div class="flex items-center gap-3 overflow-hidden">
-                  <button onclick="playAudioUrl('${j.audio_url}', '${j.params?.text || 'Audio'}')" class="w-8 h-8 rounded-full bg-[#231F2A] group-hover:bg-purple-600 group-hover:text-white text-purple-400 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
-                    <span class="material-symbols-outlined text-[18px]">play_arrow</span>
-                  </button>
-                  <div class="truncate">
-                    <div class="text-xs font-medium text-white truncate">${j.params?.text || j.type}</div>
-                    <div class="text-[10px] font-mono text-slate-400">${j.status === 'completed' ? '✓ Đã tạo' : j.status}</div>
-                  </div>
-                </div>
-                ${j.audio_url ? `
-                  <a href="${j.audio_url}" download="audio-${j.id}.wav" class="p-1 rounded-full text-slate-400 hover:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span class="material-symbols-outlined text-[18px]">download</span>
-                  </a>
-                ` : ''}
-              </div>
-            `).join('');
-          }
-
-          if (fullTbody) {
-            fullTbody.innerHTML = jobs.map(j => `
-              <tr class="hover:bg-[#18151E] transition-colors">
-                <td class="p-3.5">
-                  <button onclick="playAudioUrl('${j.audio_url}', '${j.params?.text || 'Audio'}')" class="w-8 h-8 rounded-full bg-[#231F2A] hover:bg-purple-600 text-purple-400 hover:text-white flex items-center justify-center cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
-                    <span class="material-symbols-outlined text-[18px]">play_arrow</span>
-                  </button>
-                </td>
-                <td class="p-3.5 font-medium text-white max-w-md truncate">${j.params?.text || j.type}</td>
-                <td class="p-3.5 font-mono text-purple-400 uppercase">${j.type}</td>
-                <td class="p-3.5 font-mono text-slate-400">${j.created_at ? j.created_at.substring(11, 19) : ''}</td>
-                <td class="p-3.5">
-                  <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${j.status === 'completed' ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50' : 'bg-yellow-900/40 text-yellow-300'}">
-                    ${j.status === 'completed' ? 'Hoàn tất' : j.status}
-                  </span>
-                </td>
-                <td class="p-3.5 text-right">
-                  ${j.audio_url ? `
-                    <a href="${j.audio_url}" download="chatterbox-${j.id}.wav" class="p-1.5 rounded-lg bg-[#231F2A] hover:bg-purple-600 text-white inline-flex items-center gap-1">
-                      <span class="material-symbols-outlined text-[16px]">download</span>
-                    </a>
-                  ` : ''}
-                </td>
-              </tr>
-            `).join('');
-          }
-        }
-      } catch (e) {}
-    }
-
-    // ==================== SETTINGS & MODEL MANAGEMENT ====================
-    async function loadSettings() {
-      try {
-        const res = await fetch('/api/v1/settings');
-        if (res.ok) {
-          const data = await res.json();
-          const s = data.settings || {};
-          if (s.export_dir) document.getElementById('settingExportDir').value = s.export_dir;
-          if (s.model_cache_dir) document.getElementById('settingModelDir').value = s.model_cache_dir;
-          if (s.device) document.getElementById('settingDevice').value = s.device;
-          if (s.cpu_threads_limit) document.getElementById('settingCpuThreads').value = s.cpu_threads_limit;
-          if (s.max_chunk_chars) document.getElementById('settingMaxChunk').value = s.max_chunk_chars;
-          if (s.auto_unload_models !== undefined) document.getElementById('settingAutoUnload').checked = s.auto_unload_models;
-        }
-      } catch (e) {}
-    }
-
-    async function saveAllSettings() {
-      const payload = {
-        export_dir: document.getElementById('settingExportDir').value,
-        model_cache_dir: document.getElementById('settingModelDir').value,
-        device: document.getElementById('settingDevice').value,
-        cpu_threads_limit: parseInt(document.getElementById('settingCpuThreads').value) || 4,
-        max_chunk_chars: parseInt(document.getElementById('settingMaxChunk').value) || 4000,
-        auto_unload_models: document.getElementById('settingAutoUnload').checked,
-      };
-
-      try {
-        const res = await fetch('/api/v1/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          showToast('success', 'Đã lưu toàn bộ cấu hình hệ thống thành công!');
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi khi lưu cài đặt: ' + e.message);
-      }
-    }
-
-    async function cleanProjectTmpFiles() {
-      if (!confirm("Bạn có chắc muốn dọn sạch các file audio tạm trong thư mục tmp?")) return;
-      try {
-        const res = await fetch('/api/v1/system/clean-tmp', { method: 'POST' });
-        if (res.ok) {
-          const data = await res.json();
-          const mb = (data.freed_bytes / (1024 * 1024)).toFixed(2);
-          showToast('success', `Đã dọn sạch ${data.deleted_files} file tạm (${mb} MB) trong thư mục tmp!`);
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi khi dọn dẹp file tạm: ' + e.message);
-      }
-    }
-
-    async function preloadModel(modelName) {
-      const statusEl = document.getElementById(`modelStatus-${modelName}`);
-      const oldHtml = statusEl ? statusEl.innerHTML : '';
-      if (statusEl) statusEl.innerHTML = '<span class="text-purple-400 animate-pulse">⏳ Đang nạp...</span>';
-      try {
-        const res = await fetch(`/api/v1/models/${modelName}/load`, { method: 'POST' });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          if (statusEl) statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1"></span> Đã nạp';
-          showToast('success', data.message || `Mô hình ${modelName} đã được nạp sẵn sàng!`);
-        } else {
-          if (statusEl) statusEl.innerHTML = oldHtml || '<span class="text-slate-400">Chưa nạp</span>';
-          showToast('error', data.detail || `Lỗi khi nạp mô hình ${modelName}`);
-        }
-        fetchModelsStatus();
-      } catch (e) {
-        if (statusEl) statusEl.innerHTML = oldHtml || '<span class="text-slate-400">Chưa nạp</span>';
-        showToast('error', 'Lỗi nạp model: ' + e.message);
-        fetchModelsStatus();
-      }
-    }
-
-    async function unloadModel(modelName) {
-      const statusEl = document.getElementById(`modelStatus-${modelName}`);
-      try {
-        const res = await fetch(`/api/v1/models/${modelName}`, { method: 'DELETE' });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          if (statusEl) statusEl.innerHTML = '<span class="text-slate-400">Chưa nạp</span>';
-          showToast('info', data.message || `Đã giải phóng mô hình ${modelName} khỏi bộ nhớ.`);
-        } else {
-          showToast('error', data.detail || `Lỗi khi giải phóng mô hình ${modelName}`);
-        }
-        fetchModelsStatus();
-      } catch (e) {
-        showToast('error', 'Lỗi giải phóng model: ' + e.message);
-        fetchModelsStatus();
-      }
-    }
-
-    async function deleteModelFromDisk(modelName) {
-      const label = modelName === 'nano' ? 'Chatterbox Nano (110M)'
-        : modelName === 'turbo' ? 'Chatterbox Turbo (350M)'
-        : modelName === 'standard' ? 'Chatterbox Standard (500M)'
-        : modelName === 'multilingual' ? 'Chatterbox Multilingual (500M)'
-        : modelName;
-
-      if (!confirm(`⚠️ XÁC NHẬN XÓA CHECKPOINT KHỎI Ổ ĐĨA:\n\nBạn có chắc chắn muốn xóa toàn bộ file checkpoint của "${label}" khỏi thư mục models/?\n\n• Thao tác này sẽ giải phóng dung lượng ổ đĩa.\n• Bạn có thể tải lại bất cứ lúc nào qua nút "Nạp" hoặc lệnh HF_HUB_OFFLINE=0.`)) {
-        return;
-      }
-
-      const diskEl = document.getElementById(`modelDisk-${modelName}`);
-      if (diskEl) diskEl.innerHTML = '<span class="text-amber-400 animate-pulse">⏳ Đang xóa file...</span>';
-
-      try {
-        const res = await fetch(`/api/v1/models/${modelName}/disk`, { method: 'DELETE' });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          showToast('success', data.message || `Đã xóa checkpoint của ${label} khỏi ổ đĩa!`);
-          fetchModelsStatus();
-          checkSystemHealth();
-        } else {
-          showToast('error', data.detail || `Lỗi khi xóa checkpoint của ${label}`);
-          fetchModelsStatus();
-        }
-      } catch (e) {
-        showToast('error', 'Lỗi khi xóa checkpoint: ' + e.message);
-        fetchModelsStatus();
-      }
-    }
-
-    async function fetchModelsStatus() {
-      try {
-        const res = await fetch('/api/v1/models');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.models) return;
-
-        data.models.forEach(m => {
-          const statusEl = document.getElementById(`modelStatus-${m.name}`);
-          const diskEl = document.getElementById(`modelDisk-${m.name}`);
-          const delBtn = document.getElementById(`btnDeleteDisk-${m.name}`);
-
-          if (statusEl) {
-            if (m.loaded_in_memory) {
-              statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1"></span> Đã nạp RAM';
-              statusEl.className = 'text-[11px] text-emerald-400 flex items-center gap-1 font-semibold';
-            } else {
-              statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block mr-1"></span> Chưa nạp RAM';
-              statusEl.className = 'text-[11px] text-slate-400 flex items-center gap-1';
-            }
-          }
-
-          if (diskEl) {
-            if (m.cached_on_disk && m.size_mb > 0) {
-              diskEl.innerHTML = `<span class="text-emerald-400 font-mono">💾 ${m.size_mb} MB</span> trên ổ đĩa`;
-              if (delBtn) delBtn.disabled = false;
-            } else if (m.cached_on_disk) {
-              diskEl.innerHTML = `<span class="text-emerald-400 font-mono">💾 Đã có</span> trên ổ đĩa`;
-              if (delBtn) delBtn.disabled = false;
-            } else {
-              diskEl.innerHTML = `<span class="text-amber-400 font-mono">❌ Chưa tải</span> về ổ đĩa`;
-              if (delBtn) delBtn.disabled = true;
-            }
-          }
-        });
-      } catch (e) {
-        console.warn('Lỗi lấy thông tin model:', e);
-      }
-    }
-
-    function preloadCurrentModel() {
-      const m = document.getElementById('ttsModelSelect').value;
-      preloadModel(m);
-    }
-
-    function openModelCompareModal() { document.getElementById('modelCompareModal').classList.remove('hidden'); }
-    function closeModelCompareModal() { document.getElementById('modelCompareModal').classList.add('hidden'); }
-
-    // ==================== THEME & SHORTCUTS ====================
-    function updateThemeUI(isDark) {
-      const icon = document.getElementById('themeIcon');
-      const toggleBtn = document.getElementById('themeToggle');
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-        if (icon) icon.textContent = 'light_mode';
-        if (toggleBtn) toggleBtn.title = 'Chuyển sang chế độ Sáng';
-      } else {
-        document.documentElement.classList.remove('dark');
-        if (icon) icon.textContent = 'dark_mode';
-        if (toggleBtn) toggleBtn.title = 'Chuyển sang chế độ Tối';
-      }
-    }
-
-    function toggleTheme() {
-      const html = document.documentElement;
-      const willBeDark = !html.classList.contains('dark');
-      try {
-        localStorage.setItem('chatterbox_theme', willBeDark ? 'dark' : 'light');
-      } catch (e) {}
-      updateThemeUI(willBeDark);
-      showToast('info', willBeDark ? 'Đã chuyển sang chế độ Tối (Dark Mode)' : 'Đã chuyển sang chế độ Sáng (Light Mode)');
-    }
-
-    function initTheme() {
-      let isDark = true;
-      try {
-        const saved = localStorage.getItem('chatterbox_theme');
-        if (saved === 'light') {
-          isDark = false;
-        } else if (saved === 'dark') {
-          isDark = true;
-        } else {
-          isDark = true; // Default dark
-        }
-      } catch (e) {}
-      updateThemeUI(isDark);
-    }
-
-    function openShortcutsModal() { document.getElementById('shortcutsModal').classList.remove('hidden'); }
-    function closeShortcutsModal() { document.getElementById('shortcutsModal').classList.add('hidden'); }
-
-    window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        triggerSynthesis();
-      } else if (e.key === 'Escape') {
-        stopAudio();
-        closeShortcutsModal();
-        closeCreateCharacterModal();
-        closeModelCompareModal();
-        closeTrimmerModal();
-      } else if (e.key === 'F1') {
-        e.preventDefault();
-        openShortcutsModal();
-      } else if (e.key === ' ' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
-        e.preventDefault();
-        togglePlayPause();
-      }
-    });
-
-    window.addEventListener('resize', () => {
-      if (placeholder && placeholder.classList.contains('hidden')) {
-        drawWaveform(audioElement.duration ? (audioElement.currentTime / audioElement.duration) : 0);
-      }
-    });
-
-    window.addEventListener('DOMContentLoaded', () => {
-      initTheme();
-      checkSystemHealth();
-      refreshHistory();
-      loadCharacters();
-      fetchModelsStatus();
-      updateParamsSummaryBadge();
-      initUrlRoute();
-
-      // Setup Drag & Drop File Reading on all textareas
-      setupDragAndDropTextarea('promptInput', 'charCount');
-      setupDragAndDropTextarea('batchTextarea');
-      setupDragAndDropTextarea('mtlPromptInput', 'mtlCharCount');
-      updateMtlCharCount();
-
-      // Periodic health check every 15 seconds
-      setInterval(checkSystemHealth, 15000);
-    });
-  </script>
+  <!-- ==================== JAVASCRIPT CONTROLLERS (MODULAR) ==================== -->
+  <script src="/static/js/state.js"></script>
+  <script src="/static/js/tts.js"></script>
+  <script src="/static/js/batch.js"></script>
+  <script src="/static/js/multilingual.js"></script>
+  <script src="/static/js/vc.js"></script>
+  <script src="/static/js/projects.js"></script>
+  <script src="/static/js/characters.js"></script>
+  <script src="/static/js/history.js"></script>
+  <script src="/static/js/settings.js"></script>
+  <script src="/static/js/notifications.js"></script>
+  <script src="/static/js/main.js"></script>
 </body>
 </html>

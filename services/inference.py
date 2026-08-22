@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import queue
 import subprocess
@@ -17,122 +18,39 @@ import numpy as np
 import torch
 import torchaudio as ta
 
-from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-from chatterbox.tts import ChatterboxTTS
-from chatterbox.tts_turbo import ChatterboxTurboTTS
-from chatterbox.vc import ChatterboxVC
+from services.model_registry import resolve_model_id
+from services.model_runtime import model_runtime
+from services.synthesis import set_synthesis_seed, synthesize_chunk_tensor
 from utils.platform_tools import clear_accelerator_cache, select_device
+
+logger = logging.getLogger("chatterbox.inference")
 
 
 def set_inference_seed(seed: int, device: str) -> None:
-    if not seed:
-        return
-    torch.manual_seed(seed)
-    if device == "cuda":
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
+    set_synthesis_seed(seed, device)
 
 
 def load_model(job_type: str, device: str) -> tuple[Any, int]:
     """Load model once and return (model_instance, sample_rate)."""
-    if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1":
-        class DummyModel:
-            def __init__(self):
-                self.sr = 24000
-                self.conds = {"voice": "default"}
-                self.default_conds = {"voice": "default"}
-
-            def generate(self, *args, **kwargs):
-                return torch.zeros(1, 24000)
-
-        return DummyModel(), 24000
-
-    if job_type == "tts":
-        model = ChatterboxTTS.from_pretrained(device)
-    elif job_type in {"turbo", "nano"}:
-        is_nano = (job_type == "nano")
-        model = ChatterboxTurboTTS.from_pretrained(device, nano=is_nano)
-    elif job_type == "multilingual":
-        model = ChatterboxMultilingualTTS.from_pretrained(device)
-    elif job_type == "voice-conversion":
-        model = ChatterboxVC.from_pretrained(device)
-    else:
-        raise ValueError(f"Loại mô hình không hợp lệ: {job_type}")
-
-    if hasattr(model, "conds") and getattr(model, "conds", None) is not None:
-        try:
-            model.default_conds = copy.deepcopy(model.conds)
-        except Exception:
-            model.default_conds = model.conds
-
-    return model, model.sr
+    return model_runtime.load_model(job_type, device=device)
 
 
 def generate_with_model(model: Any, job_type: str, params: dict, device: str) -> torch.Tensor:
     """Generate audio waveform tensor using an already-loaded model instance."""
     if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1":
-        return torch.zeros(1, 24000)
+        t = torch.linspace(0, 1.0, 24000)
+        return (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
 
-    seed = int(params.get("seed", 0))
+    seed = int(params.get("seed", 0) or 0)
     set_inference_seed(seed, device)
 
-    # Restore default conditionals if current line does not specify an audio prompt path
-    audio_prompt_path = params.get("audio_prompt_path")
-    if not audio_prompt_path and hasattr(model, "default_conds") and getattr(model, "default_conds", None) is not None:
-        try:
-            model.conds = copy.deepcopy(model.default_conds)
-        except Exception:
-            model.conds = model.default_conds
-
-    with torch.inference_mode():
-        if job_type == "tts":
-            wav = model.generate(
-                params["text"],
-                audio_prompt_path=audio_prompt_path,
-                exaggeration=float(params.get("exaggeration", 0.5)),
-                temperature=float(params.get("temperature", 0.8)),
-                cfg_weight=float(params.get("cfg_weight", 0.5)),
-                min_p=float(params.get("min_p", 0.05)),
-                top_p=float(params.get("top_p", 1.0)),
-                repetition_penalty=float(params.get("repetition_penalty", 1.2)),
-            )
-        elif job_type in {"turbo", "nano"}:
-            wav = model.generate(
-                params["text"],
-                audio_prompt_path=audio_prompt_path,
-                temperature=float(params.get("temperature", 0.6)),
-                top_k=int(params.get("top_k", 1000)),
-                top_p=float(params.get("top_p", 0.95)),
-                repetition_penalty=float(params.get("repetition_penalty", 1.2)),
-            )
-        elif job_type == "multilingual":
-            wav = model.generate(
-                params["text"],
-                language_id=params.get("language_id", "en"),
-                audio_prompt_path=audio_prompt_path,
-                exaggeration=float(params.get("exaggeration", 0.5)),
-                temperature=float(params.get("temperature", 0.8)),
-                cfg_weight=float(params.get("cfg_weight", 0.5)),
-                min_p=float(params.get("min_p", 0.05)),
-                top_p=float(params.get("top_p", 1.0)),
-                repetition_penalty=float(params.get("repetition_penalty", 1.2)),
-            )
-        elif job_type == "voice-conversion":
-            wav = model.generate(
-                params["source_audio_path"],
-                target_voice_path=params.get("target_voice_path"),
-            )
-        else:
-            raise ValueError(f"Loại mô hình không hợp lệ: {job_type}")
-    return wav.cpu()
+    # Convert legacy "tts" to "standard" if needed
+    model_id = resolve_model_id(job_type)
+    return synthesize_chunk_tensor(model, model_id, params.get("text", ""), params, device)
 
 
 def execute_model_inference(job_type: str, params: dict, device: str) -> tuple[torch.Tensor, int]:
-    """Single canonical model inference implementation used by both isolated runner and test harnesses.
-
-    Guarantees that default parameter values and generation logic never drift.
-    """
+    """Single canonical model inference implementation used by both isolated runner and test harnesses."""
     model, sr = load_model(job_type, device)
     wav = generate_with_model(model, job_type, params, device)
     return wav, sr
@@ -154,14 +72,7 @@ def run_isolated_subprocess(
     register_proc_callback: Callable[[str, subprocess.Popen], None] | None = None,
     unregister_proc_callback: Callable[[str], None] | None = None,
 ) -> tuple[bool, str | None, dict | None]:
-    """Execute inference inside an isolated subprocess with inactivity deadline enforcement and non-blocking stream reading.
-
-    Guarantees:
-      - Saves config to file to avoid command-line length limits on Windows.
-      - Uses os.pathsep for cross-platform PYTHONPATH on Windows and macOS.
-      - Enforces inactivity timeout reset on each progress tick + hard timeout ceiling.
-      - Cleanly intercepts OOM, crashes, and timeouts.
-    """
+    """Execute inference inside an isolated subprocess with inactivity deadline enforcement and non-blocking stream reading."""
     configs_dir = data_dir / "configs"
     configs_dir.mkdir(parents=True, exist_ok=True)
     config_file = configs_dir / f"{job_id}.json"
@@ -192,6 +103,7 @@ def run_isolated_subprocess(
         "bgm_ducking",
         "stop_on_error",
         "keep_original_timeline",
+        "resume",
     ):
         if key in params:
             config[key] = params[key]

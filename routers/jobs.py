@@ -1,7 +1,10 @@
-"""Job query, cancellation, deletion, audio download, and batch merge router."""
+"""Job query, cancellation, resumption, deletion, audio download, SSE streaming, and batch merge router."""
 
 from __future__ import annotations
 
+import asyncio
+import json
+import os
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -9,10 +12,11 @@ from typing import Annotated
 import torch
 import torchaudio as ta
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from job_store import AudioJob, JobStatus
 from services.audio import load_and_resample_audio, merge_speech_segments, mix_background_music, save_audio_wav
+from services.batch_export import create_batch_zip_package
 
 router = APIRouter(tags=["jobs"])
 
@@ -48,6 +52,72 @@ def cancel_job(job_id: str) -> dict:
     return {"id": job_id, "status": "cancelled", "message": msg}
 
 
+@router.post("/api/v1/jobs/{job_id}/resume", tags=["jobs"])
+def resume_job(job_id: str) -> dict:
+    """Resume an interrupted or failed batch job from the first uncompleted line."""
+    from api_app import job_manager
+    if not job_manager:
+        raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy job")
+
+    # Mark resume flag
+    job.params["resume"] = True
+    job.status = "queued"
+    job.phase = "queued"
+    job.error = None
+    with job_manager._jobs_lock:
+        job_manager.store.save(job)
+    job_manager._job_queue.put(job.id)
+
+    return {
+        "id": job_id,
+        "status": "queued",
+        "resumed": True,
+        "message": f"Tác vụ {job_id} đã được đưa lại vào hàng đợi với chế độ tiếp tục (resume).",
+    }
+
+
+@router.get("/api/v1/jobs/{job_id}/events", tags=["jobs"])
+async def stream_job_events(job_id: str, request: Request):
+    """Server-Sent Events (SSE) stream for real-time job progress notifications."""
+    from api_app import job_manager
+    if not job_manager:
+        raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
+
+    async def event_generator():
+        last_phase = None
+        last_pct = -1
+        while True:
+            if await request.is_disconnected():
+                break
+            job = job_manager.get_job(job_id)
+            if not job:
+                yield f"event: error\ndata: {json.dumps({'error': 'Không tìm thấy job'})}\n\n"
+                break
+
+            if job.phase != last_phase or job.progress_percent != last_pct:
+                last_phase = job.phase
+                last_pct = job.progress_percent
+                payload = json.dumps({
+                    "id": job.id,
+                    "status": job.status,
+                    "phase": job.phase,
+                    "progress_percent": job.progress_percent,
+                    "duration_seconds": job.duration_seconds,
+                    "error": job.error,
+                })
+                yield f"data: {payload}\n\n"
+
+            from job_store import TERMINAL_JOB_STATUSES, SUCCESSFUL_JOB_STATUSES
+            if job.status in TERMINAL_JOB_STATUSES:
+                break
+            await asyncio.sleep(0.15)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @router.delete("/api/v1/jobs/{job_id}")
 def delete_job(job_id: str) -> dict:
     from api_app import job_manager
@@ -63,12 +133,13 @@ def delete_job(job_id: str) -> dict:
 @router.get("/api/v1/jobs/{job_id}/audio")
 def download_audio(job_id: str) -> FileResponse:
     from api_app import job_manager
+    from job_store import SUCCESSFUL_JOB_STATUSES
     if not job_manager:
         raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
     job = job_manager.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy job")
-    if job.status != "completed" or not job.output_path:
+    if job.status not in SUCCESSFUL_JOB_STATUSES or not job.output_path:
         raise HTTPException(status_code=409, detail=f"Job chưa hoàn tất: {job.status}")
     output_path = Path(job.output_path)
     if not output_path.exists():
@@ -104,17 +175,15 @@ def download_job_srt(job_id: str) -> FileResponse:
 @router.get("/api/v1/jobs/{job_id}/zip")
 @router.get("/api/v1/jobs/{job_id}/export.zip")
 def download_job_zip(job_id: str) -> FileResponse:
-    import json
-    import os
-    import zipfile
     from api_app import API_DATA_DIR, job_manager
+    from job_store import SUCCESSFUL_JOB_STATUSES
 
     if not job_manager:
         raise HTTPException(status_code=404, detail="Hệ thống chưa sẵn sàng")
     job = job_manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy job")
-    if job.status != "completed":
+    if job.status not in SUCCESSFUL_JOB_STATUSES:
         raise HTTPException(status_code=409, detail=f"Job chưa hoàn tất: {job.status}")
 
     zip_path = API_DATA_DIR / "outputs" / f"{job_id}.zip"
@@ -123,7 +192,6 @@ def download_job_zip(job_id: str) -> FileResponse:
         srt_path = API_DATA_DIR / "outputs" / f"{job_id}.srt"
     chunks_dir = API_DATA_DIR / "chunks" / job_id
 
-    # 1. Check if existing ZIP is up to date with all source artifacts
     sources: list[Path] = []
     if job.output_path and Path(job.output_path).exists():
         sources.append(Path(job.output_path))
@@ -139,39 +207,27 @@ def download_job_zip(job_id: str) -> FileResponse:
     if zip_path.exists() and zip_path.stat().st_size > 0 and zip_path.stat().st_mtime >= latest_source_mtime:
         return FileResponse(zip_path, media_type="application/zip", filename=f"chatterbox-{job_id}-package.zip")
 
-    # 2. Build ZIP atomically using temporary file to prevent corruption under concurrent requests
-    tmp_zip = zip_path.with_suffix(f".tmp_{uuid.uuid4().hex[:8]}")
-    try:
-        with zipfile.ZipFile(tmp_zip, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            if job.output_path and Path(job.output_path).exists():
-                zf.write(job.output_path, arcname="merged.wav")
+    manifest = {
+        "id": job.id,
+        "type": job.type,
+        "status": job.status,
+        "duration_seconds": job.duration_seconds,
+        "created_at": job.created_at,
+        "completed_at": job.completed_at,
+        "params": job.params,
+        "benchmark": job.benchmark,
+    }
 
-            if srt_path.exists():
-                zf.write(srt_path, arcname="subtitles.srt")
-
-            if chunks_dir.exists():
-                for line_file in sorted(chunks_dir.glob("line_*.wav")):
-                    zf.write(line_file, arcname=f"lines/{line_file.name}")
-
-            manifest = {
-                "id": job.id,
-                "type": job.type,
-                "status": job.status,
-                "duration_seconds": job.duration_seconds,
-                "created_at": job.created_at,
-                "completed_at": job.completed_at,
-                "params": job.params,
-                "benchmark": job.benchmark,
-            }
-            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-
-        os.replace(tmp_zip, zip_path)
-    except Exception:
-        tmp_zip.unlink(missing_ok=True)
-        raise
+    create_batch_zip_package(
+        job_id=job.id,
+        output_zip_path=zip_path,
+        manifest_data=manifest,
+        merged_audio_path=Path(job.output_path) if job.output_path else None,
+        srt_path=srt_path if srt_path.exists() else None,
+        chunks_dir=chunks_dir if chunks_dir.exists() else None,
+    )
 
     return FileResponse(zip_path, media_type="application/zip", filename=f"chatterbox-{job_id}-package.zip")
-
 
 
 @router.post("/api/v1/audio/merge", tags=["audio"])
@@ -219,7 +275,6 @@ async def merge_audio_jobs(
 
     merged_speech = merge_speech_segments(chunks, pause_duration=pause_duration, target_sr=target_sr)
 
-    # Optional BGM mixing with explicit warning capture
     warning_msg = None
     if bgm_file is not None and bgm_file.filename:
         from routers.tts import save_upload

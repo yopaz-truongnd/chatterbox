@@ -477,6 +477,87 @@ def delete_character(character_id: str) -> dict:
     return {"id": character_id, "deleted": True}
 
 
+@router.get("/{character_id}/export", tags=["characters"])
+def export_character_zip(character_id: str) -> FileResponse:
+    """Export character metadata and reference audio into a portable ZIP package."""
+    import zipfile
+    character = get_character(character_id)
+    export_dir = CHARACTER_DATA_DIR / character_id / "export"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = export_dir / f"character_{character_id}.zip"
+
+    meta = dict(character)
+    ref_audio = meta.pop("reference_audio_path", None)
+    ref_name = Path(ref_audio).name if ref_audio and Path(ref_audio).exists() else None
+    if ref_name:
+        meta["reference_filename"] = ref_name
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("character.json", json.dumps(meta, ensure_ascii=False, indent=2))
+        if ref_audio and Path(ref_audio).exists():
+            zf.write(ref_audio, arcname=f"audio/{ref_name}")
+
+    return FileResponse(zip_path, media_type="application/zip", filename=f"character-{character_id}.zip")
+
+
+@router.post("/import", tags=["characters"])
+async def import_character_zip(package: Annotated[UploadFile, File()]) -> dict:
+    """Import character metadata and reference audio from an exported ZIP package."""
+    import zipfile
+    if not package.filename or not package.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=415, detail="File import phải là định dạng ZIP (.zip)")
+
+    temp_zip = CHARACTER_DATA_DIR / f"temp_import_{uuid.uuid4().hex[:8]}.zip"
+    try:
+        content = await package.read()
+        temp_zip.write_bytes(content)
+
+        with zipfile.ZipFile(temp_zip, "r") as zf:
+            if "character.json" not in zf.namelist():
+                raise HTTPException(status_code=422, detail="Gói ZIP không chứa file 'character.json' hợp lệ")
+
+            meta_data = json.loads(zf.read("character.json").decode("utf-8"))
+            new_id = uuid.uuid4().hex[:8]
+            target_char_dir = CHARACTER_DATA_DIR / new_id
+            target_char_dir.mkdir(parents=True, exist_ok=True)
+
+            ref_path = None
+            ref_filename = meta_data.get("reference_filename")
+            if ref_filename:
+                audio_arc = f"audio/{ref_filename}"
+                if audio_arc in zf.namelist():
+                    dest_audio = target_char_dir / ref_filename
+                    dest_audio.write_bytes(zf.read(audio_arc))
+                    ref_path = str(dest_audio)
+
+            new_character = {
+                "id": new_id,
+                "name": meta_data.get("name", "Imported Character"),
+                "description": meta_data.get("description", ""),
+                "language": meta_data.get("language", "en"),
+                "tags": meta_data.get("tags", []),
+                "notes": meta_data.get("notes", ""),
+                "is_default": False,
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+                "reference_audio_path": ref_path,
+                "voice": meta_data.get("voice", {
+                    "expressiveness": 0.5,
+                    "pace": 0.5,
+                    "stability": 0.7,
+                    "seed": 0,
+                }),
+            }
+
+            with characters_lock:
+                characters[new_id] = new_character
+            save_characters()
+
+            return public_character_dict(new_character)
+    finally:
+        temp_zip.unlink(missing_ok=True)
+
+
 @router.get("/{character_id}/reference-audio", include_in_schema=False)
 def download_reference_audio(character_id: str) -> FileResponse:
     character = get_character(character_id)
@@ -490,3 +571,4 @@ def download_reference_audio(character_id: str) -> FileResponse:
 
 
 load_characters()
+

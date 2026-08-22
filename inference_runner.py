@@ -74,13 +74,172 @@ def run_batch_inference(config: dict) -> None:
         pct = 10 + int((i / max(1, total_lines)) * 75)
         report_progress("generating_tokens", pct, f"Đang xử lý dòng {i+1}/{total_lines}...")
 
+        # Batch resumption: reuse chunk only if it passes QC (auto-fixing if necessary)
+        if config.get("resume", False) and line_out.exists() and line_out.stat().st_size > 44:
+            try:
+                from services.audio import load_and_resample_audio, evaluate_audio_signal, auto_fix_audio_signal
+                w_resumed, load_err = load_and_resample_audio(line_out, sr)
+                sr_resumed = sr
+                if w_resumed is not None and load_err is None:
+                    eval_resumed = evaluate_audio_signal(w_resumed, sr_resumed)
+                    actions_resumed = []
+                    if not eval_resumed["passed"] and eval_resumed.get("fixable"):
+                        fixed_w, actions_resumed, final_eval_resumed = auto_fix_audio_signal(w_resumed, sr_resumed)
+                        if final_eval_resumed["passed"]:
+                            ta.save(line_out, fixed_w, sr_resumed)
+                            w_resumed = fixed_w
+                            eval_resumed = final_eval_resumed
+
+                    if eval_resumed["passed"]:
+                        line_dur = round(w_resumed.shape[-1] / sr_resumed, 3)
+                        successful_segments.append((line_out, line_pause, line_idx))
+                        line_res = {
+                            "idx": line_idx,
+                            "status": "completed",
+                            "audio_path": str(line_out),
+                            "duration_seconds": line_dur,
+                            "inference_seconds": 0.0,
+                            "text": line_text,
+                            "pause_duration": line_pause,
+                            "quality": {
+                                "initial": eval_resumed,
+                                "actions": actions_resumed,
+                                "final": eval_resumed,
+                            },
+                        }
+                        if "start_seconds" in line_item:
+                            line_res["original_start_seconds"] = line_item["start_seconds"]
+                        if "end_seconds" in line_item:
+                            line_res["original_end_seconds"] = line_item["end_seconds"]
+                        lines_results.append(line_res)
+                        continue
+            except Exception:
+                pass
+
         t0_line = time.time()
         try:
-            wav = generate_with_model(model, model_type, line_item, device)
-            t_infer = round(time.time() - t0_line, 3)
+            from services.audio import evaluate_audio_signal, auto_fix_audio_signal
+            from services.critic import evaluate_speech_content
+            from services.narration_planner import apply_pronunciation_dict
 
-            ta.save(line_out, wav, sr)
-            line_dur = round(wav.shape[-1] / sr, 3)
+            narration_plan = line_item.get("narration_plan", {})
+            pron_dict = narration_plan.get("pronunciation")
+            raw_text = line_item.get("text", "")
+            synth_text = apply_pronunciation_dict(raw_text, pron_dict) if pron_dict else raw_text
+
+            item_to_infer = dict(line_item)
+            item_to_infer["text"] = synth_text
+            if model_type == "turbo":
+                item_to_infer.pop("cfg_weight", None)
+                item_to_infer.pop("exaggeration", None)
+                item_to_infer.pop("min_p", None)
+
+            candidate_strategy = narration_plan.get("candidate_strategy", "single")
+            num_candidates = 2 if candidate_strategy == "multi_selective" else 1
+
+            candidate_attempts: list[dict[str, Any]] = []
+            best_candidate = None
+            best_score = -1.0
+
+            report_progress("evaluating", pct, f"Đang tổng hợp và đánh giá dòng {i+1}/{total_lines}...")
+
+            for cand_idx in range(num_candidates):
+                cand_seed = line_item.get("seed")
+                cand_temp = line_item.get("temperature", 0.8)
+                if cand_idx > 0:
+                    cand_seed = ((cand_seed or 42) + 42 * cand_idx) % 1000000
+                    cand_temp = max(0.4, cand_temp - 0.1)
+
+                cand_item = dict(item_to_infer)
+                cand_item["seed"] = cand_seed
+                cand_item["temperature"] = cand_temp
+
+                cand_wav = None
+                cand_sr = sr
+                cand_meta: dict[str, Any] = {}
+                cand_passed = False
+
+                for attempt in range(2):
+                    if attempt > 0:
+                        cand_item["seed"] = ((cand_item.get("seed") or 42) + attempt * 17) % 1000000
+                        cand_item["temperature"] = max(0.3, cand_item.get("temperature", 0.8) - 0.15)
+
+                    try:
+                        wav = generate_with_model(model, model_type, cand_item, device)
+                        cand_wav = wav
+
+                        # 1. Signal QC
+                        initial_eval = evaluate_audio_signal(wav, sr)
+                        actions = []
+                        final_eval = initial_eval
+                        if not initial_eval["passed"] and initial_eval.get("fixable"):
+                            report_progress("auto_fixing", pct, f"Đang tự động chuẩn hóa tín hiệu dòng {i+1}/{total_lines}...")
+                            fixed_wav, actions, final_eval = auto_fix_audio_signal(wav, sr)
+                            report_progress("re_evaluating", pct, f"Đang tái đánh giá tín hiệu dòng {i+1}/{total_lines}...")
+                            cand_wav = fixed_wav
+                            wav = fixed_wav
+
+                        # 2. Content QC (ASR Speech Critic)
+                        target_wpm = narration_plan.get("target_wpm")
+                        content_eval = evaluate_speech_content(wav, sr, reference_text=raw_text, target_wpm=target_wpm)
+
+                        signal_score = 100.0 if final_eval["passed"] else 30.0
+                        content_score = content_eval.get("score", 100.0)
+                        combined_score = round(content_score * 0.6 + signal_score * 0.4, 1)
+                        is_passing = final_eval["passed"] and content_eval.get("passed", True)
+
+                        cand_meta = {
+                            "candidate_idx": cand_idx,
+                            "attempt": attempt + 1,
+                            "seed": cand_item.get("seed"),
+                            "temperature": cand_item.get("temperature"),
+                            "signal": {
+                                "initial": initial_eval,
+                                "actions": actions,
+                                "final": final_eval,
+                            },
+                            "content": content_eval,
+                            "score": combined_score,
+                            "passed": is_passing,
+                        }
+
+                        if is_passing:
+                            cand_passed = True
+                            break
+                    except Exception as e:
+                        cand_meta = {
+                            "candidate_idx": cand_idx,
+                            "attempt": attempt + 1,
+                            "error": str(e),
+                            "passed": False,
+                            "score": 0.0,
+                        }
+
+                candidate_attempts.append(cand_meta)
+
+                if cand_wav is not None:
+                    if cand_meta.get("score", 0) > best_score:
+                        best_candidate = (cand_wav, cand_sr, cand_meta)
+                        best_score = cand_meta.get("score", 0)
+
+            if not best_candidate:
+                raise RuntimeError("All candidate generations failed to synthesize audio")
+
+            selected_wav, selected_sr, selected_meta = best_candidate
+            for ca in candidate_attempts:
+                ca["selected"] = (ca is selected_meta)
+
+            if not selected_meta.get("passed", False):
+                issues_list = []
+                if selected_meta.get("signal", {}).get("final", {}).get("issues"):
+                    issues_list.extend(selected_meta["signal"]["final"]["issues"])
+                if selected_meta.get("content", {}).get("issues"):
+                    issues_list.extend(selected_meta["content"]["issues"])
+                err_issues = ", ".join(issues_list) or "Quality and content checks failed"
+                raise RuntimeError(f"QC failed: {err_issues}")
+
+            ta.save(line_out, selected_wav, selected_sr)
+            line_dur = round(selected_wav.shape[-1] / selected_sr, 3)
             successful_segments.append((line_out, line_pause, line_idx))
 
             line_res = {
@@ -88,9 +247,12 @@ def run_batch_inference(config: dict) -> None:
                 "status": "completed",
                 "audio_path": str(line_out),
                 "duration_seconds": line_dur,
-                "inference_seconds": t_infer,
-                "text": line_text,
+                "inference_seconds": round(time.time() - t0_line, 3),
+                "text": raw_text,
                 "pause_duration": line_pause,
+                "quality": selected_meta.get("signal", {}),
+                "content_evaluation": selected_meta.get("content", {}),
+                "attempts": candidate_attempts,
             }
             if "start_seconds" in line_item:
                 line_res["original_start_seconds"] = line_item["start_seconds"]
@@ -121,6 +283,11 @@ def run_batch_inference(config: dict) -> None:
                 "text": line_text,
                 "pause_duration": line_pause,
                 "error": err_msg,
+                "quality": {
+                    "initial": {"passed": False, "issues": [err_msg]},
+                    "actions": [],
+                    "final": {"passed": False, "issues": [err_msg]},
+                },
             }
             if "start_seconds" in line_item:
                 line_res["original_start_seconds"] = line_item["start_seconds"]
@@ -183,6 +350,7 @@ def run_batch_inference(config: dict) -> None:
                     target_sr=target_sr,
                     ducking=bgm_ducking_flag,
                 )
+            report_progress("publishing", 95, "Đang lưu tệp âm thanh hoàn chỉnh...")
             ta.save(output_path, merged_speech, target_sr)
             merged_duration = round(merged_speech.shape[-1] / target_sr, 3)
 
@@ -240,6 +408,25 @@ def run_batch_inference(config: dict) -> None:
     rtf = round(total_time / max(0.01, merged_duration), 3) if merged_duration > 0 else 0.0
     ftr = round(merged_duration / max(0.01, total_time), 2) if total_time > 0 else 0.0
 
+    # Calculate quality summary report
+    total_segs = len(lines_results)
+    passed_segs = sum(1 for r in lines_results if r.get("status") == "completed" and r.get("quality", {}).get("final", {}).get("passed", False))
+    auto_fixed_segs = sum(1 for r in lines_results if len(r.get("quality", {}).get("actions", [])) > 0)
+    failed_segs = sum(1 for r in lines_results if r.get("status") == "failed")
+    all_warnings = list(slot_warnings)
+    for r in lines_results:
+        for w in r.get("quality", {}).get("final", {}).get("warnings", []):
+            all_warnings.append(f"Dòng {r['idx']+1}: {w}")
+
+    quality_report = {
+        "passed": (failed_segs == 0 and passed_segs == total_segs and total_segs > 0),
+        "total_segments": total_segs,
+        "passed_segments": passed_segs,
+        "auto_fixed_segments": auto_fixed_segs,
+        "failed_segments": failed_segs,
+        "warnings": all_warnings,
+    }
+
     benchmark_data = {
         "device": device,
         "model_type": model_type,
@@ -251,6 +438,7 @@ def run_batch_inference(config: dict) -> None:
         "realtime_factor": rtf,
         "faster_than_realtime": ftr,
         "slot_warnings": slot_warnings,
+        "quality_report": quality_report,
         "lines_results": [
             {
                 "idx": r["idx"],
@@ -261,6 +449,7 @@ def run_batch_inference(config: dict) -> None:
                 "end_seconds": r.get("end_seconds", 0.0),
                 "text": r.get("text", ""),
                 "error": r.get("error"),
+                "quality": r.get("quality", {}),
             }
             for r in lines_results
         ],
@@ -278,7 +467,7 @@ def run_batch_inference(config: dict) -> None:
     if has_failures and completed_count == 0:
         report_progress("failed", 100, "Toàn bộ các dòng trong kịch bản đều thất bại!")
     elif has_failures:
-        report_progress("completed", 100, f"Hoàn tất sinh kịch bản ({completed_count}/{total_lines} dòng thành công, có lỗi ở một số dòng).")
+        report_progress("completed_partial", 100, f"Hoàn tất sinh kịch bản ({completed_count}/{total_lines} dòng thành công, có lỗi ở một số dòng).")
     else:
         report_progress("completed", 100, "Hoàn tất sinh kịch bản hàng loạt thành công!")
 

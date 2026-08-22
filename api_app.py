@@ -1,4 +1,4 @@
-"""Chatterbox TTS Studio - FastAPI Server & Modular REST API v1.4.0."""
+"""Chatterbox TTS Studio - FastAPI Server & Modular REST API."""
 
 from __future__ import annotations
 
@@ -11,15 +11,17 @@ PROJECT_DIR = Path(__file__).resolve().parent
 os.environ["HF_HUB_CACHE"] = str(PROJECT_DIR / "models")
 
 import torch
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import character_api
-from routers import jobs, system, tts, critic
+from chatterbox.version import API_VERSION, APP_NAME, __version__
+from routers import critic, events, jobs, projects, system, tts
+from services.model_registry import is_model_cached, is_multilingual_cached
 from services.job_manager import JobManager
-from utils.platform_tools import detect_system_profile, get_default_data_dir, is_multilingual_cached
+from utils.platform_tools import detect_system_profile, get_default_data_dir
 
 # 1. System & Hardware Profiling
 SYSTEM_PROFILE = detect_system_profile(os.getenv("CHATTERBOX_DEVICE", "auto"))
@@ -37,6 +39,7 @@ API_DATA_DIR = Path(os.getenv("CHATTERBOX_API_DATA_DIR", str(get_default_data_di
 MAX_UPLOAD_BYTES = int(os.getenv("CHATTERBOX_API_MAX_UPLOAD_BYTES", 20 * 1024 * 1024))
 JOB_TIMEOUT_SECONDS = int(os.getenv("CHATTERBOX_JOB_TIMEOUT", "240"))
 RETENTION_DAYS = int(os.getenv("CHATTERBOX_JOB_RETENTION_DAYS", "3"))
+API_KEY = os.getenv("CHATTERBOX_API_KEY")
 
 # 2. Central Job Manager
 job_manager: JobManager | None = None
@@ -44,9 +47,9 @@ job_manager: JobManager | None = None
 
 def print_startup_banner() -> None:
     models_dir = PROJECT_DIR / "models"
-    nano_cached = (models_dir / "models--ResembleAI--chatterbox-nano").exists()
-    turbo_cached = (models_dir / "models--ResembleAI--chatterbox-turbo").exists()
-    std_cached = (models_dir / "models--ResembleAI--chatterbox").exists()
+    nano_cached = is_model_cached("nano", models_dir)
+    turbo_cached = is_model_cached("turbo", models_dir)
+    std_cached = is_model_cached("standard", models_dir)
     mtl_cached = is_multilingual_cached(models_dir)
 
     dev_label = (
@@ -56,11 +59,11 @@ def print_startup_banner() -> None:
     )
 
     print("\n" + "=" * 72)
-    print("  🎙️  CHATTERBOX TTS STUDIO & REST API v1.4.0")
+    print(f"  🎙️  {APP_NAME.upper()} & REST API v{__version__}")
     print("=" * 72)
     print(f"  🔍 Hệ thống:          {sys.platform} ({torch.__version__}) | RAM: {SYSTEM_PROFILE['total_ram_gb']} GB")
     print(f"  🎮 Bộ tăng tốc:       {dev_label}")
-    print(f"  ⚡ Model mặc định:    {RECOMMENDED_MODEL.upper()} (Tự động tối ưu theo phần cứng)")
+    print(f"  ⚡ Model mặc định:    {RECOMMENDED_MODEL.upper()} (Tự động tối ưu theo phần hardware)")
     print(f"  📦 Tình trạng Checkpoints trong models/:")
     print(f"     • Nano (110M):       {'✅ Sẵn sàng (Siêu nhẹ, an toàn RAM)' if nano_cached else '❌ Chưa tải'}")
     print(f"     • Turbo (350M):      {'✅ Sẵn sàng (Hỗ trợ Paralinguistic tags)' if turbo_cached else '❌ Chưa tải'}")
@@ -102,7 +105,7 @@ async def lifespan(_: FastAPI):
 # 3. FastAPI App Initialization
 app = FastAPI(
     title="Chatterbox TTS API & Web Studio",
-    version="1.4.0",
+    version=__version__,
     description="Local API & Web GUI cho Chatterbox TTS, Turbo, Nano, Multilingual, Long-Text và Voice Conversion.",
     lifespan=lifespan,
 )
@@ -115,12 +118,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def api_key_authentication_middleware(request: Request, call_next):
+    """Optional API Key authorization middleware when CHATTERBOX_API_KEY is defined."""
+    if API_KEY:
+        path = request.url.path
+        if path.startswith("/api/v1/") and not path.startswith("/api/v1/health"):
+            header_key = request.headers.get("X-API-Key")
+            query_key = request.query_params.get("api_key")
+            provided = header_key or query_key
+            if provided != API_KEY:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Khóa API không hợp lệ hoặc bị thiếu (Invalid or missing API key)."},
+                )
+    return await call_next(request)
+
+
 # 4. Mount Modular Routers
 app.include_router(character_api.router)
 app.include_router(system.router)
 app.include_router(tts.router)
 app.include_router(jobs.router)
 app.include_router(critic.router)
+app.include_router(projects.router)
+app.include_router(events.router)
 
 if WEBUI_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(WEBUI_DIR)), name="static")
@@ -136,9 +159,14 @@ if WEBUI_DIR.exists():
 @app.get("/history-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/settings-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/connect-mcp", response_class=FileResponse, tags=["gui"])
+@app.get("/projects", response_class=FileResponse, tags=["gui"])
+@app.get("/projects-studio", response_class=FileResponse, tags=["gui"])
 def get_web_gui():
     """Phục vụ giao diện Material Design 3 Web Dashboard trực tiếp trên trình duyệt."""
-    dashboard_file = WEBUI_DIR / "material_dashboard.html"
-    if dashboard_file.exists():
-        return FileResponse(dashboard_file, media_type="text/html")
-    return HTMLResponse("<h2>Chatterbox Studio Web GUI</h2><p>Đang tải tài nguyên giao diện...</p>")
+    index_file = WEBUI_DIR / "material_dashboard.html"
+    if not index_file.exists():
+        return HTMLResponse(
+            "<h2>Chatterbox Web GUI Dashboard chưa được khởi tạo. Vui lòng kiểm tra thư mục webui/.</h2>",
+            status_code=404,
+        )
+    return FileResponse(index_file)
