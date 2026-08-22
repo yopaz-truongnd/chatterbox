@@ -10,6 +10,12 @@ import sys
 import time
 from pathlib import Path
 
+# Force UTF-8 stdout/stderr encoding on Windows/all systems
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # Set HF cache relative to project root
 PROJECT_DIR = Path(__file__).resolve().parent
 os.environ["HF_HUB_CACHE"] = str(PROJECT_DIR / "models")

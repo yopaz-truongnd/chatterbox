@@ -363,6 +363,12 @@
           <span class="material-symbols-outlined text-[19px]">history</span>
           <span>Lịch sử âm thanh</span>
         </button>
+
+        <!-- 7. Connect MCP -->
+        <button onclick="switchTab('mcp')" data-tab="mcp" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[19px]">integration_instructions</span>
+          <span>Kết nối MCP</span>
+        </button>
       </nav>
 
       <!-- Bottom Pinned Section: 7. Settings & Model -->
@@ -1590,6 +1596,141 @@
         </div>
       </section>
 
+      <!-- ========================================================================= -->
+      <!-- TAB 8: CONNECT MCP DOCUMENTATION                                          -->
+      <!-- ========================================================================= -->
+      <section id="panel-mcp" class="tab-panel space-y-3.5">
+        <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30">
+                <span class="material-symbols-outlined text-[20px]">integration_instructions</span>
+              </div>
+              <div>
+                <h2 class="text-sm font-bold text-white">🔌 Kết nối Model Context Protocol (MCP)</h2>
+                <p class="text-[11px] text-slate-400">Liên kết Chatterbox TTS Studio với các IDE AI Assistant để sinh giọng nói trực tiếp từ mã nguồn.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Documentation Body -->
+          <div class="space-y-4">
+            <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs leading-relaxed text-slate-300">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
+                <span class="material-symbols-outlined text-purple-400 text-[16px]">info</span>
+                <span>Giới thiệu về MCP</span>
+              </h3>
+              <p>
+                <strong>Model Context Protocol (MCP)</strong> là một chuẩn giao thức mở do Anthropic phát triển, giúp các trợ lý AI (LLM) kết nối trực tiếp với các ứng dụng, công cụ và dữ liệu cục bộ.
+                Khi tích hợp MCP, AI trong IDE của bạn có thể trực tiếp gọi các công cụ của Chatterbox như sinh âm thanh (TTS), chuyển đổi giọng nói (Voice Conversion) và quản lý nhân vật mà không cần qua giao diện web.
+              </p>
+            </div>
+
+            <!-- Supported Tools Card -->
+            <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
+                <span class="material-symbols-outlined text-purple-400 text-[16px]">build</span>
+                <span>Danh sách Công cụ MCP Hỗ trợ (5 Tools)</span>
+              </h3>
+              <p class="text-slate-400 text-[11px]">
+                Các AI Assistant sau khi kết nối MCP sẽ được cấp quyền sử dụng các công cụ sau để tương tác với hệ thống Chatterbox:
+              </p>
+              
+              <div class="space-y-2 mt-2">
+                <!-- Tool 1 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_list_characters</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Liệt kê tất cả nhân vật giọng mẫu và cấu hình âm sắc đang lưu trữ cục bộ.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-purple-600/20 text-purple-300 text-[9px] font-bold border border-purple-500/20 self-start md:self-center">Read-only</span>
+                </div>
+                <!-- Tool 2 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_generate_tts</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Sinh giọng nói từ văn bản (TTS) sử dụng giọng của nhân vật được chọn và trả về ID tác vụ.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 text-[9px] font-bold border border-blue-500/20 self-start md:self-center">TTS Job</span>
+                </div>
+                <!-- Tool 3 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_get_job_status</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Lấy thông tin tiến độ, kết quả của Job và đường dẫn tải file âm thanh đầu ra.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-slate-600/20 text-slate-400 text-[9px] font-bold border border-slate-500/20 self-start md:self-center">Job Status</span>
+                </div>
+                <!-- Tool 4 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_voice_conversion</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Chuyển đổi âm sắc (Voice Conversion) của file âm thanh nguồn sang giọng đọc của nhân vật đích.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/20 self-start md:self-center">Voice Clone</span>
+                </div>
+                <!-- Tool 5 -->
+                <div class="p-2.5 rounded bg-[#141218] border border-[#3F3A46]/40 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div>
+                    <span class="text-purple-300 font-mono font-bold">chatterbox_evaluate_voice</span>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Đánh giá chất lượng đọc (âm lượng, độ diễn cảm, tốc độ, độ khớp chữ) và đọc to lời nhận xét của AI Coach.</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-amber-600/20 text-amber-300 text-[9px] font-bold border border-amber-500/20 self-start md:self-center">AI Critic</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Configuration Card -->
+            <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
+                <span class="material-symbols-outlined text-purple-400 text-[16px]">code</span>
+                <span>Cấu hình tích hợp (Configuration File)</span>
+              </h3>
+              <p class="text-slate-400 text-[11px]">
+                Sao chép đoạn JSON dưới đây và dán vào file cấu hình MCP của IDE/Client của bạn:
+              </p>
+              
+              <div class="relative">
+                <pre class="bg-[#141218] p-3 rounded-lg border border-[#3F3A46] text-purple-300 font-mono text-[11px] overflow-x-auto select-all">
+{
+  "mcpServers": {
+    "chatterbox": {
+      "command": "python",
+      "args": [
+        "E:/Project/chatterbox/mcp_server.py"
+      ],
+      "env": {
+        "CHATTERBOX_API_URL": "http://127.0.0.1:8000"
+      }
+    }
+  }
+}</pre>
+                <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim()); alert('Đã sao chép vào bộ nhớ tạm!');" class="absolute top-2 right-2 px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-[10px] font-medium text-slate-300 border border-[#3F3A46] cursor-pointer flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[12px]">content_copy</span>
+                  <span>Sao chép</span>
+                </button>
+              </div>
+
+              <!-- Integration Steps -->
+              <div class="mt-4 space-y-2">
+                <h4 class="text-xs font-bold text-white">Cách cấu hình trên các IDE phổ biến:</h4>
+                <ul class="list-decimal pl-4 space-y-1.5 text-slate-400">
+                  <li>
+                    <strong class="text-slate-300">Cursor IDE</strong>: Mở <code class="bg-[#1C1A22] px-1 py-0.5 rounded text-purple-300">Settings -> Features -> MCP</code>, nhấn <strong class="text-slate-300">+ Add New MCP Tool</strong>, đặt tên là <code class="text-purple-300">chatterbox</code>, kiểu là <code class="text-purple-300">stdio</code>, và đặt lệnh chạy: <code class="text-purple-300">python E:/Project/chatterbox/mcp_server.py</code>.
+                  </li>
+                  <li>
+                    <strong class="text-slate-300">Claude Desktop</strong>: Thêm cấu hình trên vào file <code class="bg-[#1C1A22] px-1 py-0.5 rounded text-purple-300">%APPDATA%/Claude/claude_desktop_config.json</code>.
+                  </li>
+                  <li>
+                    <strong class="text-slate-300">VS Code (Roo Code / Cline)</strong>: Cấu hình trong file <code class="bg-[#1C1A22] px-1 py-0.5 rounded text-purple-300">%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json</code>.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -1890,7 +2031,8 @@
       'vc': 'voice-clone',
       'characters': 'characters',
       'history': 'history',
-      'settings': 'settings'
+      'settings': 'settings',
+      'mcp': 'connect-mcp'
     };
 
     const URL_TAB_MAP = {
@@ -1907,7 +2049,9 @@
       'history': 'history',
       'history-studio': 'history',
       'settings': 'settings',
-      'settings-studio': 'settings'
+      'settings-studio': 'settings',
+      'connect-mcp': 'mcp',
+      'mcp': 'mcp'
     };
 
     // A/B Comparison Slots

@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Chatterbox TTS Studio - API & Web Server
+title Chatterbox TTS Studio - API ^& Web Server
 
 cd /d "%~dp0"
 
@@ -49,7 +49,7 @@ if not defined HOST set "HOST=127.0.0.1"
 if not defined PORT set "PORT=8000"
 
 echo =======================================================================
-echo        CHATTERBOX TTS STUDIO - WEB GUI & REST API SERVER (WINDOWS)
+echo        CHATTERBOX TTS STUDIO - WEB GUI ^& REST API SERVER (WINDOWS)
 echo =======================================================================
 echo   * Web GUI Studio:     http://%HOST%:%PORT%/
 echo   * REST API v1 Base:   http://%HOST%:%PORT%/api/v1/

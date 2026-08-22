@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 import character_api
-from routers import jobs, system, tts
+from routers import jobs, system, tts, critic
 from services.job_manager import JobManager
 from utils.platform_tools import detect_system_profile, get_default_data_dir, is_multilingual_cached
 
@@ -120,6 +120,7 @@ app.include_router(character_api.router)
 app.include_router(system.router)
 app.include_router(tts.router)
 app.include_router(jobs.router)
+app.include_router(critic.router)
 
 if WEBUI_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(WEBUI_DIR)), name="static")
@@ -134,6 +135,7 @@ if WEBUI_DIR.exists():
 @app.get("/characters-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/history-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/settings-studio", response_class=FileResponse, tags=["gui"])
+@app.get("/connect-mcp", response_class=FileResponse, tags=["gui"])
 def get_web_gui():
     """Phục vụ giao diện Material Design 3 Web Dashboard trực tiếp trên trình duyệt."""
     dashboard_file = WEBUI_DIR / "material_dashboard.html"

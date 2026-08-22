@@ -572,12 +572,14 @@ John: Tôi cũng rất vui được tham gia.
         env = os.environ.copy()
         env["CHATTERBOX_TEST_DUMMY_INFERENCE"] = "1"
         env["PYTHONPATH"] = str(ROOT_DIR)
+        env["PYTHONIOENCODING"] = "utf-8"
 
         proc = subprocess.run(
             [sys.executable, str(ROOT_DIR / "inference_runner.py"), "--config", str(cfg_file)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
             env=env,
             timeout=15,
         )

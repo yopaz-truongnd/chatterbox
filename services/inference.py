@@ -211,6 +211,7 @@ def run_isolated_subprocess(
     # Cross-platform environment with os.pathsep
     env = os.environ.copy()
     env["HF_HUB_CACHE"] = str(project_dir / "models")
+    env["PYTHONIOENCODING"] = "utf-8"
     existing_pythonpath = env.get("PYTHONPATH", "")
     src_dir = str(project_dir / "src")
     env["PYTHONPATH"] = (src_dir + os.pathsep + existing_pythonpath) if existing_pythonpath else src_dir
@@ -221,6 +222,7 @@ def run_isolated_subprocess(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
             bufsize=1,
             env=env,
             cwd=str(project_dir),
