@@ -50,3 +50,23 @@ class JobTimeoutError(ChatterboxError):
 class CharacterNotFoundError(ChatterboxError):
     """Raised when a specified character ID does not exist in the store."""
     pass
+
+
+class ProjectError(ChatterboxError):
+    """Base exception for Project Planning and Lifecycle errors."""
+    pass
+
+
+class ProjectNotFoundError(ProjectError):
+    """Raised when a requested project ID does not exist."""
+    pass
+
+
+class ProjectNotApprovedError(ProjectError):
+    """Raised when an execution or render action is attempted on an unapproved project."""
+    pass
+
+
+class ProjectStateError(ProjectError):
+    """Raised when an invalid project state transition is attempted."""
+    pass

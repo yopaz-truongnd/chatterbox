@@ -242,6 +242,94 @@ def get_tools_list() -> list[dict]:
                 },
             },
         },
+        {
+            "name": "chatterbox_prepare_project",
+            "description": "Initialize a structured audio project from a user topic/idea. Extracts existing parameters, determines missing required/recommended slots, and returns a single-batch list of questions.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The topic, concept, or description of the audio project (e.g. 'Podcast 5 phút về lịch sử AI cho người mới').",
+                    },
+                    "initial_requirements": {
+                        "type": "object",
+                        "description": "Pre-known parameters (format, target_duration_seconds, audience, language, tone, character_id, sfx_level, output_formats). Optional.",
+                    },
+                    "auto_defaults": {
+                        "type": "boolean",
+                        "description": "If True, auto-populates sensible defaults for all non-essential recommended fields without asking. Defaults to False.",
+                    },
+                },
+                "required": ["topic"],
+            },
+        },
+        {
+            "name": "chatterbox_answer_project_questions",
+            "description": "Submit answers (structured dict or natural language string) to fill missing project requirements, advancing the project to final confirmation review.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The unique ID of the project.",
+                    },
+                    "answers": {
+                        "description": "Answers to the missing questions (can be a dictionary mapping field IDs, or a natural language text response).",
+                    },
+                    "auto_defaults": {
+                        "type": "boolean",
+                        "description": "If True, automatically fills any remaining non-critical fields with standard defaults. Defaults to False.",
+                    },
+                },
+                "required": ["project_id", "answers"],
+            },
+        },
+        {
+            "name": "chatterbox_confirm_project",
+            "description": "Explicitly confirm and approve the final project configuration plan. Transitioning status to 'approved' is MANDATORY before any audio synthesis can occur.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The unique ID of the project to approve.",
+                    },
+                    "confirmed": {
+                        "type": "boolean",
+                        "description": "Set to True to approve the project plan, or False to cancel. Defaults to True.",
+                    },
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "chatterbox_render_project",
+            "description": "Synthesize speech and render audio for an approved project. Strictly rejects unapproved projects with an error.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The unique ID of the approved project.",
+                    },
+                    "script_text": {
+                        "type": "string",
+                        "description": "Custom narration script text. If omitted, automatically generates starter content based on the project topic.",
+                    },
+                    "character_id": {
+                        "type": "string",
+                        "description": "Character ID override. Optional.",
+                    },
+                    "quality_preset": {
+                        "type": "string",
+                        "enum": ["fast", "balanced", "expressive"],
+                        "description": "Quality preset override. Optional.",
+                    },
+                },
+                "required": ["project_id"],
+            },
+        },
     ]
 
 
@@ -552,6 +640,144 @@ def execute_tool(name: str, args: dict) -> dict:
             ]
 
             return {"content": [{"type": "text", "text": "\n".join(output_msg)}]}
+
+        elif name == "chatterbox_prepare_project":
+            topic = args.get("topic")
+            initial_reqs = args.get("initial_requirements")
+            auto_defaults = bool(args.get("auto_defaults", False))
+
+            payload = {
+                "topic": topic,
+                "initial_requirements": initial_reqs,
+                "auto_defaults": auto_defaults,
+            }
+            res = make_api_request("/api/v1/projects/prepare", method="POST", data=payload)
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            proj_id = res.get("project_id")
+            p_status = res.get("status", "unknown")
+            questions = res.get("questions", [])
+            summary = res.get("summary", "")
+
+            lines = [
+                f"### 🎯 Khởi tạo dự án âm thanh: `{proj_id}`",
+                f"* **Trạng thái**: `{p_status.upper()}`",
+                "\n" + summary,
+            ]
+
+            if questions:
+                lines.append("\n#### ❓ Danh sách câu hỏi cần thu thập bổ sung:")
+                for idx, q in enumerate(questions, 1):
+                    req_mark = "*(Bắt buộc)*" if q.get("required") else "*(Khuyến nghị)*"
+                    opts = ", ".join(q.get("options", []))
+                    lines.append(f"{idx}. **{q.get('question')}** {req_mark}")
+                    if opts:
+                        lines.append(f"   - *Gợi ý lựa chọn*: {opts}")
+                lines.append(f"\n💡 *Sử dụng `chatterbox_answer_project_questions` với `project_id='{proj_id}'` để gửi câu trả lời.*")
+
+            return {"content": [{"type": "text", "text": "\n".join(lines)}]}
+
+        elif name == "chatterbox_answer_project_questions":
+            proj_id = args.get("project_id")
+            answers = args.get("answers")
+            auto_defaults = bool(args.get("auto_defaults", False))
+
+            if not proj_id:
+                return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
+
+            payload = {
+                "answers": answers,
+                "auto_defaults": auto_defaults,
+            }
+            res = make_api_request(f"/api/v1/projects/{proj_id}/answer", method="POST", data=payload)
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            p_status = res.get("status", "unknown")
+            summary = res.get("summary", "")
+            questions = res.get("questions", [])
+
+            lines = [
+                f"### 📝 Cập nhật yêu cầu dự án: `{proj_id}`",
+                f"* **Trạng thái mới**: `{p_status.upper()}`",
+                "\n" + summary,
+            ]
+
+            if questions:
+                lines.append("\n#### ⚠️ Vẫn còn thông tin cần làm rõ:")
+                for idx, q in enumerate(questions, 1):
+                    req_mark = "*(Bắt buộc)*" if q.get("required") else "*(Khuyến nghị)*"
+                    opts = ", ".join(q.get("options", []))
+                    lines.append(f"{idx}. **{q.get('question')}** {req_mark}")
+                    if opts:
+                        lines.append(f"   - *Gợi ý*: {opts}")
+
+            return {"content": [{"type": "text", "text": "\n".join(lines)}]}
+
+        elif name == "chatterbox_confirm_project":
+            proj_id = args.get("project_id")
+            confirmed = bool(args.get("confirmed", True))
+
+            if not proj_id:
+                return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
+
+            payload = {"confirmed": confirmed}
+            res = make_api_request(f"/api/v1/projects/{proj_id}/confirm", method="POST", data=payload)
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            msg = res.get("message", "")
+            p_status = res.get("status", "")
+            summary = res.get("summary", "")
+
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"{msg}\n"
+                            f"* **Project ID**: `{proj_id}`\n"
+                            f"* **Trạng thái**: `{p_status.upper()}`\n\n"
+                            f"{summary}"
+                        ),
+                    }
+                ]
+            }
+
+        elif name == "chatterbox_render_project":
+            proj_id = args.get("project_id")
+            script_text = args.get("script_text")
+            character_id = args.get("character_id")
+            quality_preset = args.get("quality_preset")
+
+            if not proj_id:
+                return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
+
+            payload = {
+                "script_text": script_text,
+                "character_id": character_id,
+                "quality_preset": quality_preset,
+            }
+            res = make_api_request(f"/api/v1/projects/{proj_id}/render", method="POST", data=payload)
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            job_id = res.get("job_id")
+            p_status = res.get("status", "")
+            msg = res.get("message", "")
+            script = res.get("script_text", "")
+
+            output_text = (
+                f"🚀 {msg}\n"
+                f"* **Project ID**: `{proj_id}`\n"
+                f"* **Job ID**: `{job_id}`\n"
+                f"* **Trạng thái dự án**: `{p_status.upper()}`\n\n"
+                f"📜 **Kịch bản thực thi**:\n"
+                f"> {script}\n\n"
+                f"Sử dụng công cụ `chatterbox_get_job_status` với `job_id='{job_id}'` để theo dõi tiến độ tổng hợp âm thanh."
+            )
+            return {"content": [{"type": "text", "text": output_text}]}
 
         else:
             return {"content": [{"type": "text", "text": f"Error: Tool '{name}' not found."}], "isError": True}

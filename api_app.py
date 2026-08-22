@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 import character_api
 from chatterbox.version import API_VERSION, APP_NAME, __version__
-from routers import critic, jobs, system, tts
+from routers import critic, jobs, projects, system, tts
 from services.model_registry import is_model_cached, is_multilingual_cached
 from services.job_manager import JobManager
 from utils.platform_tools import detect_system_profile, get_default_data_dir
@@ -142,6 +142,7 @@ app.include_router(system.router)
 app.include_router(tts.router)
 app.include_router(jobs.router)
 app.include_router(critic.router)
+app.include_router(projects.router)
 
 if WEBUI_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(WEBUI_DIR)), name="static")
@@ -157,6 +158,8 @@ if WEBUI_DIR.exists():
 @app.get("/history-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/settings-studio", response_class=FileResponse, tags=["gui"])
 @app.get("/connect-mcp", response_class=FileResponse, tags=["gui"])
+@app.get("/projects", response_class=FileResponse, tags=["gui"])
+@app.get("/projects-studio", response_class=FileResponse, tags=["gui"])
 def get_web_gui():
     """Phục vụ giao diện Material Design 3 Web Dashboard trực tiếp trên trình duyệt."""
     index_file = WEBUI_DIR / "material_dashboard.html"

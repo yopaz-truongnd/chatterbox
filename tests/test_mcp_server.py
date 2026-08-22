@@ -32,8 +32,13 @@ class MCPServerTestCase(unittest.TestCase):
             "chatterbox_download_audio",
             "chatterbox_voice_conversion",
             "chatterbox_evaluate_voice",
+            "chatterbox_prepare_project",
+            "chatterbox_answer_project_questions",
+            "chatterbox_confirm_project",
+            "chatterbox_render_project",
         }
         self.assertTrue(expected_tools.issubset(tool_names), f"Missing tools: {expected_tools - tool_names}")
+        self.assertEqual(len(tools), 10)
 
     def test_list_characters_handles_dict_and_list_responses(self):
         # 1. Dict response format (standard from /api/v1/characters)
@@ -186,6 +191,75 @@ class MCPServerTestCase(unittest.TestCase):
             self.assertIn("Không thể kết nối tới Chatterbox API", res["detail"])
             self.assertIn("./run_chatterbox_api.sh", res["detail"])
 
+    def test_project_planning_tools_execution(self):
+        # 1. Prepare Project
+        mock_prepare = {
+            "project_id": "proj_abc123",
+            "status": "awaiting_answers",
+            "summary": "### Tóm tắt dự án test",
+            "questions": [
+                {"id": "content_format", "question": "Định dạng gì?", "required": True, "options": ["Podcast"]}
+            ],
+        }
+        with patch("mcp_server.make_api_request", return_value=mock_prepare):
+            res = mcp_server.execute_tool("chatterbox_prepare_project", {"topic": "Podcast AI"})
+            self.assertFalse(res.get("isError", False))
+            text = res["content"][0]["text"]
+            self.assertIn("proj_abc123", text)
+            self.assertIn("AWAITING_ANSWERS", text)
+            self.assertIn("Định dạng gì?", text)
+
+        # 2. Answer Project Questions
+        mock_answer = {
+            "project_id": "proj_abc123",
+            "status": "awaiting_confirmation",
+            "summary": "### Tóm tắt dự án đầy đủ\nFormat: Podcast",
+            "questions": [],
+        }
+        with patch("mcp_server.make_api_request", return_value=mock_answer):
+            res = mcp_server.execute_tool(
+                "chatterbox_answer_project_questions",
+                {"project_id": "proj_abc123", "answers": "Podcast 5 phút"},
+            )
+            self.assertFalse(res.get("isError", False))
+            text = res["content"][0]["text"]
+            self.assertIn("AWAITING_CONFIRMATION", text)
+
+        # 3. Confirm Project
+        mock_confirm = {
+            "project_id": "proj_abc123",
+            "status": "approved",
+            "message": "Đã phê duyệt thành công",
+            "summary": "Full summary",
+        }
+        with patch("mcp_server.make_api_request", return_value=mock_confirm):
+            res = mcp_server.execute_tool(
+                "chatterbox_confirm_project",
+                {"project_id": "proj_abc123", "confirmed": True},
+            )
+            self.assertFalse(res.get("isError", False))
+            text = res["content"][0]["text"]
+            self.assertIn("APPROVED", text)
+            self.assertIn("Đã phê duyệt", text)
+
+        # 4. Render Project
+        mock_render = {
+            "project_id": "proj_abc123",
+            "job_id": "job_render_999",
+            "status": "rendering",
+            "message": "Đã khởi tạo tác vụ tổng hợp",
+            "script_text": "Script narration",
+        }
+        with patch("mcp_server.make_api_request", return_value=mock_render):
+            res = mcp_server.execute_tool(
+                "chatterbox_render_project",
+                {"project_id": "proj_abc123"},
+            )
+            self.assertFalse(res.get("isError", False))
+            text = res["content"][0]["text"]
+            self.assertIn("job_render_999", text)
+            self.assertIn("RENDERING", text)
+
     def test_jsonrpc_stdio_subprocess_protocol(self):
         """Integration test verifying end-to-end JSON-RPC protocol over real stdio process."""
         server_script = Path(mcp_server.__file__).resolve()
@@ -214,11 +288,14 @@ class MCPServerTestCase(unittest.TestCase):
             # 2. Tools list RPC
             tools_res = send_and_recv({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
             tools = tools_res.get("result", {}).get("tools", [])
-            self.assertEqual(len(tools), 6)
+            self.assertEqual(len(tools), 10)
             tool_names = {t["name"] for t in tools}
             self.assertIn("chatterbox_list_characters", tool_names)
             self.assertIn("chatterbox_generate_tts", tool_names)
             self.assertIn("chatterbox_download_audio", tool_names)
+            self.assertIn("chatterbox_prepare_project", tool_names)
+            self.assertIn("chatterbox_confirm_project", tool_names)
+            self.assertIn("chatterbox_render_project", tool_names)
 
             # 3. Unknown method returns standard JSON-RPC error
             err_res = send_and_recv({"jsonrpc": "2.0", "id": 3, "method": "unsupported_method", "params": {}})
