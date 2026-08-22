@@ -75,25 +75,44 @@ Sau khi khởi chạy, truy cập trình duyệt:
 | `POST` | `/api/v1/tts` | Sinh âm thanh TTS cơ bản (Tự động chọn Nano hoặc Turbo theo cấu hình máy). |
 | `POST` | `/api/v1/tts/long-text` | Sinh âm thanh cho văn bản dài, tự chia đoạn và xuất ra 1 file WAV hoàn chỉnh. |
 | `POST` | `/api/v1/voice-conversion` | Chuyển đổi âm sắc từ file giọng gốc sang giọng mục tiêu (Voice Conversion). |
-| `GET` | `/api/v1/jobs/{id}` | Truy vấn trạng thái, tiến độ thực tế (0-100%) và telemetry benchmark của job. |
+| `POST` | `/api/v1/projects/prepare` | Khởi tạo dự án âm thanh (Gate 1: Tự động trích xuất yêu cầu & hỏi 1 lượt). |
+| `POST` | `/api/v1/projects/{id}/confirm-requirements` | Xác nhận yêu cầu (Gate 1) & tự động lập dàn ý, soạn kịch bản tiếng Anh. |
+| `POST` | `/api/v1/projects/{id}/confirm-script` | Xác nhận và phê duyệt kịch bản (Gate 2) cho phép bước vào khâu Render. |
+| `POST` | `/api/v1/projects/{id}/render` | High-Level Orchestration: Chia đoạn ngữ nghĩa, submit batch & hậu kỳ WAV. |
+| `GET`  | `/api/v1/events` | Luồng sự kiện thời gian thực (Real-time Event Stream) với Condition Long-Polling (0% CPU). |
+| `GET`  | `/api/v1/jobs/{id}` | Truy vấn trạng thái, tiến độ thực tế (0-100%) và telemetry benchmark của job. |
 | `POST` | `/api/v1/jobs/{id}/cancel` | Hủy ngay lập tức job đang chờ hoặc đang xử lý. |
-| `GET` | `/api/v1/jobs/{id}/audio` | Tải xuống file WAV kết quả chất lượng cao (24kHz Mono). |
-| `GET` | `/api/v1/diagnostics` | Báo cáo chẩn đoán toàn diện: OS, GPU, VRAM, RAM, FFmpeg, Checkpoints. |
+| `GET`  | `/api/v1/jobs/{id}/audio` | Tải xuống file WAV kết quả chất lượng cao (24kHz Mono). |
+| `GET`  | `/api/v1/diagnostics` | Báo cáo chẩn đoán toàn diện: OS, GPU, VRAM, RAM, FFmpeg, Checkpoints. |
 | `GET/POST`| `/api/v1/characters` | Quản lý danh sách nhân vật và cấu hình giọng mẫu. |
 | `POST` | `/api/v1/audio/merge` | Ghép nhiều đoạn âm thanh từ các job trước đó thành một file duy nhất kèm BGM. |
 
 ---
 
-## 📂 5. Cấu trúc Dự án
+## 🤖 5. Model Context Protocol (MCP) Server
+
+Tích hợp sẵn stdio MCP Server tương thích tiêu chuẩn Claude Desktop, Google Antigravity & OpenAI Codex với **16 tools chuyên dụng**:
+* `chatterbox_list_characters`, `chatterbox_generate_tts`, `chatterbox_get_job_status`, `chatterbox_download_audio`, `chatterbox_voice_conversion`, `chatterbox_evaluate_voice`
+* `chatterbox_prepare_project`, `chatterbox_answer_project_questions`, `chatterbox_confirm_requirements`, `chatterbox_generate_script`, `chatterbox_confirm_script`, `chatterbox_confirm_project`, `chatterbox_render_project`, `chatterbox_get_project`, `chatterbox_list_projects`
+* `chatterbox_get_events` (Long-polling real-time updates)
+
+---
+
+## 📂 6. Cấu trúc Dự án
 
 ```text
 chatterbox/
-├── api_app.py                   # FastAPI Server entrypoint & Lifespan (<130 dòng)
+├── api_app.py                   # FastAPI Server entrypoint & Lifespan (<180 dòng)
+├── mcp_server.py                # Stdio MCP Server (16 tools) cho AI Agents
 ├── services/
-│   ├── inference.py             # Logic nạp model & sinh âm thanh chuẩn (Single Source of Truth)
-│   ├── audio.py                 # Ghép nối khoảng lặng, xử lý WAV & hòa âm BGM
+│   ├── event_bus.py             # In-memory Ring Buffer Event Bus & Condition Long-Polling
+│   ├── project_planner.py       # Two-Gate confirmation, semantic segmentation & auto-fix
+│   ├── inference.py             # Logic nạp model & sinh âm thanh chuẩn
+│   ├── audio.py                 # Ghép nối khoảng lặng, loudness normalization & BGM
 │   └── job_manager.py           # Quản lý hàng đợi, lifecycle của job & subprocess cô lập
 ├── routers/
+│   ├── events.py                # Long-polling event streaming router
+│   ├── projects.py              # Two-Gate Audio Projects REST API
 │   ├── system.py                # Health, System Diagnostics, Settings & Models Status
 │   ├── tts.py                   # TTS Standard, Turbo, Nano, Long-Text, Presets & VC
 │   └── jobs.py                  # Tra cứu, Hủy job, Download audio & Merge batch
@@ -101,26 +120,28 @@ chatterbox/
 │   ├── platform_tools.py        # Tự nhận diện phần cứng Windows/macOS/Linux & thư mục lưu trữ
 │   └── text_cleaner.py          # Làm sạch và phân tách văn bản thông minh
 ├── webui/
-│   └── material_dashboard.html  # Giao diện Web GUI Material Design 3
+│   ├── material_dashboard.html  # Giao diện Web GUI Material Design 3
+│   ├── js/                      # Controllers: main, tts, batch, projects, notifications,...
+│   └── css/styles.css           # Bảng phong cách giao diện
 ├── run_chatterbox_api.sh        # Script khởi chạy & chạy test cho macOS / Linux
 ├── Run_Chatterbox_API.bat       # Script khởi chạy 1-click cho Windows
 ├── run_chatterbox_api.ps1       # Script PowerShell cho Windows
-└── tests/                       # Bộ kiểm thử tích hợp (37 unit tests)
+└── tests/                       # Bộ kiểm thử tích hợp (108 unit tests)
 ```
 
 ---
 
-## 🧪 6. Chạy Kiểm thử (Unit Tests)
+## 🧪 7. Chạy Kiểm thử (Unit Tests)
 
 Kiểm thử toàn bộ hệ thống (được mock inference để chạy tức thì):
 
 ```bash
 ./run_chatterbox_api.sh --test
 ```
-*Kết quả:* **37/37 tests passed trong ~0.5 giây**.
+*Kết quả:* **108/108 tests passed**.
 
 ---
 
-## 📜 7. Giấy phép (License)
+## 📜 8. Giấy phép (License)
 
 Dự án phát triển dựa trên mô hình mã nguồn mở Chatterbox của Resemble AI theo giấy phép [MIT License](LICENSE).

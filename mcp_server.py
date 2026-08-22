@@ -286,8 +286,70 @@ def get_tools_list() -> list[dict]:
             },
         },
         {
+            "name": "chatterbox_confirm_requirements",
+            "description": "Gate 1 Confirmation: Explicitly approve project requirements and automatically generate the initial English scene outline and script.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The unique ID of the project.",
+                    },
+                    "confirmed": {
+                        "type": "boolean",
+                        "description": "Set to True to confirm requirements and proceed to script generation, or False to cancel. Defaults to True.",
+                    },
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "chatterbox_generate_script",
+            "description": "Generate or re-generate the English scene outline and full narration script based on confirmed requirements.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The unique ID of the project.",
+                    },
+                    "custom_prompt": {
+                        "type": "string",
+                        "description": "Optional custom prompt or instructions to tailor the generated script.",
+                    },
+                    "num_scenes": {
+                        "type": "integer",
+                        "description": "Optional target number of scenes (default: auto based on target duration).",
+                    },
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "chatterbox_confirm_script",
+            "description": "Gate 2 Confirmation: Review and approve the English script and scene outline. Approval transitions the project to 'approved', enabling high-level rendering.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The unique ID of the project.",
+                    },
+                    "confirmed": {
+                        "type": "boolean",
+                        "description": "Set to True to approve the script, or False to request revision. Defaults to True.",
+                    },
+                    "script_text": {
+                        "type": "string",
+                        "description": "Optional updated script text edited by user.",
+                    },
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
             "name": "chatterbox_confirm_project",
-            "description": "Explicitly confirm and approve the final project configuration plan. Transitioning status to 'approved' is MANDATORY before any audio synthesis can occur.",
+            "description": "Unified Confirmation dispatcher: Confirms whichever gate is currently pending (Gate 1 requirements or Gate 2 script).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -297,7 +359,7 @@ def get_tools_list() -> list[dict]:
                     },
                     "confirmed": {
                         "type": "boolean",
-                        "description": "Set to True to approve the project plan, or False to cancel. Defaults to True.",
+                        "description": "Set to True to approve, or False to cancel/revise. Defaults to True.",
                     },
                 },
                 "required": ["project_id"],
@@ -305,7 +367,7 @@ def get_tools_list() -> list[dict]:
         },
         {
             "name": "chatterbox_render_project",
-            "description": "Synthesize speech and render audio for an approved project. Strictly rejects unapproved projects with an error.",
+            "description": "High-level Orchestration: Segment the approved script, synthesize segments with signal quality checks, and merge the final master audio. Strictly rejects unapproved projects.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -315,7 +377,7 @@ def get_tools_list() -> list[dict]:
                     },
                     "script_text": {
                         "type": "string",
-                        "description": "Custom narration script text. If omitted, automatically generates starter content based on the project topic.",
+                        "description": "Custom narration script text override. Optional.",
                     },
                     "character_id": {
                         "type": "string",
@@ -328,6 +390,49 @@ def get_tools_list() -> list[dict]:
                     },
                 },
                 "required": ["project_id"],
+            },
+        },
+        {
+            "name": "chatterbox_get_project",
+            "description": "Retrieve the current state, requirements, outline, script, segments, and structured summary for a project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The unique ID of the project.",
+                    },
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "chatterbox_list_projects",
+            "description": "List all existing audio projects with their status and metadata.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "chatterbox_get_events",
+            "description": "Long-polling event stream for real-time project & rendering status updates. Returns immediately when new events occur or waits up to wait_seconds with zero CPU idle usage.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "after_event_id": {
+                        "type": "integer",
+                        "description": "Retrieve events with ID strictly greater than this ID (default: 0).",
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "description": "Optional project ID filter.",
+                    },
+                    "wait_seconds": {
+                        "type": "integer",
+                        "description": "Max seconds to wait for new events (default: 0, max: 30).",
+                    },
+                },
             },
         },
     ]
@@ -715,6 +820,130 @@ def execute_tool(name: str, args: dict) -> dict:
 
             return {"content": [{"type": "text", "text": "\n".join(lines)}]}
 
+        elif name == "chatterbox_confirm_requirements":
+            proj_id = args.get("project_id")
+            confirmed = bool(args.get("confirmed", True))
+
+            if not proj_id:
+                return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
+
+            payload = {"confirmed": confirmed}
+            res = make_api_request(f"/api/v1/projects/{proj_id}/confirm-requirements", method="POST", data=payload)
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            msg = res.get("message", "")
+            p_status = res.get("status", "")
+            summary = res.get("summary", "")
+
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"Gate 1 Confirmed: {msg}\n"
+                            f"* **Project ID**: `{proj_id}`\n"
+                            f"* **Trạng thái**: `{p_status.upper()}`\n\n"
+                            f"{summary}"
+                        ),
+                    }
+                ]
+            }
+
+        elif name == "chatterbox_generate_script":
+            proj_id = args.get("project_id")
+            custom_prompt = args.get("custom_prompt")
+            num_scenes = args.get("num_scenes")
+
+            if not proj_id:
+                return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
+
+            payload = {
+                "custom_prompt": custom_prompt,
+                "num_scenes": num_scenes,
+            }
+            res = make_api_request(f"/api/v1/projects/{proj_id}/generate-script", method="POST", data=payload)
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            p_status = res.get("status", "")
+            summary = res.get("summary", "")
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"📜 Generated English script for `{proj_id}` (Status: `{p_status.upper()}`):\n\n{summary}",
+                    }
+                ]
+            }
+
+        elif name == "chatterbox_confirm_script":
+            proj_id = args.get("project_id")
+            confirmed = bool(args.get("confirmed", True))
+            script_text = args.get("script_text")
+
+            if not proj_id:
+                return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
+
+            payload = {
+                "confirmed": confirmed,
+                "script_text": script_text,
+            }
+            res = make_api_request(f"/api/v1/projects/{proj_id}/confirm-script", method="POST", data=payload)
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            msg = res.get("message", "")
+            p_status = res.get("status", "")
+            summary = res.get("summary", "")
+
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"Gate 2: {msg}\n"
+                            f"* **Project ID**: `{proj_id}`\n"
+                            f"* **Trạng thái**: `{p_status.upper()}`\n\n"
+                            f"{summary}"
+                        ),
+                    }
+                ]
+            }
+
+        elif name == "chatterbox_get_project":
+            proj_id = args.get("project_id")
+            if not proj_id:
+                return {"content": [{"type": "text", "text": "Error: 'project_id' is required."}], "isError": True}
+
+            res = make_api_request(f"/api/v1/projects/{proj_id}")
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            summary = res.get("summary", "")
+            json_dump = json.dumps(res, ensure_ascii=False, indent=2)
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"{summary}\n\n#### 📦 Raw Project Data:\n```json\n{json_dump}\n```",
+                    }
+                ]
+            }
+
+        elif name == "chatterbox_list_projects":
+            res = make_api_request("/api/v1/projects")
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            projects = res.get("projects", [])
+            lines = [f"### 📋 Audio Projects List ({len(projects)} projects)\n"]
+            if not projects:
+                lines.append("*(No projects created yet)*")
+            for p in projects:
+                lines.append(f"* **`{p.get('id')}`** — **{p.get('topic')}** (Status: `{p.get('status')}` • Format: `{p.get('requirements', {}).get('content_format', 'N/A')}`)")
+            return {"content": [{"type": "text", "text": "\n".join(lines)}]}
+
         elif name == "chatterbox_confirm_project":
             proj_id = args.get("project_id")
             confirmed = bool(args.get("confirmed", True))
@@ -763,21 +992,51 @@ def execute_tool(name: str, args: dict) -> dict:
             if "detail" in res:
                 return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
 
-            job_id = res.get("job_id")
+            job_id = res.get("job_id") or res.get("final_job_id")
             p_status = res.get("status", "")
             msg = res.get("message", "")
             script = res.get("script_text", "")
+            seg_count = res.get("segment_count", 0)
 
             output_text = (
                 f"🚀 {msg}\n"
                 f"* **Project ID**: `{proj_id}`\n"
+                f"* **Segments**: `{seg_count}`\n"
                 f"* **Job ID**: `{job_id}`\n"
                 f"* **Trạng thái dự án**: `{p_status.upper()}`\n\n"
-                f"📜 **Kịch bản thực thi**:\n"
+                f"📜 **Script**:\n"
                 f"> {script}\n\n"
                 f"Sử dụng công cụ `chatterbox_get_job_status` với `job_id='{job_id}'` để theo dõi tiến độ tổng hợp âm thanh."
             )
             return {"content": [{"type": "text", "text": output_text}]}
+
+        elif name == "chatterbox_get_events":
+            after_id = int(args.get("after_event_id", 0))
+            wait_s = int(args.get("wait_seconds", 0))
+            proj_id = args.get("project_id")
+            params = f"?after_id={after_id}&wait={wait_s}"
+            if proj_id:
+                params += f"&project_id={proj_id}"
+            res = make_api_request(f"/api/v1/events{params}")
+            if "detail" in res:
+                return {"content": [{"type": "text", "text": f"Error: {res['detail']}"}], "isError": True}
+
+            events = res.get("events", [])
+            last_id = res.get("last_event_id", after_id)
+            md = [f"### 📡 Chatterbox Event Stream ({len(events)} new events, last_event_id: `{last_id}`)\n"]
+            if not events:
+                md.append("*(No new events received)*")
+            else:
+                for ev in events:
+                    ev_id = ev.get("id")
+                    ev_type = ev.get("type", "unknown")
+                    ev_proj = ev.get("project_id") or "global"
+                    ev_stat = ev.get("status") or "-"
+                    ev_prog = f"({ev.get('progress')}%)" if ev.get("progress") is not None else ""
+                    md.append(f"- `#{ev_id}` **`{ev_type}`** [Project: `{ev_proj}`] Status: `{ev_stat}` {ev_prog}")
+                    if ev.get("data"):
+                        md.append(f"  ```json\n  {json.dumps(ev['data'], ensure_ascii=False)}\n  ```")
+            return {"content": [{"type": "text", "text": "\n".join(md)}]}
 
         else:
             return {"content": [{"type": "text", "text": f"Error: Tool '{name}' not found."}], "isError": True}

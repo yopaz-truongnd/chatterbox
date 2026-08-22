@@ -192,9 +192,49 @@ class JobManager:
         with self._jobs_lock:
             job = self._jobs.get(job_id)
             if job:
+                old_progress = getattr(job, "progress_percent", 0) or 0
                 for k, v in changes.items():
                     setattr(job, k, v)
                 self.store.save(job)
+
+                # Emit lightweight event for listeners
+                try:
+                    from services.event_bus import event_bus
+                    project_id = job.params.get("project_id") if isinstance(job.params, dict) else None
+                    new_progress = getattr(job, "progress_percent", 0) or 0
+                    if job.status == "completed":
+                        event_bus.emit(
+                            event_type="completed",
+                            project_id=project_id,
+                            job_id=job.id,
+                            status="completed",
+                            progress=100,
+                            data={
+                                "audio_url": f"/api/v1/jobs/{job.id}/audio",
+                                "duration_seconds": job.duration_seconds,
+                            },
+                        )
+                    elif job.status == "failed":
+                        event_bus.emit(
+                            event_type="failed",
+                            project_id=project_id,
+                            job_id=job.id,
+                            status="failed",
+                            progress=new_progress,
+                            data={"error": job.error},
+                        )
+                    elif job.status == "processing":
+                        if new_progress - old_progress >= 5 or (new_progress > 0 and old_progress == 0):
+                            event_bus.emit(
+                                event_type="render_progress",
+                                project_id=project_id,
+                                job_id=job.id,
+                                status="rendering",
+                                progress=new_progress,
+                                data={"phase": job.phase},
+                            )
+                except Exception:
+                    pass
 
     def _register_proc(self, job_id: str, proc: subprocess.Popen) -> None:
         with self._proc_lock:

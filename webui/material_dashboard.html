@@ -113,13 +113,45 @@
         </select>
       </div>
 
+      <!-- Notifications Button & Dropdown -->
+      <div class="relative">
+        <button id="notificationsToggle" onclick="toggleNotificationsPanel()" class="relative p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Thông báo sự kiện (Real-time Events)">
+          <span class="material-symbols-outlined text-[18px]">notifications</span>
+          <span id="notificationsBadge" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500 animate-ping"></span>
+          <span id="notificationsCount" class="hidden absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 text-[9px] font-bold bg-purple-600 text-white rounded-full flex items-center justify-center border border-[#18151E]">0</span>
+        </button>
+
+        <!-- Floating Notifications Panel Dropdown -->
+        <div id="notificationsPanel" class="hidden absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#18151E] border border-[#3F3A46] rounded-xl shadow-m3-3 z-50 overflow-hidden text-xs">
+          <div class="px-3.5 py-2.5 bg-[#231F2A] border-b border-[#3F3A46] flex items-center justify-between">
+            <div class="flex items-center gap-1.5 font-bold text-white">
+              <span class="material-symbols-outlined text-purple-400 text-[18px]">notifications_active</span>
+              <span>Sự kiện & Thông báo</span>
+              <span id="notifTotalBadge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-600/30 text-purple-300 border border-purple-500/40 font-mono">0</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="clearAllNotifications()" class="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-[#18151E] transition-colors cursor-pointer">Xóa hết</button>
+              <button onclick="toggleNotificationsPanel()" class="p-1 text-slate-400 hover:text-white rounded hover:bg-[#18151E] cursor-pointer">
+                <span class="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+          </div>
+          <div id="notificationsList" class="max-h-80 overflow-y-auto divide-y divide-[#3F3A46]/40 p-1">
+            <div id="notificationsEmpty" class="py-8 text-center text-slate-500 space-y-1">
+              <span class="material-symbols-outlined text-[28px] text-slate-600">notifications_paused</span>
+              <p class="text-xs">Chưa có thông báo sự kiện nào</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Theme Switcher -->
-      <button id="themeToggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors" title="Chuyển chế độ Sáng/Tối">
+      <button id="themeToggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Chuyển chế độ Sáng/Tối">
         <span id="themeIcon" class="material-symbols-outlined text-[18px]">dark_mode</span>
       </button>
 
       <!-- Help / Shortcuts -->
-      <button onclick="openShortcutsModal()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors" title="Bảng phím tắt (F1)">
+      <button onclick="openShortcutsModal()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Bảng phím tắt (F1)">
         <span class="material-symbols-outlined text-[18px]">keyboard</span>
       </button>
     </div>
@@ -2107,6 +2139,7 @@
   <script src="/static/js/characters.js"></script>
   <script src="/static/js/history.js"></script>
   <script src="/static/js/settings.js"></script>
+  <script src="/static/js/notifications.js"></script>
   <script src="/static/js/main.js"></script>
 </body>
 </html>

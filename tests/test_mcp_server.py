@@ -34,11 +34,17 @@ class MCPServerTestCase(unittest.TestCase):
             "chatterbox_evaluate_voice",
             "chatterbox_prepare_project",
             "chatterbox_answer_project_questions",
+            "chatterbox_confirm_requirements",
+            "chatterbox_generate_script",
+            "chatterbox_confirm_script",
             "chatterbox_confirm_project",
             "chatterbox_render_project",
+            "chatterbox_get_project",
+            "chatterbox_list_projects",
+            "chatterbox_get_events",
         }
         self.assertTrue(expected_tools.issubset(tool_names), f"Missing tools: {expected_tools - tool_names}")
-        self.assertEqual(len(tools), 10)
+        self.assertEqual(len(tools), 16)
 
     def test_list_characters_handles_dict_and_list_responses(self):
         # 1. Dict response format (standard from /api/v1/characters)
@@ -288,14 +294,18 @@ class MCPServerTestCase(unittest.TestCase):
             # 2. Tools list RPC
             tools_res = send_and_recv({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
             tools = tools_res.get("result", {}).get("tools", [])
-            self.assertEqual(len(tools), 10)
+            self.assertEqual(len(tools), 16)
             tool_names = {t["name"] for t in tools}
             self.assertIn("chatterbox_list_characters", tool_names)
             self.assertIn("chatterbox_generate_tts", tool_names)
             self.assertIn("chatterbox_download_audio", tool_names)
             self.assertIn("chatterbox_prepare_project", tool_names)
+            self.assertIn("chatterbox_confirm_requirements", tool_names)
+            self.assertIn("chatterbox_generate_script", tool_names)
+            self.assertIn("chatterbox_confirm_script", tool_names)
             self.assertIn("chatterbox_confirm_project", tool_names)
             self.assertIn("chatterbox_render_project", tool_names)
+            self.assertIn("chatterbox_get_events", tool_names)
 
             # 3. Unknown method returns standard JSON-RPC error
             err_res = send_and_recv({"jsonrpc": "2.0", "id": 3, "method": "unsupported_method", "params": {}})
