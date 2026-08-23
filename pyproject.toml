@@ -27,6 +27,8 @@ dependencies = [
     "pykakasi==2.3.0",
     "pyloudnorm",
     "omegaconf",
+    "pydantic>=2.0",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
