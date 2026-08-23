@@ -34,7 +34,7 @@ $env:PYTHONPATH = "$ProjectRoot\src;$env:PYTHONPATH"
 # Run tests
 if ($args[0] -eq "--test" -or $args[0] -eq "test") {
     Write-Host "=======================================================================" -ForegroundColor Cyan
-    Write-Host "       CHATTERBOX TTS — CHẠY KIỂM THỬ TÍCH HỢP (UNIT TESTS)           " -ForegroundColor Cyan
+    Write-Host "       CHATTERBOX TTS -- CHAY KIEM THU TICH HOP (UNIT TESTS)           " -ForegroundColor Cyan
     Write-Host "=======================================================================" -ForegroundColor Cyan
     $env:CHATTERBOX_IN_PROCESS = "1"
     & $PythonBin -m unittest discover -v tests/
@@ -45,12 +45,12 @@ $HostAddr = if ($env:HOST) { $env:HOST } else { "127.0.0.1" }
 $Port = if ($env:PORT) { $env:PORT } else { "8000" }
 
 Write-Host "=======================================================================" -ForegroundColor Magenta
-Write-Host "       CHATTERBOX TTS STUDIO — WEB GUI & REST API SERVER (POWERSHELL)  " -ForegroundColor Magenta
+Write-Host "       CHATTERBOX TTS STUDIO -- WEB GUI & REST API SERVER (POWERSHELL)  " -ForegroundColor Magenta
 Write-Host "=======================================================================" -ForegroundColor Magenta
 Write-Host "  * Web GUI Studio:     http://$HostAddr`:$Port/" -ForegroundColor Green
 Write-Host "  * REST API v1 Base:   http://$HostAddr`:$Port/api/v1/" -ForegroundColor Green
 Write-Host "  * API Swagger Docs:   http://$HostAddr`:$Port/docs" -ForegroundColor Green
-Write-Host "  * Dữ liệu:            $env:CHATTERBOX_API_DATA_DIR" -ForegroundColor DarkGray
+Write-Host "  * Du lieu:            $env:CHATTERBOX_API_DATA_DIR" -ForegroundColor DarkGray
 Write-Host "=======================================================================" -ForegroundColor Magenta
 
 & $PythonBin -m uvicorn api_app:app --host $HostAddr --port $Port

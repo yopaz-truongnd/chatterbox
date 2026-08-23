@@ -64,6 +64,85 @@ def handle_generate_tts(args: dict, request_fn: Callable, api_url: str, **kwargs
 
     job_id = res.get("id")
     status = res.get("status")
+
+    # Synchronize MCP voice generation task to Projects Studio
+    try:
+        from utils.platform_tools import get_default_data_dir
+        from datetime import datetime, timezone
+        
+        data_dir = get_default_data_dir()
+        proj_dir = data_dir / "projects"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        
+        proj_id = f"proj_mcp_{job_id[:12]}"
+        created_iso = datetime.now(timezone.utc).isoformat()
+        
+        project_data = {
+            "id": proj_id,
+            "topic": f"MCP TTS: {text[:45]}...",
+            "status": "rendering" if status in ("queued", "processing") else status or "rendering",
+            "requirements": {
+                "content_format": "mcp_tts",
+                "target_duration_seconds": 30,
+                "audience": "general",
+                "tone": "expressive",
+                "sfx_level": "none",
+                "output_formats": ["wav"],
+                "character_id": character_id,
+            },
+            "missing_required": [],
+            "missing_recommended": [],
+            "pronunciation_dict": {},
+            "pronunciation_candidates": [],
+            "outline": [
+                {
+                    "scene_idx": 1,
+                    "title": "MCP Generated Audio",
+                    "description": "Standalone voice synthesized through Model Context Protocol (MCP)",
+                }
+            ],
+            "script": {
+                "full_text": text,
+                "scenes": [
+                    {
+                        "scene_idx": 1,
+                        "title": "MCP Generated Audio",
+                        "paragraphs": [
+                            {
+                                "character_id": character_id,
+                                "text": text,
+                            }
+                        ]
+                    }
+                ]
+            },
+            "voice_plan": {
+                "default_model": model or "turbo",
+                "quality_preset": preset or "balanced",
+                "character_id": character_id,
+            },
+            "segments": [
+                {
+                    "idx": 0,
+                    "text": text,
+                    "character_id": character_id,
+                    "status": "completed" if status == "completed" else "failed",
+                    "audio_url": f"/api/v1/jobs/{job_id}/audio" if status == "completed" else None,
+                }
+            ],
+            "jobs": [job_id],
+            "final_job_id": job_id,
+            "audio_url": f"/api/v1/jobs/{job_id}/audio" if status == "completed" else None,
+            "srt_url": f"/api/v1/jobs/{job_id}/srt" if status == "completed" else None,
+            "created_at": created_iso,
+            "updated_at": created_iso,
+        }
+        
+        proj_file = proj_dir / f"{proj_id}.json"
+        proj_file.write_text(json.dumps(project_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
     return {
         "content": [
             {
@@ -279,6 +358,85 @@ def handle_voice_conversion(
 
     job_id = res.get("id")
     status = res.get("status")
+
+    # Synchronize MCP Voice Conversion task to Projects Studio
+    try:
+        from utils.platform_tools import get_default_data_dir
+        from datetime import datetime, timezone
+        
+        data_dir = get_default_data_dir()
+        proj_dir = data_dir / "projects"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        
+        proj_id = f"proj_mcp_{job_id[:12]}"
+        created_iso = datetime.now(timezone.utc).isoformat()
+        
+        project_data = {
+            "id": proj_id,
+            "topic": f"MCP VC: {os.path.basename(source_path)}",
+            "status": "rendering" if status in ("queued", "processing") else status or "rendering",
+            "requirements": {
+                "content_format": "mcp_vc",
+                "target_duration_seconds": 30,
+                "audience": "general",
+                "tone": "expressive",
+                "sfx_level": "none",
+                "output_formats": ["wav"],
+                "character_id": character_id,
+            },
+            "missing_required": [],
+            "missing_recommended": [],
+            "pronunciation_dict": {},
+            "pronunciation_candidates": [],
+            "outline": [
+                {
+                    "scene_idx": 1,
+                    "title": "MCP Voice Conversion",
+                    "description": f"Voice conversion from source file {os.path.basename(source_path)} to character {character_id}",
+                }
+            ],
+            "script": {
+                "full_text": f"[Source Audio: {os.path.basename(source_path)}] -> [Target Character ID: {character_id}]",
+                "scenes": [
+                    {
+                        "scene_idx": 1,
+                        "title": "MCP Voice Conversion",
+                        "paragraphs": [
+                            {
+                                "character_id": character_id,
+                                "text": f"Voice converted from {os.path.basename(source_path)}",
+                            }
+                        ]
+                    }
+                ]
+            },
+            "voice_plan": {
+                "default_model": "voice-conversion",
+                "quality_preset": "balanced",
+                "character_id": character_id,
+            },
+            "segments": [
+                {
+                    "idx": 0,
+                    "text": f"Voice converted from {os.path.basename(source_path)}",
+                    "character_id": character_id,
+                    "status": "completed" if status == "completed" else "failed",
+                    "audio_url": f"/api/v1/jobs/{job_id}/audio" if status == "completed" else None,
+                }
+            ],
+            "jobs": [job_id],
+            "final_job_id": job_id,
+            "audio_url": f"/api/v1/jobs/{job_id}/audio" if status == "completed" else None,
+            "srt_url": f"/api/v1/jobs/{job_id}/srt" if status == "completed" else None,
+            "created_at": created_iso,
+            "updated_at": created_iso,
+        }
+        
+        proj_file = proj_dir / f"{proj_id}.json"
+        proj_file.write_text(json.dumps(project_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
     return {
         "content": [
             {

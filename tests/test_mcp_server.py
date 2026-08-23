@@ -275,6 +275,7 @@ class MCPServerTestCase(unittest.TestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
         )
 
         def send_and_recv(req: dict) -> dict:

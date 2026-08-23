@@ -275,7 +275,8 @@ class UnifiedServicesTestCase(unittest.TestCase):
                 self.sr = 24000
                 self.conds = {"v": 1}
 
-        with patch("chatterbox.tts_turbo.ChatterboxTurboTTS.from_pretrained") as mock_turbo:
+        with patch("services.model_runtime.select_device", side_effect=lambda d: d), \
+             patch("chatterbox.tts_turbo.ChatterboxTurboTTS.from_pretrained") as mock_turbo:
             mock_turbo.side_effect = lambda dev, nano=False: MockModel(f"nano_{dev}")
 
             # 1. Load on CPU
