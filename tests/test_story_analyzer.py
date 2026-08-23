@@ -104,3 +104,23 @@ class StoryAnalyzerTestCase(unittest.TestCase):
         from services.story_analyzer import classify_beat_role
         role, _ = classify_beat_role(script_text, [{"text": script_text}], beat_idx=2)
         self.assertEqual(role, BeatRole.LORE)
+
+    def test_unresolved_source_span_fails_fast(self):
+        script = "Original sentence."
+        segments = [{"text": "Modified sentence."}]
+        with self.assertRaises(ValueError):
+            analyze_story_beats(script, segments)
+
+    def test_final_descriptive_beat_remains_description(self):
+        # Even if it is in final position, if there are no concluding signals, it remains DESCRIPTION
+        script_text = "Zhulong's body was red and thousands of miles long."
+        from services.story_analyzer import classify_beat_role
+        role, _ = classify_beat_role(script_text, [{"text": script_text}], beat_idx=3)
+        self.assertEqual(role, BeatRole.DESCRIPTION)
+
+    def test_outro_concluding_signals_classified_correctly(self):
+        # Concluding signals should correctly resolve to OUTRO
+        script_text = "Finally, the tale concludes our lesson about the rhythm of the cosmos."
+        from services.story_analyzer import classify_beat_role
+        role, _ = classify_beat_role(script_text, [{"text": script_text}], beat_idx=3)
+        self.assertEqual(role, BeatRole.OUTRO)

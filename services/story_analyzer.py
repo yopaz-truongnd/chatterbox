@@ -31,6 +31,8 @@ def analyze_story_beats(
     """
     if not script_text:
         return []
+    if segments:
+        segments = [dict(seg) for seg in segments]
 
     # If segments are not provided, we perform basic paragraph/scene splitting with exact offsets
     if not segments:
@@ -91,11 +93,12 @@ def analyze_story_beats(
         source_start = first_seg.get("source_start")
         source_end = last_seg.get("source_end")
 
-        if source_start is not None and source_end is not None:
-            beat_text = script_text[source_start:source_end]
-        else:
-            texts = [seg.get("text", "") for seg in group]
-            beat_text = " ".join(texts)
+        if source_start is None or source_end is None:
+            raise ValueError(
+                "Cannot preserve exact script text because source span could not be resolved"
+            )
+
+        beat_text = script_text[source_start:source_end]
 
         # Estimate duration
         est_sec = sum(seg.get("estimated_seconds", len(seg.get("text", "").split()) / 2.3) for seg in group)
@@ -151,11 +154,6 @@ def analyze_story_beats(
     if current_group:
         story_beats.append(flush_beat(current_group, beat_idx))
 
-    # Adjust Outro role if necessary (last beat defaults to outro unless it's hook)
-    if len(story_beats) > 1 and story_beats[-1].role == BeatRole.DESCRIPTION:
-        # Re-classify final beat as outro if it fits closing narrative signals
-        story_beats[-1].role = BeatRole.OUTRO
-
     return story_beats
 
 
@@ -185,7 +183,8 @@ def classify_beat_role(beat_text: str, group: list[dict[str, Any]], beat_idx: in
         scores[BeatRole.REFLECTION] += 0.30
     if beat_text.rstrip().endswith("?"):
         scores[BeatRole.REFLECTION] += 0.40
-    if '"' in beat_text or "'" in beat_text:
+    clean_quotes = re.sub(r"\b'\w\b", "", beat_text)
+    if '"' in clean_quotes or "'" in clean_quotes:
         scores[BeatRole.REVEAL] += 0.30
         scores[BeatRole.LORE] += 0.20
 
@@ -200,6 +199,8 @@ def classify_beat_role(beat_text: str, group: list[dict[str, Any]], beat_idx: in
         scores[BeatRole.ESCALATION] += 0.30
     if any(w in text_lower for w in ["climax", "battle", "clash", "force", "power", "daylight"]):
         scores[BeatRole.CLIMAX] += 0.40
+    if any(w in text_lower for w in ["conclude", "outro", "finally", "ending", "farewell", "concluding"]):
+        scores[BeatRole.OUTRO] += 0.45
 
     # Signal 4: Speaker role hints
     speakers = {seg.get("speaker", "Narrator").lower() for seg in group}
