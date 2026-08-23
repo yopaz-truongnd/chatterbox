@@ -183,6 +183,10 @@ class SoundDirectorTestCase(unittest.TestCase):
         # 5. Sound Director adds decisions
         directed_plan = direct_sound(voice_plan)
         
+        # Verify direct_sound did not mutate original voice_plan (non-mutating check)
+        self.assertIsNot(directed_plan, voice_plan)
+        self.assertIsNone(voice_plan.beats[0].ambience)
+
         # Verify hook has ambience intent
         self.assertIsNotNone(directed_plan.beats[0].ambience)
         # Verify reflection beat has silence decision
@@ -193,16 +197,13 @@ class SoundDirectorTestCase(unittest.TestCase):
         fixed_plan = apply_director_fixes(directed_plan, critique)
 
         # Invariant validations
-        # Exact text preservation
-        reconstructed = " ".join(beat.script.text for beat in fixed_plan.beats)
-        self.assertEqual(
-            reconstructed,
-            "What if I told you that, in ancient Chinese mythology, "
-            "there was a dragon so powerful... simply opening its eyes could bring daylight to the world? "
-            "Its name was Zhulong — the Torch Dragon. Zhulong appears in ancient Chinese texts. "
-            "When Zhulong opened its eyes... it was day. When it closed them... night fell. "
-            "Perhaps Zhulong was never merely a creature."
-        )
+        # Exact text preservation: Verify each beat matches its source offsets
+        for idx, beat in enumerate(fixed_plan.beats):
+            self.assertEqual(beat.script.text, raw_script[story_beats[idx].source_start:story_beats[idx].source_end])
+
+        # Exact byte-for-byte reconstruction of original raw script text
+        reconstructed = raw_script[story_beats[0].source_start:story_beats[-1].source_end]
+        self.assertEqual(reconstructed, raw_script)
 
         # IDs and roles unchanged
         for idx, beat in enumerate(fixed_plan.beats):

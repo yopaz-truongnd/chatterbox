@@ -68,8 +68,9 @@ def load_sound_policy(policy_path: str | None = None) -> dict[str, Any]:
                         policy["density"].update(loaded["density"])
                     if "roles" in loaded:
                         policy["roles"].update(loaded["roles"])
-        except Exception:
-            pass  # Fail-safe to default policy if malformed
+        except Exception as e:
+            import sys
+            print(f"WARNING: failed to load sound policy YAML at {policy_path}: {e}", file=sys.stderr)
     return policy
 
 
@@ -94,13 +95,16 @@ def direct_sound(
 
     Operates purely on plan intents, leaving asset resolution to the Resource Manager.
     """
+    import copy
+    directed_plan = copy.deepcopy(voice_plan)
+
     # Load consolidated policy rules
     policy = load_sound_policy(policy_path)
     role_rules = policy.get("roles", {})
 
     active_ambience: AmbienceIntent | None = None
 
-    for idx, beat in enumerate(voice_plan.beats):
+    for idx, beat in enumerate(directed_plan.beats):
         role = beat.role
         rule = role_rules.get(role.value, {})
 
@@ -180,32 +184,6 @@ def direct_sound(
                     )
                 )
 
-        # Physical sounds (e.g. fire, wind) only if action words are explicitly present in the text
-        if "breath" in text_lower or "wind" in text_lower:
-            # Physical function -> Wind whoosh
-            sfx_intents.append(
-                SFXIntent(
-                    intent="subtle_cold_wind_whoosh",
-                    function=SFXFunction.PHYSICAL,
-                    placement=SFXPlacement.UNDER,
-                    necessity=0.68,
-                    max_volume_db=-26.0,
-                    reason="physical wind whoosh triggered by action keyword"
-                )
-            )
-        elif "fire" in text_lower or "summer" in text_lower:
-            # Physical function -> Fire swell
-            sfx_intents.append(
-                SFXIntent(
-                    intent="subtle_flame_swell",
-                    function=SFXFunction.PHYSICAL,
-                    placement=SFXPlacement.UNDER,
-                    necessity=0.62,
-                    max_volume_db=-28.0,
-                    reason="physical fire swell triggered by action keyword"
-                )
-            )
-
         # Reflection beat checks: absolutely block impacts
         if role == BeatRole.REFLECTION:
             # Reflection beat should NOT have any physical impacts. Enforce this inside director
@@ -230,4 +208,4 @@ def direct_sound(
 
         beat.silence = silence_decision
 
-    return voice_plan
+    return directed_plan

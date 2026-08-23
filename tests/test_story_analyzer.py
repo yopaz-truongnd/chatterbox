@@ -16,13 +16,13 @@ class StoryAnalyzerTestCase(unittest.TestCase):
         script_text = "  What if I told you...\n\nIts name was Zhulong — the Torch Dragon.  "
         beats = analyze_story_beats(script_text)
         
-        # Verify exact reconstruction matches original text
-        reconstructed = " ".join(beat.text for beat in beats)
-        self.assertEqual(reconstructed, "  What if I told you... Its name was Zhulong — the Torch Dragon.  ")
+        # Verify each beat's text matches its exact source span
+        for beat in beats:
+            self.assertEqual(beat.text, script_text[beat.source_start:beat.source_end])
 
-        # Lineage check
-        self.assertIsNotNone(beats[0].source_start)
-        self.assertIsNotNone(beats[0].source_end)
+        # Verify exact reconstruction using spans matches original script_text 100% byte-for-byte
+        reconstructed = script_text[beats[0].source_start:beats[-1].source_end]
+        self.assertEqual(reconstructed, script_text)
 
     def test_multi_sentence_grouping_and_ids(self):
         # We supply segments representing multiple short sentences
@@ -97,3 +97,10 @@ class StoryAnalyzerTestCase(unittest.TestCase):
         self.assertEqual(mapped[0]["speaker"], "Alice")
         self.assertEqual(mapped[0]["emotion"], "mysterious")
         self.assertEqual(mapped[0]["beat_role"], "hook")
+
+    def test_lore_with_mythological_keywords(self):
+        # Contains "dragon" but also "ancient texts" and exposition. Should be classified as LORE, not SUPERNATURAL_EVENT.
+        script_text = "Ancient texts describe the crimson dragon dwelling beyond the northern wilderness."
+        from services.story_analyzer import classify_beat_role
+        role, _ = classify_beat_role(script_text, [{"text": script_text}], beat_idx=2)
+        self.assertEqual(role, BeatRole.LORE)

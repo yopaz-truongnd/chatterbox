@@ -32,7 +32,7 @@ def analyze_story_beats(
     if not script_text:
         return []
 
-    # If segments are not provided, we perform basic paragraph/scene splitting
+    # If segments are not provided, we perform basic paragraph/scene splitting with exact offsets
     if not segments:
         segments = []
         start = 0
@@ -45,7 +45,9 @@ def analyze_story_beats(
                     "id": f"seg_{p_idx:03d}",
                     "text": p_text,
                     "speaker": "Narrator",
-                    "estimated_seconds": len(p_text.split()) / 2.3
+                    "estimated_seconds": len(p_text.split()) / 2.3,
+                    "source_start": start,
+                    "source_end": end,
                 })
             start = match.end()
         # last part
@@ -55,8 +57,27 @@ def analyze_story_beats(
                 "id": f"seg_{len(p_matches)+1:03d}",
                 "text": p_text,
                 "speaker": "Narrator",
-                "estimated_seconds": len(p_text.split()) / 2.3
+                "estimated_seconds": len(p_text.split()) / 2.3,
+                "source_start": start,
+                "source_end": start + len(p_text),
             })
+    else:
+        # Resolve user-provided segment offsets sequentially to avoid picking up out-of-order duplicates
+        search_cursor = 0
+        for seg in segments:
+            seg_text = seg.get("text", "")
+            if not seg_text:
+                seg["source_start"] = None
+                seg["source_end"] = None
+                continue
+            pos = script_text.find(seg_text, search_cursor)
+            if pos != -1:
+                seg["source_start"] = pos
+                seg["source_end"] = pos + len(seg_text)
+                search_cursor = pos + len(seg_text)
+            else:
+                seg["source_start"] = None
+                seg["source_end"] = None
 
     story_beats: list[StoryBeat] = []
     current_group: list[dict[str, Any]] = []
@@ -64,18 +85,17 @@ def analyze_story_beats(
     beat_idx = 1
 
     def flush_beat(group: list[dict[str, Any]], idx: int) -> StoryBeat:
-        texts = [seg.get("text", "") for seg in group]
-        first_text = texts[0]
-        last_text = texts[-1]
+        first_seg = group[0]
+        last_seg = group[-1]
 
-        source_start = script_text.find(first_text)
-        if source_start != -1:
-            source_end = script_text.find(last_text, source_start) + len(last_text)
+        source_start = first_seg.get("source_start")
+        source_end = last_seg.get("source_end")
+
+        if source_start is not None and source_end is not None:
             beat_text = script_text[source_start:source_end]
         else:
+            texts = [seg.get("text", "") for seg in group]
             beat_text = " ".join(texts)
-            source_start = None
-            source_end = None
 
         # Estimate duration
         est_sec = sum(seg.get("estimated_seconds", len(seg.get("text", "").split()) / 2.3) for seg in group)
@@ -110,13 +130,12 @@ def analyze_story_beats(
             scene_changed = seg.get("scene_id") != prev_seg.get("scene_id")
             over_duration = (current_duration + seg_dur > 25.0)
 
-            # Check if there is a newline/paragraph break in source text between segments
+            # Check if there is a newline/paragraph break in source text between segments using offsets
             p_break = False
-            prev_text = prev_seg.get("text", "")
-            pos_prev = script_text.find(prev_text)
-            pos_curr = script_text.find(seg_text, max(0, pos_prev))
-            if pos_prev != -1 and pos_curr != -1:
-                gap_text = script_text[pos_prev + len(prev_text):pos_curr]
+            prev_end = prev_seg.get("source_end")
+            curr_start = seg.get("source_start")
+            if prev_end is not None and curr_start is not None:
+                gap_text = script_text[prev_end:curr_start]
                 if "\n" in gap_text:
                     p_break = True
 
@@ -173,10 +192,10 @@ def classify_beat_role(beat_text: str, group: list[dict[str, Any]], beat_idx: in
     # Signal 3: Lexical indicators (weighted lower to avoid simplistic keyword triggers)
     if any(w in text_lower for w in ["think", "wonder", "ponder", "perhaps", "maybe", "represent"]):
         scores[BeatRole.REFLECTION] += 0.45
-    if any(w in text_lower for w in ["ancient", "text", "century", "history", "dynasty", "mythology", "classic"]):
-        scores[BeatRole.LORE] += 0.40
+    if any(w in text_lower for w in ["ancient", "text", "century", "history", "dynasty", "mythology", "classic", "describe", "legend"]):
+        scores[BeatRole.LORE] += 0.45
     if any(w in text_lower for w in ["dragon", "god", "spirit", "supernatural", "magic", "immortal", "myth"]):
-        scores[BeatRole.SUPERNATURAL_EVENT] += 0.40
+        scores[BeatRole.SUPERNATURAL_EVENT] += 0.30
     if any(w in text_lower for w in ["but", "however", "suddenly", "terrifying", "colossal"]):
         scores[BeatRole.ESCALATION] += 0.30
     if any(w in text_lower for w in ["climax", "battle", "clash", "force", "power", "daylight"]):
