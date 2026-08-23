@@ -177,9 +177,8 @@ class VoicePlanTestCase(unittest.TestCase):
             )
 
     def test_exact_script_preservation(self):
-        raw_text = "What if I told you... simply opening its eyes could bring daylight to the world?"
-        script_seg = BeatScript(text=raw_text, preserve_exact_text=True)
-        self.assertEqual(script_seg.text, raw_text)
+        raw = "  What if I told you...\n"
+        self.assertEqual(BeatScript(text=raw).text, raw)
 
     def test_compatibility_builder_energy_scaling(self):
         project_data = {
@@ -281,11 +280,23 @@ class VoicePlanTestCase(unittest.TestCase):
         self.assertEqual(voice_plan.beats[0].voice.pause.after, 1.2)
         self.assertEqual(voice_plan.beats[0].voice.pronunciation, {"Zhulong": "Joo-long"})
         
-        # Verify silence decision
-        self.assertIsNotNone(voice_plan.beats[0].silence)
-        self.assertEqual(voice_plan.beats[0].silence.after.duration, 1.2)  # type: ignore
+        # Verify silence decision is None (Phase 1 does not infer silence)
+        self.assertIsNone(voice_plan.beats[0].silence)
         
         # Verify emphasis
         self.assertEqual(len(voice_plan.beats[0].voice.emphasis), 2)
         self.assertEqual(voice_plan.beats[0].voice.emphasis[0].text, "Zhulong")
         self.assertEqual(voice_plan.beats[0].voice.emphasis[0].strength, EmphasisStrength.MEDIUM)
+
+    def test_compatibility_builder_fail_fast_role(self):
+        project_data = {"id": "proj_123"}
+        segments = [
+            {
+                "id": "seg_001",
+                "text": "Valid text",
+                "beat_role": "invalid_role_here",
+                "narration_plan": {}
+            }
+        ]
+        with self.assertRaises(ValueError):
+            build_voice_plan(project_data, segments)

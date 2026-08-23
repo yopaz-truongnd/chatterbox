@@ -69,7 +69,7 @@ class BeatScript(BaseModel):
     def validate_non_empty_text(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("Script text cannot be empty.")
-        return v.strip()
+        return v
 
 
 class Emphasis(BaseModel):
@@ -224,10 +224,6 @@ def build_voice_plan(
         global_direction = {}
 
     derived_pace = 0.92
-    if segments:
-        first_seg_plan = segments[0].get("narration_plan", {})
-        if first_seg_plan and "target_wpm" in first_seg_plan:
-            derived_pace = round(first_seg_plan["target_wpm"] / 138.0, 2)
 
     global_dir_model = GlobalDirection(
         tone=global_direction.get("tone", "mysterious_cinematic"),
@@ -248,10 +244,7 @@ def build_voice_plan(
         # Use segment.beat_role if provided, otherwise default fallback
         role_str = seg.get("beat_role")
         if role_str:
-            try:
-                role_enum = BeatRole(role_str)
-            except ValueError:
-                role_enum = default_beat_role
+            role_enum = BeatRole(role_str)
         else:
             role_enum = default_beat_role
 
@@ -305,10 +298,6 @@ def build_voice_plan(
         )
 
         silence_decision = None
-        if pause_after_sec > 1.0:
-            silence_decision = SilenceDecision(
-                after=SilenceAfter(duration=pause_after_sec, reason="let_beat_resonate")
-            )
 
         beat_obj = Beat(
             id=seg_id,
