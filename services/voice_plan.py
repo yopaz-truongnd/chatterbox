@@ -33,6 +33,14 @@ class SFXPlacement(str, Enum):
     BRIDGE = "bridge"
 
 
+class SFXFunction(str, Enum):
+    ATMOSPHERE = "atmosphere"
+    TRANSITION = "transition"
+    PHYSICAL = "physical"
+    EMPHASIS = "emphasis"
+    EMOTIONAL = "emotional"
+
+
 class EmphasisStrength(str, Enum):
     SUBTLE = "subtle"
     MEDIUM = "medium"
@@ -116,12 +124,14 @@ class AmbienceIntent(BaseModel):
 
 class SFXIntent(BaseModel):
     intent: str
+    function: SFXFunction = SFXFunction.EMPHASIS
     placement: SFXPlacement
     anchor: str | None = None
     offset: float = 0.0
     intensity: str = "medium"
     necessity: float = 0.5
     max_volume_db: float = -24.0
+    reason: str | None = None
 
     @field_validator("necessity")
     @classmethod
