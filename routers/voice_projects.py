@@ -15,10 +15,16 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse, JSONResponse
 
 from schemas.voice_projects import (
+    AddPronunciationRequest,
     ArtifactInfo,
     CheckVoiceResourcesRequest,
+    BindDirectorResourceRequest,
     CreateVoiceProjectRequest,
     EvaluateVoiceProjectRequest,
+    DirectorAttemptDecisionRequest,
+    DirectorDirectionPatchRequest,
+    DirectorResourcePatchRequest,
+    DirectorTimingPatchRequest,
     ExportVoiceProjectRequest,
     FinalizeVoiceProjectRequest,
     HumanActionSchema,
@@ -28,6 +34,9 @@ from schemas.voice_projects import (
     PrepareMixRequest,
     RenderBeatRequest,
     RenderVoiceProjectRequest,
+    RegisterDirectorResourceRequest,
+    OmitDirectorResourceRequest,
+    ReproduceVoiceProjectRequest,
     UpdateVoiceScriptRequest,
     VoiceProjectArtifactsListResponse,
     VoiceProjectBeatsSummary,
@@ -42,11 +51,16 @@ from services.audio_mix_models import MixPlan
 from services.render_models import ProjectStatus
 from services.resource_models import RequirementPriority
 from services.voice_project_dependencies import (
+    get_director_resource_service,
+    get_director_review_service,
+    get_director_revision_service,
     get_voice_project_operation_manager,
     get_voice_project_service,
     get_voice_project_store,
     resolve_server_tts_provider,
 )
+from services.director_review_models import BeatDirectionPatch, BeatResourcePatch, BeatTimingPatch
+from services.director_revision_store import DirectorRevisionStore
 from services.voice_project_models import (
     BeatNotFoundError,
     ExportDependencyUnavailableError,
@@ -145,6 +159,9 @@ def _handle_domain_error(exc: Exception, project_id: str | None = None) -> JSONR
     elif isinstance(exc, ProviderUnavailableError):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         error_code = "PROVIDER_UNAVAILABLE"
+    elif isinstance(exc, ValueError):
+        status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        error_code = "VALIDATION_ERROR"
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         error_code = "INTERNAL_ERROR"
@@ -803,7 +820,16 @@ def download_project_artifact(project_id: str, artifact_id: str):
 
         target_file = artifact_map.get(artifact_id)
         if not target_file:
-            # Check if artifact_id matches an attempt or custom file inside project_dir
+            manifest = store.load_manifest(project_id)
+            for beat_id, beat_state in manifest.beats.items():
+                for attempt in beat_state.attempts:
+                    if artifact_id == f"beat_{beat_id.lower()}_attempt_{attempt.attempt}":
+                        candidate = Path(attempt.audio_path)
+                        target_file = candidate if candidate.is_absolute() else proj_dir / candidate
+                        break
+                if target_file:
+                    break
+        if not target_file:
             target_file = (proj_dir / artifact_id).resolve()
 
         target_file = target_file.resolve()
@@ -881,3 +907,172 @@ def cancel_voice_project_job(job_id: str):
             content={"success": False, "message": message},
         )
     return {"success": True, "message": message}
+
+
+# =========================================================
+# 6. Phase 16 Director Review & Incremental Revision
+# =========================================================
+
+
+@router.get("/api/v1/voice-projects/{project_id}/director-review", summary="Get Director Project Review")
+def get_director_review(project_id: str):
+    try:
+        return get_director_review_service().get_review(project_id).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.get("/api/v1/voice-projects/{project_id}/resource-shopping-list", summary="Get Resource Shopping List")
+def get_director_shopping_list(project_id: str):
+    try:
+        return get_director_review_service().shopping_list(project_id).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post("/api/v1/voice-projects/{project_id}/resources/pronunciations")
+def add_director_pronunciation(project_id: str, req: AddPronunciationRequest):
+    try:
+        return get_director_resource_service().add_pronunciation(
+            project_id, req.term, req.phonetic, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post("/api/v1/voice-projects/{project_id}/resources/bind")
+def bind_director_resource(project_id: str, req: BindDirectorResourceRequest):
+    try:
+        return get_director_resource_service().bind_asset(
+            project_id, req.resource_id, req.asset_id, req.actor_id, req.reason, req.allow_substitution
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post("/api/v1/voice-projects/{project_id}/resources/register")
+def register_director_resource(project_id: str, req: RegisterDirectorResourceRequest):
+    try:
+        return get_director_resource_service().register_asset(
+            project_id, req.resource_id, req.file_path, req.category, req.intent, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post("/api/v1/voice-projects/{project_id}/resources/omit")
+def omit_director_resource(project_id: str, req: OmitDirectorResourceRequest):
+    try:
+        return get_director_resource_service().omit_optional(
+            project_id, req.resource_id, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.get("/api/v1/voice-projects/{project_id}/beats/{beat_id}/review")
+def get_director_beat_review(project_id: str, beat_id: str):
+    try:
+        return get_director_review_service().get_beat_review(project_id, beat_id).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post("/api/v1/voice-projects/{project_id}/beats/{beat_id}/attempts/{attempt_id}/approve")
+def approve_director_attempt(project_id: str, beat_id: str, attempt_id: int, req: DirectorAttemptDecisionRequest):
+    try:
+        return get_director_revision_service().approve_attempt(
+            project_id, beat_id, attempt_id, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post("/api/v1/voice-projects/{project_id}/beats/{beat_id}/attempts/{attempt_id}/reject")
+def reject_director_attempt(project_id: str, beat_id: str, attempt_id: int, req: DirectorAttemptDecisionRequest):
+    try:
+        return get_director_revision_service().reject_attempt(
+            project_id, beat_id, attempt_id, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post("/api/v1/voice-projects/{project_id}/beats/{beat_id}/attempts/{attempt_id}/select")
+def select_director_attempt(project_id: str, beat_id: str, attempt_id: int, req: DirectorAttemptDecisionRequest):
+    try:
+        return get_director_revision_service().select_attempt(
+            project_id, beat_id, attempt_id, req.actor_id, req.reason, req.explicit_approval
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.patch("/api/v1/voice-projects/{project_id}/beats/{beat_id}/direction")
+def update_director_direction(project_id: str, beat_id: str, req: DirectorDirectionPatchRequest):
+    try:
+        patch = BeatDirectionPatch.model_validate(req.model_dump(exclude={"actor_id", "reason"}))
+        return get_director_revision_service().update_direction(
+            project_id, beat_id, patch, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.patch("/api/v1/voice-projects/{project_id}/beats/{beat_id}/timing")
+def update_director_timing(project_id: str, beat_id: str, req: DirectorTimingPatchRequest):
+    try:
+        patch = BeatTimingPatch.model_validate(req.model_dump(exclude={"actor_id", "reason"}))
+        return get_director_revision_service().update_timing(
+            project_id, beat_id, patch, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.patch("/api/v1/voice-projects/{project_id}/beats/{beat_id}/resources")
+def update_director_beat_resources(project_id: str, beat_id: str, req: DirectorResourcePatchRequest):
+    try:
+        patch = BeatResourcePatch.model_validate(req.model_dump(exclude={"actor_id", "reason"}))
+        return get_director_revision_service().update_resources(
+            project_id, beat_id, patch, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.get("/api/v1/voice-projects/{project_id}/revisions")
+def get_director_revisions(project_id: str):
+    try:
+        store = get_voice_project_store()
+        if not store.project_exists(project_id):
+            raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
+        revisions = DirectorRevisionStore(store)
+        return {
+            "project_id": project_id,
+            "events": [item.model_dump(mode="json") for item in revisions.list_events(project_id)],
+            "state": revisions.get_state(project_id).model_dump(mode="json"),
+        }
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.post(
+    "/api/v1/voice-projects/{project_id}/reproduce",
+    response_model=VoiceProjectOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def reproduce_director_project(project_id: str, req: ReproduceVoiceProjectRequest | None = None):
+    request = req or ReproduceVoiceProjectRequest()
+    try:
+        service = get_director_revision_service(provider_name=request.provider)
+        op = get_voice_project_operation_manager().submit(
+            project_id, "reproduce", service.reproduce_project, project_id,
+            revision_ids=request.revision_ids, policy=request.policy,
+        )
+        return VoiceProjectOperationResponse(
+            job_id=op.id, project_id=project_id, operation=op.operation,
+            status=op.status.value, message="Incremental reproduction scheduled successfully",
+        )
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)

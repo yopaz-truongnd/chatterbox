@@ -160,6 +160,23 @@ Dùng cho multi-track timeline construction (MixPlan), pure Python WAV mixing & 
   - `tests/test_audio_export.py`
   - `tests/test_voice_workflow.py`
 
+## Director Review, Resource Resolution & Incremental Reproduction (Phase 16)
+
+Dùng cho director snapshot, resource shopping list/binding, beat candidate approval,
+direction/timing/resource revisions, persisted audit trail và minimum-safe reproduction.
+
+- Primary Services:
+  - `services/director_review_models.py` — Typed public/application contracts cho review, gaps, candidates và impacts.
+  - `services/director_review_service.py` — Read model tổng hợp từ immutable source, VoicePlan, ResourceReport và RenderManifest.
+  - `services/director_resource_service.py` — Pronunciation overrides, managed asset registration/binding và omission policy.
+  - `services/director_revision_service.py` — Candidate decisions, constrained beat patches và incremental reproduction.
+  - `services/director_revision_store.py` — Atomic `revision-history.yaml` và explicit `revision-state.yaml`.
+  - `services/resource_manager.py::apply_project_resource_overrides` — Reapply persisted project decisions on every canonical resource check.
+- REST API: `routers/voice_projects.py` (`/director-review`, `/resource-shopping-list`, beat revisions, `/reproduce`).
+- MCP Adapter: `mcp_adapter/voice_project_tools.py`, schemas in `mcp_adapter/catalog.py`.
+- CLI: `services/voice_cli.py` Phase 16 commands use REST and never instantiate server inference.
+- Tests: `tests/test_director_phase16.py` plus existing Phase 11-15 regression suites.
+
 ## Ownership Rules
 
 - `services/project_requirements.py` sở hữu heuristic trích xuất và câu hỏi làm rõ.

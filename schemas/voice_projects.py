@@ -172,6 +172,60 @@ class FinalizeVoiceProjectRequest(BaseModel):
     )
 
 
+class DirectorActorRequest(BaseModel):
+    actor_id: str = "unknown"
+    reason: str | None = None
+
+
+class AddPronunciationRequest(DirectorActorRequest):
+    term: str
+    phonetic: str
+
+
+class BindDirectorResourceRequest(DirectorActorRequest):
+    resource_id: str
+    asset_id: str
+    allow_substitution: bool = True
+
+
+class RegisterDirectorResourceRequest(DirectorActorRequest):
+    resource_id: str
+    file_path: str
+    category: str
+    intent: str
+
+
+class OmitDirectorResourceRequest(DirectorActorRequest):
+    resource_id: str
+
+
+class DirectorAttemptDecisionRequest(DirectorActorRequest):
+    explicit_approval: bool = False
+
+
+class DirectorDirectionPatchRequest(DirectorActorRequest):
+    emotion: str | None = None
+    energy: float | None = None
+    pace: float | None = None
+    voice_style: str | None = None
+
+
+class DirectorTimingPatchRequest(DirectorActorRequest):
+    pause_before_ms: float | None = None
+    pause_after_ms: float | None = None
+
+
+class DirectorResourcePatchRequest(DirectorActorRequest):
+    ambience_intent: str | None = None
+    sfx: list[dict[str, Any]] | None = None
+
+
+class ReproduceVoiceProjectRequest(BaseModel):
+    revision_ids: list[str] | None = None
+    policy: dict[str, Any] | None = None
+    provider: str = "local"
+
+
 # ---------------------------------------------------------
 # Sub-models & Summary DTOs
 # ---------------------------------------------------------
