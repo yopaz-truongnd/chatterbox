@@ -328,7 +328,199 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
     },
 ]
 
+VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
+    {
+        "name": "chatterbox_voice_project_create",
+        "description": "Create a new Voice Narration project with source script and configuration.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "script_text": {
+                    "type": "string",
+                    "description": "The raw story script text to narrate.",
+                },
+                "project_id": {
+                    "type": "string",
+                    "description": "Unique project identifier slug (e.g. 'torch_dragon'). Optional.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Human-readable project title. Optional.",
+                },
+                "language": {
+                    "type": "string",
+                    "description": "Source text language code (default: 'en').",
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Optional voice configuration (e.g. voice profile).",
+                },
+            },
+            "required": ["script_text"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_project_get",
+        "description": "Get comprehensive agent-friendly project summary including current stage, beat counts, resource readiness, and suggested next action.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_plan",
+        "description": "Trigger automated story beat analysis, narration planning, sound direction, and director critique for a voice project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Optional planning settings override.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_check_resources",
+        "description": "Check and resolve audio requirements (SFX, Ambience) and pronunciation knowledge for a directed voice plan.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "manifest_path": {
+                    "type": "string",
+                    "description": "Custom asset manifest path. Optional.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_render",
+        "description": "Trigger asynchronous narration audio synthesis and automated Voice QC verification for a project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "TTS Provider: 'local' (default), 'gemini', or 'fake' (testing).",
+                },
+                "beats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional subset of beat IDs to render.",
+                },
+                "auto_qc": {
+                    "type": "boolean",
+                    "description": "Whether to perform automatic Voice QC (default: true).",
+                },
+                "force_rerender": {
+                    "type": "boolean",
+                    "description": "Whether to force rerender of passed beats (default: false).",
+                },
+                "allow_blocked": {
+                    "type": "boolean",
+                    "description": "Allow render even if missing required resource gaps were found (default: false).",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_render_beat",
+        "description": "Selectively synthesize or rerender a single specific narration beat.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "beat_id": {
+                    "type": "string",
+                    "description": "Beat ID to render (e.g. 'B01').",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "TTS Provider: 'local', 'gemini', or 'fake'.",
+                },
+                "allow_blocked": {
+                    "type": "boolean",
+                    "description": "Allow render even if project resource check is blocked.",
+                },
+            },
+            "required": ["project_id", "beat_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_qc",
+        "description": "Re-evaluate Signal QC and Speech Critic on existing audio renders without re-synthesizing.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "beats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional subset of beat IDs to re-evaluate.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_job_status",
+        "description": "Check status, progress, active stage, and current beat of an asynchronous Voice Project operation job.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The operation job ID (e.g. 'vp_op_xxx').",
+                },
+            },
+            "required": ["job_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_job_cancel",
+        "description": "Cancel a running or queued Voice Project operation job.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The operation job ID to cancel.",
+                },
+            },
+            "required": ["job_id"],
+        },
+    },
+]
+
 
 def get_tools_list() -> list[dict]:
     """Return all tool schemas available on this MCP server."""
-    return VOICE_TOOL_SCHEMAS + PROJECT_TOOL_SCHEMAS
+    return VOICE_TOOL_SCHEMAS + PROJECT_TOOL_SCHEMAS + VOICE_PROJECT_TOOL_SCHEMAS
+

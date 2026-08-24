@@ -151,19 +151,28 @@ class VoiceProjectService:
         elif state.stage == ProjectStatus.FAILED:
             suggested_action = f"Project failed: {state.error or 'Check error logs and retry'}"
 
+        rendered_beats = len([b for b in manifest.beats.values() if b.attempts]) if manifest else 0
+        required_gaps_count = len([g for g in report.missing if g.priority.value == "required"]) if report else 0
+        recommended_gaps_count = len([g for g in report.missing if g.priority.value == "recommended"]) if report else 0
+
         return VoiceProjectSummary(
             project_id=project_id,
             title=state.title or project_id,
             stage=state.stage,
+            language=getattr(state, "language", "en"),
             total_beats=total_beats,
+            rendered_beats=rendered_beats,
             passed_beats=passed_beats,
             review_beats=review_beats,
             failed_beats=failed_beats,
             resource_readiness_score=readiness_score,
             resource_blocked=resource_blocked,
+            required_gaps_count=required_gaps_count,
+            recommended_gaps_count=recommended_gaps_count,
             provider=self.provider_name,
             suggested_action=suggested_action,
             human_action=human_action,
+            last_error=state.error,
         )
 
     def update_script(self, project_id: str, new_script_text: str) -> ProjectState:
@@ -343,6 +352,8 @@ class VoiceProjectService:
         allow_resource_blocked: bool = False,
         force_rerender: bool = False,
         auto_qc: bool = True,
+        progress_callback: Any | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> VoiceRenderResult:
         """Render narration beats through injected TTSExecutionPort with Voice QC verification."""
         state = self.store.get_project_state(project_id)
@@ -408,6 +419,8 @@ class VoiceProjectService:
                     auto_qc=auto_qc,
                     allow_resource_blocked=allow_resource_blocked,
                     force_rerender=force_rerender,
+                    progress_callback=progress_callback,
+                    cancellation_token=cancellation_token,
                 )
                 self.store.save_manifest(project_id, manifest)
 
@@ -464,6 +477,8 @@ class VoiceProjectService:
         beat_id: str,
         execution_port: TTSExecutionPort | None = None,
         allow_resource_blocked: bool = False,
+        progress_callback: Any | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> VoiceRenderResult:
         """Selectively render/rerender a single beat with strict beat existence validation."""
         plan = self.store.load_voice_plan(project_id)
@@ -481,6 +496,8 @@ class VoiceProjectService:
             allow_resource_blocked=allow_resource_blocked,
             force_rerender=True,
             auto_qc=True,
+            progress_callback=progress_callback,
+            cancellation_token=cancellation_token,
         )
 
     def evaluate(

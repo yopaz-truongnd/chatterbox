@@ -102,15 +102,20 @@ class VoiceProjectSummary(BaseModel):
     project_id: str
     title: str = ""
     stage: ProjectStatus
+    language: str = "en"
     total_beats: int = 0
+    rendered_beats: int = 0
     passed_beats: int = 0
     review_beats: int = 0
     failed_beats: int = 0
     resource_readiness_score: float = 0.0
     resource_blocked: bool = False
+    required_gaps_count: int = 0
+    recommended_gaps_count: int = 0
     provider: str = "chatterbox-http"
     suggested_action: str = ""
     human_action: HumanActionRequired | None = None
+    last_error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
