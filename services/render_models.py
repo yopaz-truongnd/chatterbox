@@ -16,13 +16,16 @@ from pydantic import BaseModel, Field, field_validator
 
 class ProjectStatus(str, Enum):
     NEW = "NEW"
+    PLANNING = "PLANNING"
     PLANNED = "PLANNED"
+    RESOURCE_CHECKING = "RESOURCE_CHECKING"
     RESOURCE_BLOCKED = "RESOURCE_BLOCKED"
     READY_TO_RENDER = "READY_TO_RENDER"
     RENDERING = "RENDERING"
     QC_PENDING = "QC_PENDING"
     REVIEW_REQUIRED = "REVIEW_REQUIRED"
     NARRATION_READY = "NARRATION_READY"
+    MIX_READY = "MIX_READY"
     FAILED = "FAILED"
 
 
@@ -44,13 +47,24 @@ class QCVerdict(str, Enum):
 
 
 # ==========================================
-# 1. Project State & Lifecycle (Phase 7)
+# 1. Project State & Lifecycle (Phase 7 & 11)
 # ==========================================
 
 class ProjectArtifacts(BaseModel):
     voice_plan: str = "voice-plan.yaml"
+    director_critique: str = "director-critique.yaml"
     resource_report: str = "resource-report.yaml"
     render_manifest: str = "render-manifest.yaml"
+
+    # Dependency & Staleness Tracking Hashes (Phase 11)
+    source_sha256: str = ""
+    voice_plan_source_sha256: str = ""
+    voice_plan_sha256: str = ""
+    resource_report_voice_plan_sha256: str = ""
+    resource_report_sha256: str = ""
+    render_manifest_voice_plan_sha256: str = ""
+    render_manifest_resource_report_sha256: str = ""
+    render_manifest_sha256: str = ""
 
 
 class ProjectStateStatus(BaseModel):
@@ -65,14 +79,40 @@ class ProjectStateStatus(BaseModel):
 class ProjectState(BaseModel):
     version: int = 1
     project_id: str
+    title: str = ""
+    language: str = "en"
     source_script_path: str = "source/script.txt"
     stage: ProjectStatus = ProjectStatus.NEW
+    last_stable_stage: ProjectStatus = ProjectStatus.NEW
+    error: str | None = None
     status: ProjectStateStatus = Field(default_factory=ProjectStateStatus)
     artifacts: ProjectArtifacts = Field(default_factory=ProjectArtifacts)
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+    def sync_legacy_status(self) -> None:
+        """Derive legacy boolean flags from canonical stage."""
+        stage = self.stage
+        self.status.story_analyzed = stage in (
+            ProjectStatus.PLANNED, ProjectStatus.RESOURCE_CHECKING, ProjectStatus.RESOURCE_BLOCKED,
+            ProjectStatus.READY_TO_RENDER, ProjectStatus.RENDERING, ProjectStatus.QC_PENDING,
+            ProjectStatus.REVIEW_REQUIRED, ProjectStatus.NARRATION_READY, ProjectStatus.MIX_READY,
+        )
+        self.status.voice_plan_ready = self.status.story_analyzed
+        self.status.sound_directed = self.status.story_analyzed
+        self.status.resources_checked = stage in (
+            ProjectStatus.RESOURCE_BLOCKED, ProjectStatus.READY_TO_RENDER, ProjectStatus.RENDERING,
+            ProjectStatus.QC_PENDING, ProjectStatus.REVIEW_REQUIRED, ProjectStatus.NARRATION_READY,
+            ProjectStatus.MIX_READY,
+        )
+        self.status.render_ready = stage in (
+            ProjectStatus.READY_TO_RENDER, ProjectStatus.RENDERING, ProjectStatus.QC_PENDING,
+            ProjectStatus.REVIEW_REQUIRED, ProjectStatus.NARRATION_READY, ProjectStatus.MIX_READY,
+        )
+        self.status.narration_ready = stage in (ProjectStatus.NARRATION_READY, ProjectStatus.MIX_READY)
+
     def to_dict(self) -> dict[str, Any]:
+        self.sync_legacy_status()
         return self.model_dump(mode="json")
 
     def to_yaml(self) -> str:
