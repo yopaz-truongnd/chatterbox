@@ -75,8 +75,18 @@ def _slugify(text: str) -> str:
     return re.sub(r"[-\s]+", "_", s)
 
 
+from services.voice_project_models import (
+    HumanActionType,
+    InvalidProjectStateError,
+    StaleArtifactError,
+    VoiceProjectNotFound,
+)
+from services.voice_project_service import VoiceProjectService
+from services.voice_project_store import VoiceProjectStore
+
+
 def cmd_new(args: argparse.Namespace) -> int:
-    """Initialize a new narration project workspace."""
+    """Initialize a new narration project workspace using VoiceProjectService."""
     script_path = Path(args.script_path)
     if not script_path.exists():
         if args.json:
@@ -99,37 +109,37 @@ def cmd_new(args: argparse.Namespace) -> int:
     base_dir = Path(args.output_dir) if args.output_dir else Path("projects")
     project_dir = base_dir / project_id
 
-    project_dir.mkdir(parents=True, exist_ok=True)
-    (project_dir / "source").mkdir(parents=True, exist_ok=True)
-    (project_dir / "renders").mkdir(parents=True, exist_ok=True)
-    (project_dir / "qc").mkdir(parents=True, exist_ok=True)
-    (project_dir / "logs").mkdir(parents=True, exist_ok=True)
+    store = VoiceProjectStore(root_dir=base_dir)
+    service = VoiceProjectService(store=store)
 
-    # Copy script
-    dest_script = project_dir / "source" / "script.txt"
-    with open(dest_script, "w", encoding="utf-8") as f:
-        f.write(script_text)
-
-    # Initialize project.yaml
-    state = ProjectState(
-        version=1,
-        project_id=project_id,
-        source_script_path="source/script.txt",
-        stage=ProjectStatus.NEW,
-        status=ProjectStateStatus(),
-        artifacts=ProjectArtifacts(),
-    )
-    with open(project_dir / "project.yaml", "w", encoding="utf-8") as f:
-        f.write(state.to_yaml())
+    try:
+        state = service.create_project(
+            script_text=script_text,
+            project_id=project_id,
+            title=project_id,
+        )
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"error": str(exc), "exit_code": EXIT_GENERIC_ERROR}))
+        else:
+            print(f"Error creating project: {exc}", file=sys.stderr)
+        return EXIT_GENERIC_ERROR
 
     if args.auto:
         # Run planning and resources automatically
-        plan_res = execute_plan(project_dir)
-        if plan_res != EXIT_SUCCESS:
-            return plan_res
-        res_code, _ = execute_resources(project_dir)
-        if res_code not in (EXIT_SUCCESS, EXIT_RESOURCE_BLOCKED):
-            return res_code
+        try:
+            service.plan(project_id)
+            res_check = service.check_resources(project_id)
+            if res_check.render_blocked:
+                if not args.json:
+                    print(f"Created new project '{project_id}' at {project_dir}")
+                return EXIT_RESOURCE_BLOCKED
+        except Exception as exc:
+            if args.json:
+                print(json.dumps({"error": str(exc), "exit_code": EXIT_GENERIC_ERROR}))
+            else:
+                print(f"Error during auto plan/resource check: {exc}", file=sys.stderr)
+            return EXIT_GENERIC_ERROR
 
     if args.json:
         print(json.dumps({
@@ -145,61 +155,23 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 
 def execute_plan(project_dir: Path) -> int:
-    """Execute full planning pipeline for a project."""
+    """Execute full planning pipeline for a project directory via VoiceProjectService."""
     project_dir = Path(project_dir)
-    script_path = project_dir / "source" / "script.txt"
-    if not script_path.exists():
+    store = VoiceProjectStore(root_dir=project_dir.parent)
+    service = VoiceProjectService(store=store)
+
+    try:
+        service.plan(project_dir.name)
+        return EXIT_SUCCESS
+    except Exception as exc:
         return EXIT_GENERIC_ERROR
-
-    with open(script_path, "r", encoding="utf-8") as f:
-        raw_script = f.read()
-
-    # 1. Story Analyzer
-    story_beats = analyze_story_beats(raw_script)
-    segments = story_beats_to_narration_segments(story_beats)
-
-    # 2. Narration Planner
-    planned_segments = compile_narration_plan(segments)
-
-    # 3. VoicePlan Builder
-    project_data = {
-        "project": {"id": project_dir.name, "title": project_dir.name, "source_script": raw_script},
-        "voice": {"profile": "mythology_narrator_male", "provider": "chatterbox-http", "model": "auto"},
-        "global_direction": {"tone": "mysterious", "base_pace": 0.92, "dramatic_level": 3, "max_energy": 5.0, "avoid_overacting": True},
-    }
-    voice_plan = build_voice_plan(project_data, planned_segments)
-
-    # 4. Sound Director
-    directed_plan = direct_sound(voice_plan)
-
-    # 5. Director Critic & Autofix
-    critique = critique_voice_plan(directed_plan)
-    final_plan = apply_director_fixes(directed_plan, critique)
-
-    # Save voice-plan.yaml
-    with open(project_dir / "voice-plan.yaml", "w", encoding="utf-8") as f:
-        f.write(final_plan.to_yaml())
-
-    # Update project.yaml
-    state_path = project_dir / "project.yaml"
-    if state_path.exists():
-        with open(state_path, "r", encoding="utf-8") as f:
-            state = ProjectState.from_dict(yaml.safe_load(f) or {})
-        state.status.story_analyzed = True
-        state.status.voice_plan_ready = True
-        state.status.sound_directed = True
-        state.stage = ProjectStatus.PLANNED
-        with open(state_path, "w", encoding="utf-8") as f:
-            f.write(state.to_yaml())
-
-    return EXIT_SUCCESS
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
     """CLI handler for voice plan."""
     target_path = Path(args.target)
     if target_path.is_file():
-        # Target is a standalone script file -> create temp or output plan
+        # Standalone script file target
         with open(target_path, "r", encoding="utf-8") as f:
             raw_script = f.read()
 
@@ -234,55 +206,36 @@ def cmd_plan(args: argparse.Namespace) -> int:
             print(f"Error: Project directory '{target_path}' not found", file=sys.stderr)
         return EXIT_GENERIC_ERROR
 
-    res = execute_plan(target_path)
-    if res == EXIT_SUCCESS:
+    store = VoiceProjectStore(root_dir=target_path.parent)
+    service = VoiceProjectService(store=store)
+
+    try:
+        plan_res = service.plan(target_path.name)
         if args.json:
             print(json.dumps({"status": "success", "project_dir": str(target_path), "plan": "voice-plan.yaml"}, indent=2))
         else:
             print(f"Successfully planned project at {target_path}")
-    return res
+        return EXIT_SUCCESS
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"error": str(exc), "exit_code": EXIT_GENERIC_ERROR}))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_GENERIC_ERROR
 
 
 def execute_resources(project_dir: Path) -> tuple[int, ResourceReport | None]:
-    """Resolve resources for a project."""
+    """Resolve resources for a project directory via VoiceProjectService."""
     project_dir = Path(project_dir)
-    plan_path = project_dir / "voice-plan.yaml"
-    if not plan_path.exists():
+    store = VoiceProjectStore(root_dir=project_dir.parent)
+    service = VoiceProjectService(store=store)
+
+    try:
+        res_check = service.check_resources(project_dir.name)
+        exit_code = EXIT_RESOURCE_BLOCKED if res_check.render_blocked else EXIT_SUCCESS
+        return exit_code, res_check.report
+    except Exception as exc:
         return EXIT_GENERIC_ERROR, None
-
-    with open(plan_path, "r", encoding="utf-8") as f:
-        plan = VoicePlan.from_yaml(f.read())
-
-    manifest = load_manifest()
-    knowledge = load_pronunciation_knowledge()
-    sub_rules = load_substitution_rules()
-    sel_rules = load_selection_rules()
-
-    report = resolve_project_resources(
-        plan=plan,
-        manifest=manifest,
-        knowledge=knowledge,
-        substitution_rules=sub_rules,
-        selection_rules=sel_rules,
-    )
-
-    # Write resource-report.yaml
-    with open(project_dir / "resource-report.yaml", "w", encoding="utf-8") as f:
-        yaml.safe_dump(report.to_dict(), f, sort_keys=False, allow_unicode=True)
-
-    # Update project.yaml
-    state_path = project_dir / "project.yaml"
-    if state_path.exists():
-        with open(state_path, "r", encoding="utf-8") as f:
-            state = ProjectState.from_dict(yaml.safe_load(f) or {})
-        state.status.resources_checked = True
-        state.status.render_ready = not report.readiness.render_blocked
-        state.stage = ProjectStatus.READY_TO_RENDER if not report.readiness.render_blocked else ProjectStatus.RESOURCE_BLOCKED
-        with open(state_path, "w", encoding="utf-8") as f:
-            f.write(state.to_yaml())
-
-    exit_code = EXIT_RESOURCE_BLOCKED if report.readiness.render_blocked else EXIT_SUCCESS
-    return exit_code, report
 
 
 def cmd_resources(args: argparse.Namespace) -> int:
@@ -295,9 +248,20 @@ def cmd_resources(args: argparse.Namespace) -> int:
             print(f"Error: Project directory '{project_dir}' not found", file=sys.stderr)
         return EXIT_GENERIC_ERROR
 
-    code, report = execute_resources(project_dir)
-    if report is None:
-        return code
+    store = VoiceProjectStore(root_dir=project_dir.parent)
+    service = VoiceProjectService(store=store)
+
+    try:
+        res_check = service.check_resources(project_dir.name)
+        report = res_check.report
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"error": str(exc), "exit_code": EXIT_GENERIC_ERROR}))
+        else:
+            print(f"Error checking resources: {exc}", file=sys.stderr)
+        return EXIT_GENERIC_ERROR
+
+    code = EXIT_RESOURCE_BLOCKED if res_check.render_blocked else EXIT_SUCCESS
 
     if args.json:
         print(json.dumps({
@@ -471,8 +435,8 @@ def cmd_assets_ingest(args: argparse.Namespace) -> int:
         category=category,
         intents=intents,
         tags=tags,
-        intensity=args.intensity,
-        loopable=args.loopable,
+        intensity=int(getattr(args, "intensity", 3) or 3),
+        loopable=bool(getattr(args, "loopable", False)),
     )
 
     try:
@@ -528,22 +492,7 @@ def cmd_render(args: argparse.Namespace) -> int:
             print(f"Error: Project directory '{project_dir}' not found", file=sys.stderr)
         return EXIT_GENERIC_ERROR
 
-    plan_path = project_dir / "voice-plan.yaml"
-    if not plan_path.exists():
-        if args.json:
-            print(json.dumps({"error": "voice-plan.yaml not found", "exit_code": EXIT_GENERIC_ERROR}))
-        else:
-            print("Error: voice-plan.yaml not found. Run 'voice plan' first.", file=sys.stderr)
-        return EXIT_GENERIC_ERROR
-
-    with open(plan_path, "r", encoding="utf-8") as f:
-        plan = VoicePlan.from_yaml(f.read())
-
-    report_path = project_dir / "resource-report.yaml"
-    report = None
-    if report_path.exists():
-        with open(report_path, "r", encoding="utf-8") as f:
-            report = ResourceReport.from_dict(yaml.safe_load(f) or {})
+    store = VoiceProjectStore(root_dir=project_dir.parent)
 
     # Provider selection: canonical priority (chatterbox-http default, or explicit --provider / --fake)
     provider_name = getattr(args, "provider", None)
@@ -552,20 +501,27 @@ def cmd_render(args: argparse.Namespace) -> int:
     elif not provider_name:
         provider_name = "chatterbox-http"
 
-    model_override = getattr(args, "model", None) or (plan.voice.model if plan.voice and plan.voice.model not in ("flash-tts", "fake-tts-v1") else None)
+    model_override = getattr(args, "model", None)
     voice_override = getattr(args, "voice", None)
     provider = create_tts_provider(provider_name=provider_name, model=model_override, voice=voice_override)
 
+    service = VoiceProjectService(
+        store=store,
+        execution_port=provider,
+        provider_name=provider_name,
+    )
+
     try:
-        manifest, state = render_project_narration(
-            project_dir=project_dir,
-            plan=plan,
-            provider=provider,
-            resource_report=report,
-            beats_filter=args.beats,
+        # Preserve the legacy one-command render UX while keeping the service
+        # lifecycle strict: PLANNED projects pass through resource checking.
+        if store.get_project_state(project_dir.name).stage == ProjectStatus.PLANNED:
+            service.check_resources(project_dir.name)
+        render_res = service.render(
+            project_id=project_dir.name,
+            beats=args.beats,
             auto_qc=args.qc,
             force_rerender=getattr(args, "force_rerender", False) or getattr(args, "force", False),
-            allow_resource_blocked=getattr(args, "allow_blocked", False),
+            allow_resource_blocked=getattr(args, "force", False),
         )
     except ResourceBlockedError as exc:
         if args.json:
@@ -579,17 +535,25 @@ def cmd_render(args: argparse.Namespace) -> int:
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return EXIT_PROVIDER_UNAVAILABLE
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"error": str(exc), "exit_code": EXIT_GENERIC_ERROR}))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_GENERIC_ERROR
 
-    all_passed = all(b.status == RenderStatus.PASSED for b in manifest.beats.values())
+    manifest = render_res.manifest
+    all_passed = manifest is not None and all(b.status == RenderStatus.PASSED for b in manifest.beats.values())
     if args.json:
         print(json.dumps({
             "status": "success" if all_passed else "completed_with_review",
-            "manifest": manifest.to_dict(),
+            "manifest": manifest.to_dict() if manifest else {},
         }, indent=2))
     else:
-        print(f"Render completed. Manifest updated with {len(manifest.beats)} beats.")
-        for bid, bstate in manifest.beats.items():
-            print(f"  • {bid}: {bstate.status.value} (selected attempt: {bstate.selected_attempt})")
+        print(f"Render completed. Manifest updated with {len(manifest.beats) if manifest else 0} beats.")
+        if manifest:
+            for bid, bstate in manifest.beats.items():
+                print(f"  • {bid}: {bstate.status.value} (selected attempt: {bstate.selected_attempt})")
 
     return EXIT_SUCCESS if all_passed else EXIT_QC_FAILED
 
