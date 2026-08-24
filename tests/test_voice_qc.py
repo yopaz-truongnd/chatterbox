@@ -106,7 +106,7 @@ class TestVoiceQCPhase9(unittest.TestCase):
 
     def test_direction_qc_duration_evaluation(self):
         # 8 words at 138 WPM -> expected duration ~ 3.48s
-        # If actual duration is 3.5s -> within tolerance -> pass
+        # 1. If actual duration is 3.5s -> within tolerance -> pass
         dir_res = evaluate_direction_qc(
             beat=self.beat,
             actual_duration=3.5,
@@ -114,13 +114,23 @@ class TestVoiceQCPhase9(unittest.TestCase):
         )
         self.assertTrue(dir_res.passed)
 
-        # If actual duration is 0.2s -> too fast -> warning
-        dir_res_fast = evaluate_direction_qc(
+        # 2. Mild pacing deviation (e.g. 2.0s < dur_min 2.26s) -> warning, passed=True
+        dir_res_mild = evaluate_direction_qc(
+            beat=self.beat,
+            actual_duration=2.0,
+            actual_wpm=220.0,
+        )
+        self.assertTrue(dir_res_mild.passed)
+        self.assertTrue(any("fast" in w for w in dir_res_mild.warnings))
+
+        # 3. Extreme pacing deviation (e.g. 0.2s or extreme WPM > 260) -> issue, passed=False
+        dir_res_extreme = evaluate_direction_qc(
             beat=self.beat,
             actual_duration=0.2,
             actual_wpm=300.0,
         )
-        self.assertTrue(any("fast" in w for w in dir_res_fast.warnings))
+        self.assertFalse(dir_res_extreme.passed)
+        self.assertTrue(any("fast" in i or "wpm" in i for i in [iss.lower() for iss in dir_res_extreme.issues]))
 
     def test_beat_qc_verdict_pass_on_clean_render(self):
         provider = FakeTTSProvider(sample_rate=24000)

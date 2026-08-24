@@ -92,7 +92,7 @@ def evaluate_signal_qc(audio_path: str | Path) -> SignalQCResult:
         silent_count = sum(1 for s in abs_samples if s < silence_threshold)
         silence_ratio = silent_count / len(samples)
 
-        clipping_detected = peak >= 0.999 or any(abs(s) >= 32765 for s in samples[:1000] if sampwidth == 2 and samples[0] == 32767)
+        clipping_detected = peak >= 0.995 or any(abs(s) >= 32760 for s in samples)
 
         issues: list[str] = []
         warnings: list[str] = []
@@ -170,7 +170,13 @@ def evaluate_content_qc(
                 risk_flags.append(f"Proper noun '{proper_noun}' might be mispronounced or omitted in transcript")
                 warnings.append(f"Pronunciation check flag: {proper_noun}")
 
-    passed = len(issues) == 0 and accuracy >= 70.0 and wer <= 0.30
+    # Enforce tight content quality thresholds
+    if wer > 0.15:
+        issues.append(f"WER exceeds maximum allowed threshold ({wer * 100:.1f}% > 15.0%)")
+    if len(missing) > 1:
+        issues.append(f"Multiple missing words detected ({len(missing)} words omitted)")
+
+    passed = len(issues) == 0 and accuracy >= 85.0 and wer <= 0.15
 
     return ContentQCResult(
         passed=passed,
@@ -203,17 +209,25 @@ def evaluate_direction_qc(
 
     # Expected duration
     expected_dur = (word_count / (target_wpm / 60.0)) / pace
-    # Add tolerance of +/- 35%
+    # Standard tolerance range (+/- 35%)
     dur_min = max(0.4, expected_dur * 0.65)
-    dur_max = max(1.2, expected_dur * 1.45)
+    dur_max = max(1.2, expected_dur * 1.35)
 
     issues: list[str] = []
     warnings: list[str] = []
 
-    if actual_duration < dur_min:
-        warnings.append(f"Beat rendered too fast ({actual_duration:.2f}s < min {dur_min:.2f}s)")
+    # Extreme deviation triggers failure (issue); mild deviation triggers warning
+    if actual_duration < expected_dur * 0.50:
+        issues.append(f"Extreme fast pacing error ({actual_duration:.2f}s < 50% of expected {expected_dur:.2f}s)")
+    elif actual_duration > expected_dur * 1.75:
+        issues.append(f"Extreme slow pacing error ({actual_duration:.2f}s > 175% of expected {expected_dur:.2f}s)")
+    elif actual_duration < dur_min:
+        warnings.append(f"Beat rendered slightly fast ({actual_duration:.2f}s < min {dur_min:.2f}s)")
     elif actual_duration > dur_max:
-        warnings.append(f"Beat rendered too slow ({actual_duration:.2f}s > max {dur_max:.2f}s)")
+        warnings.append(f"Beat rendered slightly slow ({actual_duration:.2f}s > max {dur_max:.2f}s)")
+
+    if actual_wpm < 50.0 or actual_wpm > 260.0:
+        issues.append(f"Extreme WPM deviation ({actual_wpm:.1f} WPM)")
 
     passed = len(issues) == 0
 

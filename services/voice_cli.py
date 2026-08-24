@@ -22,6 +22,7 @@ from services.render_models import (
     ProjectState,
     ProjectStateStatus,
     ProjectStatus,
+    QCVerdict,
     RenderStatus,
 )
 from services.voice_plan import VoicePlan, build_voice_plan
@@ -534,8 +535,8 @@ def cmd_render(args: argparse.Namespace) -> int:
         with open(report_path, "r", encoding="utf-8") as f:
             report = ResourceReport.from_dict(yaml.safe_load(f) or {})
 
-    # Provider selection
-    provider = FakeTTSProvider() if args.fake or not os.environ.get("GEMINI_API_KEY") else GeminiTTSProvider()
+    # Provider selection: only use FakeTTSProvider when explicitly requested via --fake
+    provider = FakeTTSProvider() if args.fake else GeminiTTSProvider()
 
     try:
         manifest, state = render_project_narration(
@@ -545,7 +546,8 @@ def cmd_render(args: argparse.Namespace) -> int:
             resource_report=report,
             beats_filter=args.beats,
             auto_qc=args.qc,
-            force=args.force,
+            force_rerender=getattr(args, "force_rerender", False) or getattr(args, "force", False),
+            allow_resource_blocked=getattr(args, "allow_blocked", False),
         )
     except ResourceBlockedError as exc:
         if args.json:
@@ -576,13 +578,13 @@ def cmd_render(args: argparse.Namespace) -> int:
 
 def cmd_rerender(args: argparse.Namespace) -> int:
     """CLI handler for voice rerender."""
-    args.force = True
+    args.force_rerender = True
     args.beats = args.beat_ids
     return cmd_render(args)
 
 
 def cmd_qc(args: argparse.Namespace) -> int:
-    """CLI handler for voice qc."""
+    """CLI handler for voice qc with persistence to manifest and project state."""
     project_dir = Path(args.project_dir)
     plan_path = project_dir / "voice-plan.yaml"
     manifest_path = project_dir / "render-manifest.yaml"
@@ -608,7 +610,9 @@ def cmd_qc(args: argparse.Namespace) -> int:
 
     target_beats = [b for b in plan.beats if not args.beat_ids or b.id in args.beat_ids]
     qc_results = {}
-    all_passed = True
+
+    qc_dir = project_dir / "qc"
+    qc_dir.mkdir(parents=True, exist_ok=True)
 
     for beat in target_beats:
         bstate = manifest.get_or_create_beat(beat.id)
@@ -626,8 +630,61 @@ def cmd_qc(args: argparse.Namespace) -> int:
         )
         latest_attempt.qc_result = qc_res
         qc_results[beat.id] = qc_res.to_dict()
-        if not qc_res.signal.passed or not qc_res.content.passed or not qc_res.direction.passed:
-            all_passed = False
+
+        # Update attempt & beat status
+        if qc_res.verdict == QCVerdict.PASS:
+            latest_attempt.status = RenderStatus.PASSED
+            bstate.status = RenderStatus.PASSED
+            bstate.selected_attempt = latest_attempt.attempt
+        elif qc_res.verdict == QCVerdict.NEEDS_REVIEW:
+            latest_attempt.status = RenderStatus.NEEDS_REVIEW
+            bstate.status = RenderStatus.NEEDS_REVIEW
+            bstate.selected_attempt = latest_attempt.attempt
+        elif qc_res.verdict == QCVerdict.RETRY:
+            latest_attempt.status = RenderStatus.QC_FAILED
+            bstate.status = RenderStatus.QC_FAILED
+        else:
+            latest_attempt.status = RenderStatus.FAILED
+            bstate.status = RenderStatus.FAILED
+
+        # Persist attempt JSON
+        beat_render_dir = project_dir / "renders" / beat.id
+        if beat_render_dir.exists():
+            meta_path = beat_render_dir / f"attempt_{latest_attempt.attempt:02d}.json"
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(latest_attempt.model_dump(mode="json"), f, indent=2, ensure_ascii=False)
+
+        # Persist QC artifact JSON
+        beat_qc_dir = qc_dir / beat.id
+        beat_qc_dir.mkdir(parents=True, exist_ok=True)
+        qc_meta_path = beat_qc_dir / f"attempt_{latest_attempt.attempt:02d}.json"
+        with open(qc_meta_path, "w", encoding="utf-8") as f:
+            json.dump(qc_res.to_dict(), f, indent=2, ensure_ascii=False)
+
+    # Persist updated render manifest to disk
+    from services.voice_renderer import save_render_manifest
+    save_render_manifest(manifest, project_dir)
+
+    # Persist updated project.yaml state
+    state_path = project_dir / "project.yaml"
+    all_passed = all(b.status == RenderStatus.PASSED for b in manifest.beats.values())
+    any_needs_review = any(b.status == RenderStatus.NEEDS_REVIEW for b in manifest.beats.values())
+    any_failed = any(b.status == RenderStatus.FAILED for b in manifest.beats.values())
+
+    if state_path.exists():
+        with open(state_path, "r", encoding="utf-8") as f:
+            state = ProjectState.from_dict(yaml.safe_load(f) or {})
+        if all_passed and len(manifest.beats) == len(plan.beats):
+            state.stage = ProjectStatus.NARRATION_READY
+            state.status.narration_ready = True
+        elif any_needs_review:
+            state.stage = ProjectStatus.REVIEW_REQUIRED
+            state.status.narration_ready = False
+        elif any_failed:
+            state.stage = ProjectStatus.FAILED
+            state.status.narration_ready = False
+        with open(state_path, "w", encoding="utf-8") as f:
+            f.write(state.to_yaml())
 
     if args.json:
         print(json.dumps({"status": "passed" if all_passed else "review_required", "qc_results": qc_results}, indent=2))

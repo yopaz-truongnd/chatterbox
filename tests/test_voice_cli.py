@@ -11,6 +11,7 @@ import yaml
 
 from services.voice_cli import (
     EXIT_GENERIC_ERROR,
+    EXIT_PROVIDER_UNAVAILABLE,
     EXIT_QC_FAILED,
     EXIT_RESOURCE_BLOCKED,
     EXIT_SUCCESS,
@@ -158,11 +159,66 @@ class TestVoiceCLIPhase7(unittest.TestCase):
         state_file = proj_dir / "project.yaml"
         mtime_before = state_file.stat().st_mtime_ns
 
-        # Run inspect
+        # Run inspect (read-only)
         main(["inspect", str(proj_dir)])
         mtime_after = state_file.stat().st_mtime_ns
 
         self.assertEqual(mtime_before, mtime_after)
+
+    def test_render_without_fake_flag_fails_provider_unavailable(self):
+        projects_root = self.temp_dir / "projects"
+        main([
+            "new",
+            str(self.script_file),
+            "--project-id", "unavail_proj",
+            "--output-dir", str(projects_root),
+        ])
+        proj_dir = projects_root / "unavail_proj"
+        main(["plan", str(proj_dir)])
+
+        # Temporarily unset GEMINI_API_KEY
+        import os
+        old_key = os.environ.pop("GEMINI_API_KEY", None)
+        try:
+            exit_code = main(["render", str(proj_dir)])
+            # Must return EXIT_PROVIDER_UNAVAILABLE (4), NOT fall back to fake!
+            self.assertEqual(exit_code, EXIT_PROVIDER_UNAVAILABLE)
+        finally:
+            if old_key is not None:
+                os.environ["GEMINI_API_KEY"] = old_key
+
+    def test_standalone_qc_persists_manifest_and_state(self):
+        projects_root = self.temp_dir / "projects"
+        main([
+            "new",
+            str(self.script_file),
+            "--project-id", "qc_persist_proj",
+            "--output-dir", str(projects_root),
+        ])
+        proj_dir = projects_root / "qc_persist_proj"
+        main(["plan", str(proj_dir)])
+        # Render with fake provider
+        main(["render", str(proj_dir), "--fake"])
+
+        # Now run standalone QC
+        exit_code = main(["qc", str(proj_dir)])
+        self.assertEqual(exit_code, EXIT_SUCCESS)
+
+        # Verify render-manifest.yaml has persisted QC result and attempt status
+        manifest_file = proj_dir / "render-manifest.yaml"
+        self.assertTrue(manifest_file.exists())
+        with open(manifest_file, "r", encoding="utf-8") as f:
+            manifest_data = yaml.safe_load(f)
+        for bstate in manifest_data["beats"].values():
+            self.assertEqual(bstate["status"], "passed")
+            self.assertIsNotNone(bstate["selected_attempt"])
+
+        # Verify project.yaml has been updated to NARRATION_READY
+        state_file = proj_dir / "project.yaml"
+        with open(state_file, "r", encoding="utf-8") as f:
+            proj_data = yaml.safe_load(f)
+        self.assertEqual(proj_data["stage"], ProjectStatus.NARRATION_READY.value)
+        self.assertTrue(proj_data["status"]["narration_ready"])
 
 
 if __name__ == "__main__":

@@ -24,12 +24,14 @@ class FakeTTSProvider(TTSProvider):
         self,
         sample_rate: int = 24000,
         fail_on_beats: list[str] | None = None,
+        transient_fail_beats: list[tuple[str, int]] | None = None,
         simulate_clipping_beats: list[str] | None = None,
         simulate_silent_beats: list[str] | None = None,
         fixed_duration: float | None = None,
     ):
         self.sample_rate = sample_rate
         self.fail_on_beats = set(fail_on_beats or [])
+        self.transient_fail_beats = set(transient_fail_beats or [])
         self.simulate_clipping_beats = set(simulate_clipping_beats or [])
         self.simulate_silent_beats = set(simulate_silent_beats or [])
         self.fixed_duration = fixed_duration
@@ -69,7 +71,18 @@ class FakeTTSProvider(TTSProvider):
                 provider="fake",
                 model="fake-tts-v1",
                 audio_path=None,
-                error=f"Simulated provider failure for beat {request.beat_id}",
+                error=f"Simulated permanent provider failure for beat {request.beat_id}",
+                retryable=False,
+            )
+
+        if (request.beat_id, request.attempt_id) in self.transient_fail_beats:
+            return TTSRenderResult(
+                success=False,
+                provider="fake",
+                model="fake-tts-v1",
+                audio_path=None,
+                error=f"Simulated transient glitch for beat {request.beat_id} attempt {request.attempt_id}",
+                retryable=True,
             )
 
         # 2. Calculate duration

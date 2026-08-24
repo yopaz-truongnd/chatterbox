@@ -215,6 +215,75 @@ class TestVoiceRendererPhase8(unittest.TestCase):
         self.assertIn("Target Pacing: 130 WPM", payload["system_instruction"])
         self.assertIn("Zhulong", payload["system_instruction"])
 
+    def test_gemini_provider_unimplemented_error(self):
+        gemini_provider = GeminiTTSProvider(api_key="mock_key", model_name="flash-tts")
+        req = TTSRenderRequest(
+            project_id="proj_g",
+            beat_id="B01",
+            text="Test text",
+        )
+        res = gemini_provider.render(req, self.temp_dir)
+        self.assertFalse(res.success)
+        self.assertIsNone(res.audio_path)
+        self.assertIn("not yet implemented", res.error.lower())
+
+    def test_renderer_retries_on_transient_provider_failure(self):
+        # Beat B01 fails on attempt 1 (transient), then succeeds on attempt 2
+        provider = FakeTTSProvider(
+            sample_rate=24000,
+            transient_fail_beats=[("B01", 1)],
+        )
+
+        manifest, _ = render_project_narration(
+            project_dir=self.temp_dir,
+            plan=self.plan,
+            provider=provider,
+            beats_filter=["B01"],
+            auto_qc=True,
+            max_retries=3,
+        )
+
+        b01_state = manifest.beats["B01"]
+        # Should have 2 attempts recorded and passed on attempt 2
+        self.assertEqual(len(b01_state.attempts), 2)
+        self.assertEqual(b01_state.attempts[0].status, RenderStatus.FAILED)
+        self.assertEqual(b01_state.attempts[1].status, RenderStatus.PASSED)
+        self.assertEqual(b01_state.selected_attempt, 2)
+        self.assertEqual(b01_state.status, RenderStatus.PASSED)
+
+    def test_rerender_does_not_bypass_resource_blocked_gate(self):
+        blocked_report = ResourceReport(
+            project_id="proj_torch",
+            readiness=ReadinessReport(
+                score=30,
+                render_blocked=True,
+                required_missing_count=1,
+                block_reasons=["Missing required proper noun: Qiongqi"],
+            ),
+            resolved=[],
+            substituted=[],
+            missing=[
+                ResourceGap(
+                    id="gap_qiongqi",
+                    type=ResourceCategory.KNOWLEDGE,
+                    term="Qiongqi",
+                    priority=RequirementPriority.REQUIRED,
+                )
+            ],
+            pronunciation_overrides={},
+        )
+
+        # Rerender with force_rerender=True must still respect resource readiness gate
+        with self.assertRaises(ResourceBlockedError):
+            render_project_narration(
+                project_dir=self.temp_dir,
+                plan=self.plan,
+                provider=self.provider,
+                resource_report=blocked_report,
+                force_rerender=True,
+                allow_resource_blocked=False,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

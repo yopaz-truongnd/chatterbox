@@ -158,6 +158,7 @@ def render_single_beat_attempt(
             "director_note": request.director_note,
         },
         error=result.error,
+        retryable=result.retryable,
     )
 
     # Save attempt metadata json
@@ -176,14 +177,17 @@ def render_project_narration(
     beats_filter: list[str] | None = None,
     auto_qc: bool = True,
     max_retries: int = 3,
+    force_rerender: bool = False,
+    allow_resource_blocked: bool = False,
     force: bool = False,
 ) -> tuple[RenderManifest, ProjectState | None]:
     """Render project narration beats with resource gating, auto-QC, and resumption."""
+    force_rerender = force_rerender or force
     project_dir = Path(project_dir)
     project_id = plan.project.id or project_dir.name
 
     # 1. Resource Readiness Gate Check
-    if resource_report and resource_report.readiness.render_blocked and not force:
+    if resource_report and resource_report.readiness.render_blocked and not allow_resource_blocked:
         reasons = "; ".join(resource_report.readiness.block_reasons)
         raise ResourceBlockedError(
             f"Cannot render project '{project_id}': Resource report is BLOCKED. Reasons: {reasons}"
@@ -210,8 +214,8 @@ def render_project_narration(
     for beat in target_beats:
         beat_state = manifest.get_or_create_beat(beat.id)
 
-        # Idempotency: Skip if already passed and not forcing
-        if not force and beat_state.status == RenderStatus.PASSED and beat_state.selected_attempt is not None:
+        # Idempotency: Skip if already passed and not forcing rerender
+        if not force_rerender and beat_state.status == RenderStatus.PASSED and beat_state.selected_attempt is not None:
             continue
 
         # Render and QC loop (up to max_retries attempts)
@@ -230,7 +234,17 @@ def render_project_narration(
                 retry_adjustment=retry_adjustment,
             )
 
-            if not attempt.status == RenderStatus.FAILED and auto_qc and attempt.audio_path:
+            if attempt.status == RenderStatus.FAILED:
+                beat_state.attempts.append(attempt)
+                if attempt.retryable and current_attempt_id < max_retries:
+                    retry_adjustment = {"director_note": f"Retry after transient provider error: {attempt.error}"}
+                    current_attempt_id += 1
+                    continue
+                else:
+                    beat_state.status = RenderStatus.FAILED
+                    break
+
+            if auto_qc and attempt.audio_path:
                 # Run Voice QC
                 qc_res = evaluate_beat_qc(
                     beat=beat,

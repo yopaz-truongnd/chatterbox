@@ -65,7 +65,7 @@ class GeminiTTSProvider(TTSProvider):
     def __init__(
         self,
         api_key: str | None = None,
-        model_name: str = "gemini-2.0-flash-tts-preview",
+        model_name: str = "flash-tts",
         sample_rate: int = 24000,
     ):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
@@ -105,6 +105,7 @@ class GeminiTTSProvider(TTSProvider):
                 model=self.model_name,
                 audio_path=None,
                 error="GEMINI_API_KEY is not configured",
+                retryable=False,
             )
 
         payload = map_voice_plan_to_gemini_payload(request)
@@ -112,30 +113,14 @@ class GeminiTTSProvider(TTSProvider):
         filename = f"attempt_{request.attempt_id:02d}.wav"
         audio_path = output_dir / filename
 
-        # Here we could invoke Google GenAI Client if available
-        # If running in environment without live network/quota, return informative result
-        try:
-            # Check if google-genai or google-generativeai is installed
-            import urllib.request
-            import json
-
-            # For demonstration & fallback, provide structured metadata
-            return TTSRenderResult(
-                success=True,
-                provider="gemini",
-                model=self.model_name,
-                audio_path=str(audio_path),
-                duration=max(1.0, len(request.text.split()) / 2.3),
-                sample_rate=self.sample_rate,
-                channels=1,
-                provider_request_id=f"gemini_{request.beat_id}_{request.attempt_id}",
-                raw_metadata={"payload": payload},
-            )
-        except Exception as exc:
-            return TTSRenderResult(
-                success=False,
-                provider="gemini",
-                model=self.model_name,
-                audio_path=None,
-                error=f"Gemini TTS generation error: {exc}",
-            )
+        # Live Gemini TTS audio rendering endpoint is not yet connected;
+        # do not return fake success when no audio file is produced.
+        return TTSRenderResult(
+            success=False,
+            provider="gemini",
+            model=self.model_name,
+            audio_path=None,
+            error="Gemini TTS live audio rendering is not yet implemented",
+            raw_metadata={"payload": payload},
+            retryable=False,
+        )

@@ -139,6 +139,7 @@ class TTSRenderResult(BaseModel):
     provider_request_id: str | None = None
     raw_metadata: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
+    retryable: bool = False
 
 
 # ==========================================
@@ -212,6 +213,7 @@ class RenderAttempt(BaseModel):
     direction_summary: dict[str, Any] = Field(default_factory=dict)
     qc_result: BeatQCResult | None = None
     error: str | None = None
+    retryable: bool = False
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
