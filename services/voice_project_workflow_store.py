@@ -40,11 +40,14 @@ class VoiceProjectWorkflowStore:
         root_key = str(self.root_dir.resolve())
         with self._locks_guard:
             self._lock = self._root_locks.setdefault(root_key, threading.RLock())
-        self._recover_interrupted_workflows()
+        self._recovery_done = False
 
-    def _recover_interrupted_workflows(self) -> None:
+    def recover_interrupted_workflows(self) -> None:
         """Startup recovery: mark active workflows interrupted if server crashed."""
         with self._lock:
+            if self._recovery_done:
+                return
+            self._recovery_done = True
             for yaml_file in self.root_dir.glob("vwf_*.yaml"):
                 try:
                     with open(yaml_file, "r", encoding="utf-8") as f:

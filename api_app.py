@@ -21,6 +21,7 @@ from chatterbox.version import API_VERSION, APP_NAME, __version__
 from routers import critic, events, jobs, projects, system, tts, voice_projects, voice_workflows
 from services.model_registry import is_model_cached, is_multilingual_cached
 from services.job_manager import JobManager
+from services.voice_project_dependencies import get_voice_project_workflow_service
 from utils.platform_tools import detect_system_profile, get_default_data_dir
 
 # 1. System & Hardware Profiling
@@ -88,6 +89,7 @@ async def lifespan(_: FastAPI):
     )
     job_manager.startup()
     character_api.configure_storage(API_DATA_DIR)
+    get_voice_project_workflow_service().store.recover_interrupted_workflows()
 
     # Clean expired records and orphaned files (TTL)
     deleted, freed = job_manager.store.cleanup_expired(retention_days=RETENTION_DAYS)

@@ -39,8 +39,8 @@ class TestVoiceWorkflowsAPI(TestCase):
             human_action={"action_type": "final_audio_approval"},
         )
 
-        with patch("routers.voice_workflows.VoiceProjectWorkflowService") as service_cls:
-            service_cls.return_value.start_workflow.return_value = state
+        with patch("routers.voice_workflows.get_voice_project_workflow_service") as get_service:
+            get_service.return_value.start_workflow.return_value = state
             with TestClient(api_app.app) as client:
                 response = client.post(
                     "/api/v1/voice-workflows",
@@ -60,8 +60,22 @@ class TestVoiceWorkflowsAPI(TestCase):
         self.assertEqual(body["steps"][0]["operation_id"], "vp_op_123")
         self.assertEqual(body["steps"][0]["progress_percent"], 100.0)
 
-        forwarded = service_cls.return_value.start_workflow.call_args.kwargs["policy"]
+        forwarded = get_service.return_value.start_workflow.call_args.kwargs["policy"]
         self.assertEqual(forwarded, policy)
+
+    def test_repeated_get_does_not_recover_running_workflow(self):
+        state = VoiceWorkflowState(
+            workflow_id="vwf_running_poll",
+            project_id="running_poll",
+            status=WorkflowStatus.RUNNING,
+        )
+        with patch("routers.voice_workflows.get_voice_project_workflow_service") as get_service:
+            get_service.return_value.get_workflow.return_value = state
+            with TestClient(api_app.app) as client:
+                responses = [client.get("/api/v1/voice-workflows/vwf_running_poll") for _ in range(3)]
+
+        self.assertTrue(all(response.status_code == 200 for response in responses))
+        self.assertTrue(all(response.json()["status"] == "running" for response in responses))
 
 
 if __name__ == "__main__":

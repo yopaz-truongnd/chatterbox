@@ -16,7 +16,7 @@ from schemas.voice_workflows import (
     WorkflowPolicySchema,
     WorkflowStepSchema,
 )
-from services.voice_project_workflow import VoiceProjectWorkflowService
+from services.voice_project_dependencies import get_voice_project_workflow_service
 from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy
 from services.voice_project_models import InvalidProjectStateError
 
@@ -63,7 +63,7 @@ def _format_workflow_response(state: VoiceWorkflowState) -> VoiceWorkflowRespons
 )
 def create_voice_workflow(req: CreateVoiceWorkflowRequest):
     """Launch autonomous end-to-end production workflow."""
-    service = VoiceProjectWorkflowService()
+    service = get_voice_project_workflow_service()
     policy = WorkflowPolicy.model_validate(req.policy.model_dump())
     state = service.start_workflow(
         script_text=req.script_text,
@@ -82,7 +82,7 @@ def create_voice_workflow(req: CreateVoiceWorkflowRequest):
 )
 def get_voice_workflow(workflow_id: str):
     """Retrieve execution status, current step, and human action gates."""
-    service = VoiceProjectWorkflowService()
+    service = get_voice_project_workflow_service()
     state = service.get_workflow(workflow_id)
     if not state:
         raise HTTPException(
@@ -99,7 +99,7 @@ def get_voice_workflow(workflow_id: str):
 )
 def resume_voice_workflow(workflow_id: str):
     """Resume execution of a workflow paused at a human action gate."""
-    service = VoiceProjectWorkflowService()
+    service = get_voice_project_workflow_service()
     try:
         state = service.resume_workflow(workflow_id)
         return _format_workflow_response(state)
@@ -122,7 +122,7 @@ def resume_voice_workflow(workflow_id: str):
 )
 def approve_voice_workflow(workflow_id: str, req: ApproveVoiceWorkflowRequest):
     """Record an explicit human decision and continue the workflow."""
-    service = VoiceProjectWorkflowService()
+    service = get_voice_project_workflow_service()
     try:
         state = service.approve_workflow(
             workflow_id,
@@ -144,7 +144,7 @@ def approve_voice_workflow(workflow_id: str, req: ApproveVoiceWorkflowRequest):
 )
 def cancel_voice_workflow(workflow_id: str):
     """Cancel in-flight workflow and active background operations."""
-    service = VoiceProjectWorkflowService()
+    service = get_voice_project_workflow_service()
     success, message = service.cancel_workflow(workflow_id)
     if not success:
         return JSONResponse(

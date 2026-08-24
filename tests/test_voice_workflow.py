@@ -11,6 +11,9 @@ from unittest import mock
 from services.voice_project_workflow import VoiceProjectWorkflowService
 from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
 from services.voice_project_models import InvalidProjectStateError
+from services.voice_project_models import MixPlanStaleError
+from services.tts.fake import FakeTTSProvider
+from services.voice_project_service import VoiceProjectService
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 
@@ -208,6 +211,42 @@ class TestVoiceWorkflow(unittest.TestCase):
             thread.join()
 
         self.assertCountEqual(outcomes, ["claimed", "rejected"])
+
+    def test_store_recovery_runs_only_when_explicitly_requested_at_startup(self):
+        running = VoiceWorkflowState(
+            workflow_id="vwf_running_poll",
+            project_id="running_poll",
+            status=WorkflowStatus.RUNNING,
+        )
+        self.wf_store.save_workflow(running)
+
+        second_store = VoiceProjectWorkflowStore(root_dir=self.wf_store.root_dir)
+        self.assertEqual(second_store.get_workflow(running.workflow_id).status, WorkflowStatus.RUNNING)
+
+        second_store.recover_interrupted_workflows()
+        self.assertEqual(second_store.get_workflow(running.workflow_id).status, WorkflowStatus.INTERRUPTED)
+
+    def test_rerender_makes_existing_premaster_and_master_stale(self):
+        state = self.service.start_workflow(
+            script_text="The morning sun rose gently over the calm green valley.",
+            project_id="wf_stale_downstream",
+            policy=WorkflowPolicy(provider="fake"),
+        )
+        completed = self._wait_for_workflow(state.workflow_id)
+        self.assertEqual(completed.status, WorkflowStatus.COMPLETED)
+
+        project_service = VoiceProjectService(
+            store=self.service.project_store,
+            execution_port=FakeTTSProvider(),
+            provider_name="fake",
+        )
+        beat_id = next(iter(project_service.store.load_manifest("wf_stale_downstream").beats))
+        project_service.render_beat("wf_stale_downstream", beat_id)
+
+        with self.assertRaises(MixPlanStaleError):
+            project_service.master("wf_stale_downstream")
+        with self.assertRaises(MixPlanStaleError):
+            project_service.export("wf_stale_downstream")
 
     def test_workflow_persistence_failure_is_not_silenced(self):
         state = VoiceWorkflowState(

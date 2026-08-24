@@ -412,6 +412,13 @@ class VoiceProjectService:
             ProjectStatus.NARRATION_READY,
             ProjectStatus.FAILED,
         }
+        if force_rerender and beats:
+            allowed_from.update({
+                ProjectStatus.MIX_READY,
+                ProjectStatus.MIXED,
+                ProjectStatus.MASTERED,
+                ProjectStatus.COMPLETED,
+            })
         if allow_resource_blocked:
             allowed_from.add(ProjectStatus.RESOURCE_BLOCKED)
         if state.stage not in allowed_from:
@@ -719,63 +726,8 @@ class VoiceProjectService:
         mix_plan_path = proj_dir / "mix-plan.yaml"
 
         if not mix_plan_path.exists():
-            # Auto-prepare mix plan if not present
             self.prepare_for_mix(project_id, mix_config=mix_config)
-
-        with open(mix_plan_path, "r", encoding="utf-8") as f:
-            mix_plan = MixPlan.from_yaml(f.read())
-
-        # Validate MixPlan Stale State
-        plan = self.store.load_voice_plan(project_id)
-        manifest = self.store.load_manifest(project_id)
-        report = self.store.load_resource_report(project_id)
-
-        if not plan or not manifest:
-            raise InvalidProjectStateError("Cannot mix: VoicePlan or RenderManifest missing.")
-
-        # 1. Check upstream artifact hashes
-        if mix_plan.dependency_hashes:
-            plan_path = proj_dir / "voice-plan.yaml"
-            manifest_path = proj_dir / "render-manifest.yaml"
-            report_path = proj_dir / "resource-report.yaml"
-
-            if plan_path.exists() and compute_file_sha256(plan_path) != mix_plan.dependency_hashes.get("voice_plan_sha256"):
-                raise MixPlanStaleError(f"MixPlan for project '{project_id}' is stale: voice-plan.yaml has changed since MixPlan was generated. Run prepare_for_mix() again.")
-            if manifest_path.exists() and compute_file_sha256(manifest_path) != mix_plan.dependency_hashes.get("render_manifest_sha256"):
-                raise MixPlanStaleError(f"MixPlan for project '{project_id}' is stale: render-manifest.yaml has changed since MixPlan was generated. Run prepare_for_mix() again.")
-            if report_path.exists() and compute_file_sha256(report_path) != mix_plan.dependency_hashes.get("resource_report_sha256"):
-                raise MixPlanStaleError(f"MixPlan for project '{project_id}' is stale: resource-report.yaml has changed since MixPlan was generated. Run prepare_for_mix() again.")
-
-        # 2. Check each voice clip selected attempt & source file hash
-        for vclip in mix_plan.voice_clips:
-            b_manifest = manifest.beats.get(vclip.beat_id)
-            if not b_manifest:
-                raise MixPlanStaleError(f"MixPlan is stale: beat '{vclip.beat_id}' no longer in render manifest.")
-            if b_manifest.selected_attempt != vclip.selected_attempt:
-                raise MixPlanStaleError(f"MixPlan is stale: selected attempt for beat '{vclip.beat_id}' changed from {vclip.selected_attempt} to {b_manifest.selected_attempt}.")
-            clip_file = Path(vclip.source_path)
-            if not clip_file.is_absolute():
-                clip_file = proj_dir / clip_file
-            if not clip_file.exists():
-                raise MixPlanStaleError(f"MixPlan audio file missing: '{clip_file}'.")
-            if vclip.source_sha256 and compute_file_sha256(clip_file) != vclip.source_sha256:
-                raise MixPlanStaleError(f"MixPlan is stale: audio file content changed for beat '{vclip.beat_id}'. Run prepare_for_mix().")
-
-        # 3. Check each ambience clip source file and hash
-        for amb in mix_plan.ambience_clips:
-            amb_file = resolve_asset_file_path(amb.source_path, project_dir=proj_dir)
-            if not amb_file.exists():
-                raise MixPlanStaleError(f"MixPlan is stale: ambience asset missing at '{amb_file}'. Run prepare_for_mix().")
-            if amb.source_sha256 and compute_file_sha256(amb_file) != amb.source_sha256:
-                raise MixPlanStaleError(f"MixPlan is stale: ambience asset '{amb.resource_id}' changed on disk. Run prepare_for_mix().")
-
-        # 4. Check each SFX clip source file and hash
-        for sfx in mix_plan.sfx_clips:
-            sfx_file = resolve_asset_file_path(sfx.source_path, project_dir=proj_dir)
-            if not sfx_file.exists():
-                raise MixPlanStaleError(f"MixPlan is stale: SFX asset missing at '{sfx_file}'. Run prepare_for_mix().")
-            if sfx.source_sha256 and compute_file_sha256(sfx_file) != sfx.source_sha256:
-                raise MixPlanStaleError(f"MixPlan is stale: SFX asset '{sfx.resource_id}' changed on disk. Run prepare_for_mix().")
+        mix_plan, _, mix_plan_path = self._load_valid_mix_plan(project_id)
 
         with self.store.get_project_lock(project_id):
             state.stage = ProjectStatus.MIXING
@@ -793,6 +745,9 @@ class VoiceProjectService:
                     output_path=premaster_path,
                     progress_callback=progress_callback,
                     cancellation_token=cancellation_token,
+                )
+                (mix_dir / "premaster.lineage").write_text(
+                    compute_file_sha256(mix_plan_path), encoding="utf-8"
                 )
 
                 if cancellation_token and cancellation_token.is_cancelled():
@@ -828,9 +783,12 @@ class VoiceProjectService:
         state = self.store.get_project_state(project_id)
         proj_dir = self.store.get_project_dir(project_id)
         premaster_path = proj_dir / "mix" / "premaster.wav"
-
-        if not premaster_path.exists():
-            # Mix first if premaster not rendered
+        _, _, mix_plan_path = self._load_valid_mix_plan(project_id)
+        if premaster_path.exists():
+            self._verify_lineage(
+                premaster_path, proj_dir / "mix" / "premaster.lineage", mix_plan_path, "Premaster"
+            )
+        else:
             self.mix(project_id, cancellation_token=cancellation_token)
 
         with self.store.get_project_lock(project_id):
@@ -848,6 +806,9 @@ class VoiceProjectService:
                     profile=prof,
                     progress_callback=progress_callback,
                     cancellation_token=cancellation_token,
+                )
+                (proj_dir / "mix" / "master.lineage").write_text(
+                    compute_file_sha256(premaster_path), encoding="utf-8"
                 )
 
                 if cancellation_token and cancellation_token.is_cancelled():
@@ -883,8 +844,17 @@ class VoiceProjectService:
         state = self.store.get_project_state(project_id)
         proj_dir = self.store.get_project_dir(project_id)
         master_path = proj_dir / "mix" / "master.wav"
-
-        if not master_path.exists():
+        _, _, mix_plan_path = self._load_valid_mix_plan(project_id)
+        premaster_path = proj_dir / "mix" / "premaster.wav"
+        if premaster_path.exists():
+            self._verify_lineage(
+                premaster_path, proj_dir / "mix" / "premaster.lineage", mix_plan_path, "Premaster"
+            )
+        if master_path.exists():
+            self._verify_lineage(
+                master_path, proj_dir / "mix" / "master.lineage", premaster_path, "Master"
+            )
+        else:
             self.master(project_id, cancellation_token=cancellation_token)
 
         with self.store.get_project_lock(project_id):
@@ -1032,3 +1002,58 @@ class VoiceProjectService:
             })
 
         return artifacts
+
+    def _load_valid_mix_plan(self, project_id: str) -> tuple[MixPlan, RenderManifest, Path]:
+        """Load a MixPlan and reject it when any upstream input has changed."""
+        proj_dir = self.store.get_project_dir(project_id)
+        mix_plan_path = proj_dir / "mix-plan.yaml"
+        if not mix_plan_path.exists():
+            self.prepare_for_mix(project_id)
+        with open(mix_plan_path, "r", encoding="utf-8") as f:
+            mix_plan = MixPlan.from_yaml(f.read())
+
+        plan = self.store.load_voice_plan(project_id)
+        manifest = self.store.load_manifest(project_id)
+        if not plan or not manifest:
+            raise InvalidProjectStateError("Cannot mix: VoicePlan or RenderManifest missing.")
+
+        paths = {
+            "voice_plan_sha256": proj_dir / "voice-plan.yaml",
+            "render_manifest_sha256": proj_dir / "render-manifest.yaml",
+            "resource_report_sha256": proj_dir / "resource-report.yaml",
+        }
+        for hash_name, path in paths.items():
+            expected = mix_plan.dependency_hashes.get(hash_name)
+            if expected and (not path.exists() or compute_file_sha256(path) != expected):
+                raise MixPlanStaleError(
+                    f"MixPlan for project '{project_id}' is stale: {path.name} has changed "
+                    "since MixPlan was generated. Run prepare_for_mix() again."
+                )
+
+        for vclip in mix_plan.voice_clips:
+            beat = manifest.beats.get(vclip.beat_id)
+            if not beat or beat.selected_attempt != vclip.selected_attempt:
+                raise MixPlanStaleError(f"MixPlan is stale: selected render changed for beat '{vclip.beat_id}'.")
+            clip_file = Path(vclip.source_path)
+            if not clip_file.is_absolute():
+                clip_file = proj_dir / clip_file
+            if not clip_file.exists() or (vclip.source_sha256 and compute_file_sha256(clip_file) != vclip.source_sha256):
+                raise MixPlanStaleError(f"MixPlan is stale: audio changed for beat '{vclip.beat_id}'.")
+
+        for clip_type, clips in (("ambience", mix_plan.ambience_clips), ("SFX", mix_plan.sfx_clips)):
+            for clip in clips:
+                source = resolve_asset_file_path(clip.source_path, project_dir=proj_dir)
+                if not source.exists() or (clip.source_sha256 and compute_file_sha256(source) != clip.source_sha256):
+                    raise MixPlanStaleError(f"MixPlan is stale: {clip_type} asset '{clip.resource_id}' changed.")
+        return mix_plan, manifest, mix_plan_path
+
+    @staticmethod
+    def _verify_lineage(artifact: Path, lineage_path: Path, source: Path, label: str) -> None:
+        if not artifact.exists():
+            return
+        if (
+            not source.exists()
+            or not lineage_path.exists()
+            or lineage_path.read_text(encoding="utf-8").strip() != compute_file_sha256(source)
+        ):
+            raise MixPlanStaleError(f"{label} is stale relative to {source.name}; rebuild it before continuing.")

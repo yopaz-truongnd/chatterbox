@@ -22,6 +22,7 @@ from services.voice_renderer import ProviderUnavailableError
 
 # Shared OperationManager singleton across the server process
 _GLOBAL_OPERATION_MANAGER: VoiceProjectOperationManager | None = None
+_GLOBAL_WORKFLOW_SERVICE: Any | None = None
 
 
 def get_voice_project_store(root_dir: str | Path | None = None) -> VoiceProjectStore:
@@ -108,3 +109,15 @@ def get_voice_project_service(
         execution_port=actual_port,
         provider_name=provider_name,
     )
+
+
+def get_voice_project_workflow_service() -> Any:
+    """Provide the process-wide workflow orchestrator used by REST and MCP adapters."""
+    global _GLOBAL_WORKFLOW_SERVICE
+    if _GLOBAL_WORKFLOW_SERVICE is None:
+        # Local import avoids a module cycle: the workflow service uses the
+        # project dependency functions above for its own composition.
+        from services.voice_project_workflow import VoiceProjectWorkflowService
+
+        _GLOBAL_WORKFLOW_SERVICE = VoiceProjectWorkflowService()
+    return _GLOBAL_WORKFLOW_SERVICE
