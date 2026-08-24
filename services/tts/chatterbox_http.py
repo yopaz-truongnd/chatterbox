@@ -146,14 +146,16 @@ class ChatterboxHttpProvider(TTSProvider):
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(
             supports_emotion=False,
-            supports_pace=True,
+            supports_pace=False,
             supports_pronunciation=True,
             supports_director_notes=False,
             supports_ssml=False,
             supports_seed=True,
         )
 
-    def _submit_job(self, request: TTSRenderRequest, model: str) -> tuple[str | None, str | None]:
+    def _submit_job(
+        self, request: TTSRenderRequest, model: str
+    ) -> tuple[str | None, str | None, ProviderErrorType | None, bool]:
         """Submit TTS job via multipart/form-data or urlencoded POST request.
         
         Returns (job_id, error_message).
@@ -199,13 +201,21 @@ class ChatterboxHttpProvider(TTSProvider):
                     job_id = body.get("id")
                     if not job_id:
                         return None, f"Response missing job ID: {body}"
-                    return job_id, None
-                return None, f"HTTP request failed with status {resp.status}"
+                    return job_id, None, None, False
+                retryable = resp.status == 429 or resp.status >= 500
+                error_type = ProviderErrorType.RATE_LIMIT if resp.status == 429 else (
+                    ProviderErrorType.SERVER_ERROR if resp.status >= 500 else ProviderErrorType.BAD_REQUEST
+                )
+                return None, f"HTTP request failed with status {resp.status}", error_type, retryable
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")
-            return None, f"HTTP Error {exc.code}: {err_body}"
+            retryable = exc.code == 429 or exc.code >= 500
+            error_type = ProviderErrorType.RATE_LIMIT if exc.code == 429 else (
+                ProviderErrorType.SERVER_ERROR if exc.code >= 500 else ProviderErrorType.BAD_REQUEST
+            )
+            return None, f"HTTP Error {exc.code}: {err_body}", error_type, retryable
         except Exception as exc:
-            return None, f"Connection error submitting job: {exc}"
+            return None, f"Connection error submitting job: {exc}", ProviderErrorType.NETWORK_ERROR, True
 
     def _poll_job(
         self,
@@ -320,17 +330,16 @@ class ChatterboxHttpProvider(TTSProvider):
         if progress_callback:
             progress_callback("submitting", 5.0, {"model": selected_model})
 
-        job_id, submit_err = self._submit_job(request, selected_model)
+        job_id, submit_err, submit_error_type, submit_retryable = self._submit_job(request, selected_model)
         if submit_err or not job_id:
-            err_type = ProviderErrorType.NETWORK_ERROR if "Connection" in str(submit_err) else ProviderErrorType.SERVER_ERROR
             return TTSRenderResult(
                 success=False,
                 provider="chatterbox-http",
                 model=selected_model,
                 audio_path=None,
                 error=submit_err or "Failed to submit TTS job",
-                error_type=err_type,
-                retryable=True,
+                error_type=submit_error_type or ProviderErrorType.SERVER_ERROR,
+                retryable=submit_retryable,
             )
 
         # 2. Poll Job

@@ -68,9 +68,30 @@ class TestChatterboxHttpProviderPhase10A(unittest.TestCase):
         self.assertEqual(provider.base_url, "http://127.0.0.1:8000")
         caps = provider.capabilities()
         self.assertFalse(caps.supports_emotion)
-        self.assertTrue(caps.supports_pace)
+        self.assertFalse(caps.supports_pace)
         self.assertTrue(caps.supports_pronunciation)
         self.assertFalse(caps.supports_director_notes)
+
+        with self.assertRaisesRegex(ValueError, "Unknown TTS provider"):
+            create_tts_provider("typo-provider")
+
+    def test_http_4xx_submit_error_is_not_retryable(self):
+        provider = ChatterboxHttpProvider(base_url="http://127.0.0.1:8000")
+        req = TTSRenderRequest(project_id="p", beat_id="B1", text="Invalid request")
+        error = urllib.error.HTTPError(
+            url="http://127.0.0.1:8000/api/v1/tts",
+            code=422,
+            msg="Unprocessable Entity",
+            hdrs=None,
+            fp=io.BytesIO(b'{"detail":"invalid"}'),
+        )
+
+        with mock.patch("urllib.request.urlopen", side_effect=error):
+            result = provider.render(req, self.temp_dir)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_type, ProviderErrorType.BAD_REQUEST)
+        self.assertFalse(result.retryable)
 
     def test_http_healthcheck(self):
         provider = ChatterboxHttpProvider(base_url="http://127.0.0.1:8000")

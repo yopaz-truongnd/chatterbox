@@ -177,6 +177,10 @@ class TestAudioCandidateEvaluatorPhase10B(unittest.TestCase):
 
         self.assertEqual(ref_text, ref_copy)
 
+    def test_serialization_excludes_audio_tensor(self):
+        result = CandidateEvaluation(passed=True, score=100.0, fixed_tensor=self.clean_tensor)
+        self.assertNotIn("fixed_tensor", result.to_dict())
+
 
 if __name__ == "__main__":
     unittest.main()

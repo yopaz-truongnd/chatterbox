@@ -65,7 +65,7 @@ class CandidateEvaluation(BaseModel):
     duration: float = 0.0
     sample_rate: int = 24000
     channels: int = 1
-    fixed_tensor: Any | None = None
+    fixed_tensor: Any | None = Field(default=None, exclude=True)
 
     signal: dict[str, Any] = Field(default_factory=dict)
     content: dict[str, Any] = Field(default_factory=dict)

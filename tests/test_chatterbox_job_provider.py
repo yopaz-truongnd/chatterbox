@@ -8,8 +8,12 @@ from pathlib import Path
 import shutil
 import struct
 import tempfile
+import threading
 import unittest
+import unittest.mock as mock
 import wave
+
+import torch
 
 from services.render_models import (
     ProviderErrorType,
@@ -99,7 +103,7 @@ class TestChatterboxJobProviderPhase10A(unittest.TestCase):
         render_output_dir = self.temp_dir / "renders" / "B01"
         result = provider.render(req, render_output_dir)
 
-        self.assertTrue(result.success)
+        self.assertTrue(result.success, result.error)
         self.assertEqual(result.provider, "chatterbox-job")
         self.assertEqual(result.model, "nano")
         self.assertEqual(result.provider_request_id, "job_inproc_1")
@@ -165,6 +169,29 @@ class TestChatterboxJobProviderPhase10A(unittest.TestCase):
 
         self.assertFalse(result.success)
         self.assertIn("cancelled", result.error.lower())
+
+    def test_job_provider_worker_thread_uses_direct_inference_contract(self):
+        class WorkerJobManager:
+            device = "cpu"
+            _worker_thread = threading.current_thread()
+
+        class WorkerGateway(FakeGateway):
+            def _get_jm(self):
+                return WorkerJobManager()
+
+        gateway = WorkerGateway(output_wav_path=str(self.sample_wav))
+        provider = ChatterboxJobProvider(gateway=gateway, default_model="nano")
+        req = TTSRenderRequest(project_id="p", beat_id="B1", text="Direct render")
+        timeline = torch.linspace(0, 1.0, 24000)
+        wav = (0.35 * torch.sin(2 * math.pi * 440 * timeline)).unsqueeze(0)
+
+        with mock.patch("services.inference.execute_model_inference", return_value=(wav, 24000)) as execute:
+            result = provider.render(req, self.temp_dir / "direct")
+
+        self.assertTrue(result.success, result.error)
+        execute.assert_called_once()
+        self.assertEqual(execute.call_args.args[0], "nano")
+        self.assertEqual(execute.call_args.args[2], "cpu")
 
 
 if __name__ == "__main__":

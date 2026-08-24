@@ -28,6 +28,7 @@ from services.render_models import (
     TTSRenderRequest,
     TTSRenderResult,
 )
+from services.audio import save_audio_wav
 from services.tts.base import CancellationToken, ProgressCallback, TTSProvider
 from services.tts.chatterbox_http import normalize_language_id
 from services.tts.gemini import validate_generated_wave
@@ -133,7 +134,7 @@ class ChatterboxJobProvider(TTSProvider):
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(
             supports_emotion=False,
-            supports_pace=True,
+            supports_pace=False,
             supports_pronunciation=True,
             supports_director_notes=False,
             supports_ssml=False,
@@ -191,23 +192,12 @@ class ChatterboxJobProvider(TTSProvider):
             # Running inside the worker thread itself: execute synchronously to prevent deadlock
             try:
                 from services.inference import execute_model_inference
-                output_wav = execute_model_inference(
-                    model_type=self.default_model,
-                    params=params,
-                    input_paths=[],
-                    output_dir=output_dir,
-                )
-                if not output_wav or not Path(output_wav).exists():
-                    return TTSRenderResult(
-                        success=False,
-                        provider="chatterbox-job",
-                        model=self.default_model,
-                        audio_path=None,
-                        error="Synchronous inference produced no output file",
-                        error_type=ProviderErrorType.INVALID_AUDIO_RESPONSE,
-                        retryable=True,
-                    )
-                shutil.copyfile(Path(output_wav), temp_wav_path)
+                job_type = "tts" if self.default_model == "standard" else self.default_model
+                if job_type == "auto":
+                    import api_app
+                    job_type = getattr(api_app, "RECOMMENDED_MODEL", "nano")
+                wav, sample_rate = execute_model_inference(job_type, params, jm_instance.device)
+                save_audio_wav(temp_wav_path, wav, sample_rate)
                 is_valid, duration, s_rate, channels, val_err = validate_generated_wave(temp_wav_path)
                 if not is_valid:
                     temp_wav_path.unlink(missing_ok=True)

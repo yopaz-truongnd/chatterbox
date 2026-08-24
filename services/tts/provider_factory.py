@@ -48,8 +48,10 @@ def create_tts_provider(
             **kwargs,
         )
 
-    # Default to chatterbox-http with auto model selection
-    return ChatterboxHttpProvider(
-        default_model=model or "auto",
-        **kwargs,
-    )
+    if p_name in ("chatterbox-http", "http", "local"):
+        return ChatterboxHttpProvider(
+            default_model=model or "auto",
+            **kwargs,
+        )
+
+    raise ValueError(f"Unknown TTS provider: {p_name}")
