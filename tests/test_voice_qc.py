@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+import services.critic
 
 from services.voice_plan import (
     Beat,
@@ -226,6 +227,37 @@ class TestVoiceQCPhase9(unittest.TestCase):
         # Candidate selection should select att2 because qc_score 95 > 85
         best = select_best_candidate([att1, att2])
         self.assertEqual(best.attempt, 2)
+
+    def test_beat_qc_single_whisper_call_and_exact_field_names(self):
+        provider = FakeTTSProvider(sample_rate=24000)
+        from services.render_models import TTSRenderRequest
+
+        req = TTSRenderRequest(
+            project_id="p1",
+            beat_id="B01",
+            text=self.beat.script.text,
+        )
+        res = provider.render(req, self.temp_dir)
+
+        import unittest.mock as mock
+        with mock.patch("services.audio_candidate_evaluator.evaluate_speech_content", wraps=services.critic.evaluate_speech_content) as mock_critic:
+            qc = evaluate_beat_qc(
+                beat=self.beat,
+                audio_path=res.audio_path,
+                attempt_id=1,
+                pronunciation_overrides={"Zhulong": "Joo-long"},
+            )
+            # Must run Whisper/critic ONCE and only once
+            self.assertEqual(mock_critic.call_count, 1)
+
+        # Verify exact field names on DTO and JSON dict
+        self.assertIsInstance(qc.content.pronunciation_risk_flags, list)
+        self.assertIsInstance(qc.direction.expected_wpm, float)
+        self.assertEqual(qc.direction.expected_wpm, 138.0)
+        
+        qc_dict = qc.to_dict()
+        self.assertIn("pronunciation_risk_flags", qc_dict["content"])
+        self.assertIn("expected_wpm", qc_dict["direction"])
 
 
 if __name__ == "__main__":

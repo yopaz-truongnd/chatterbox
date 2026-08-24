@@ -28,7 +28,7 @@ from services.render_models import (
     TTSRenderRequest,
     TTSRenderResult,
 )
-from services.tts.base import TTSProvider
+from services.tts.base import CancellationToken, ProgressCallback, TTSProvider
 
 logger = logging.getLogger(__name__)
 
@@ -438,8 +438,27 @@ class GeminiTTSProvider(TTSProvider):
 
         return None, req_id, raw_meta
 
-    def render(self, request: TTSRenderRequest, output_dir: Path) -> TTSRenderResult:
+    def render(
+        self,
+        request: TTSRenderRequest,
+        output_dir: Path,
+        progress_callback: ProgressCallback | None = None,
+        cancellation_token: CancellationToken | None = None,
+    ) -> TTSRenderResult:
         """Render narration beat into validated WAV audio using Gemini TTS API."""
+        if cancellation_token and cancellation_token.is_cancelled():
+            return TTSRenderResult(
+                success=False,
+                provider="gemini",
+                model=self.model_name,
+                audio_path=None,
+                error="Render cancelled by cancellation token",
+                retryable=False,
+            )
+
+        if progress_callback:
+            progress_callback("submitting", 10.0, {"model": self.model_name})
+
         start_time = time.time()
 
         # 1. Validate API Key

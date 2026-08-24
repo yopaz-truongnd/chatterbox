@@ -48,6 +48,7 @@ from services.asset_ingest import ingest_asset
 from services.resource_doctor import diagnose_resources
 from services.tts.fake import FakeTTSProvider
 from services.tts.gemini import GeminiTTSProvider
+from services.tts.provider_factory import create_tts_provider
 from services.voice_renderer import (
     ResourceBlockedError,
     ProviderUnavailableError,
@@ -163,7 +164,7 @@ def execute_plan(project_dir: Path) -> int:
     # 3. VoicePlan Builder
     project_data = {
         "project": {"id": project_dir.name, "title": project_dir.name, "source_script": raw_script},
-        "voice": {"profile": "mythology_narrator_male", "provider": "gemini", "model": "flash-tts"},
+        "voice": {"profile": "mythology_narrator_male", "provider": "chatterbox-http", "model": "auto"},
         "global_direction": {"tone": "mysterious", "base_pace": 0.92, "dramatic_level": 3, "max_energy": 5.0, "avoid_overacting": True},
     }
     voice_plan = build_voice_plan(project_data, planned_segments)
@@ -207,7 +208,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
         planned_segments = compile_narration_plan(segments)
         project_data = {
             "project": {"id": target_path.stem, "title": target_path.stem, "source_script": raw_script},
-            "voice": {"profile": "mythology_narrator_male", "provider": "gemini", "model": "flash-tts"},
+            "voice": {"profile": "mythology_narrator_male", "provider": "chatterbox-http", "model": "auto"},
             "global_direction": {"tone": "mysterious", "base_pace": 0.92, "dramatic_level": 3, "max_energy": 5.0, "avoid_overacting": True},
         }
         voice_plan = build_voice_plan(project_data, planned_segments)
@@ -544,13 +545,16 @@ def cmd_render(args: argparse.Namespace) -> int:
         with open(report_path, "r", encoding="utf-8") as f:
             report = ResourceReport.from_dict(yaml.safe_load(f) or {})
 
-    # Provider selection: only use FakeTTSProvider when explicitly requested via --fake
+    # Provider selection: canonical priority (chatterbox-http default, or explicit --provider / --fake)
+    provider_name = getattr(args, "provider", None)
     if args.fake:
-        provider = FakeTTSProvider()
-    else:
-        model_override = getattr(args, "model", None) or (plan.voice.model if plan.voice and plan.voice.model not in ("flash-tts", "fake-tts-v1") else None)
-        voice_override = getattr(args, "voice", None)
-        provider = GeminiTTSProvider(model_name=model_override, voice_name=voice_override)
+        provider_name = "fake"
+    elif not provider_name:
+        provider_name = "chatterbox-http"
+
+    model_override = getattr(args, "model", None) or (plan.voice.model if plan.voice and plan.voice.model not in ("flash-tts", "fake-tts-v1") else None)
+    voice_override = getattr(args, "voice", None)
+    provider = create_tts_provider(provider_name=provider_name, model=model_override, voice=voice_override)
 
     try:
         manifest, state = render_project_narration(
@@ -763,10 +767,11 @@ def build_parser() -> argparse.ArgumentParser:
     # voice render
     p_render = subparsers.add_parser("render", help="Render narration beats using TTS provider")
     p_render.add_argument("project_dir", help="Path to project directory")
+    p_render.add_argument("--provider", choices=["chatterbox-http", "chatterbox-job", "gemini", "fake"], help="TTS execution provider (default: chatterbox-http)")
     p_render.add_argument("--qc", action="store_true", default=True, help="Auto-run Voice QC after rendering")
     p_render.add_argument("--beats", nargs="+", help="Render only specific beat IDs")
     p_render.add_argument("--fake", action="store_true", help="Force use of FakeTTSProvider")
-    p_render.add_argument("--model", help="Override TTS model name (e.g., gemini-3.1-flash-tts-preview)")
+    p_render.add_argument("--model", help="Override TTS model name (e.g., nano, turbo, gemini-3.1-flash-tts-preview)")
     p_render.add_argument("--voice", help="Override TTS voice name (e.g., Kore, Aoede)")
     p_render.add_argument("--force", action="store_true", help="Force render even if resource report is blocked")
     p_render.add_argument("--json", action="store_true", help="Output machine-readable JSON")
@@ -775,9 +780,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_rerender = subparsers.add_parser("rerender", help="Selectively rerender specific story beats")
     p_rerender.add_argument("project_dir", help="Path to project directory")
     p_rerender.add_argument("beat_ids", nargs="+", help="One or more beat IDs to rerender")
+    p_rerender.add_argument("--provider", choices=["chatterbox-http", "chatterbox-job", "gemini", "fake"], help="TTS execution provider (default: chatterbox-http)")
     p_rerender.add_argument("--qc", action="store_true", default=True, help="Auto-run Voice QC after rendering")
     p_rerender.add_argument("--fake", action="store_true", help="Force use of FakeTTSProvider")
-    p_rerender.add_argument("--model", help="Override TTS model name (e.g., gemini-3.1-flash-tts-preview)")
+    p_rerender.add_argument("--model", help="Override TTS model name (e.g., nano, turbo, gemini-3.1-flash-tts-preview)")
     p_rerender.add_argument("--voice", help="Override TTS voice name (e.g., Kore, Aoede)")
     p_rerender.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
