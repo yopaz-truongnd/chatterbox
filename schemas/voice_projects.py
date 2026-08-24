@@ -1,7 +1,7 @@
-"""Public REST schemas and request/response models for Voice Projects (Phase 12).
+"""Public REST schemas and request/response models for Voice Projects (Phase 12-14).
 
 Defines stable contract models for HTTP requests, asynchronous operation jobs,
-agent summaries, resource reports, and structured domain errors.
+agent summaries, resource reports, mix plans, artifacts, and structured domain errors.
 """
 
 from __future__ import annotations
@@ -91,10 +91,6 @@ class RenderVoiceProjectRequest(BaseModel):
         default=False,
         description="Whether to re-synthesize beats even if already in PASSED status.",
     )
-    allow_blocked: bool = Field(
-        default=False,
-        description="Force rendering even if missing required resource gaps were identified.",
-    )
 
 
 class RenderBeatRequest(BaseModel):
@@ -103,10 +99,6 @@ class RenderBeatRequest(BaseModel):
     provider: str = Field(
         default="local",
         description="Semantic TTS provider: 'local', 'gemini', or 'fake'.",
-    )
-    allow_blocked: bool = Field(
-        default=False,
-        description="Allow render even if project resource check is blocked.",
     )
 
 
@@ -119,6 +111,67 @@ class EvaluateVoiceProjectRequest(BaseModel):
     )
 
 
+class PrepareMixRequest(BaseModel):
+    """Payload to prepare deterministic MixPlan."""
+
+    mastering_profile: str = Field(
+        default="storytelling",
+        description="Target audio mastering profile (e.g. 'storytelling', 'podcast').",
+    )
+    output_formats: list[str] = Field(
+        default=["wav"],
+        description="List of target export formats ('wav', 'mp3').",
+    )
+    mix_config: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional mix parameter overrides.",
+    )
+
+
+class MixVoiceProjectRequest(BaseModel):
+    """Payload to execute multi-track audio mixing."""
+
+    mix_config: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional mix parameter overrides.",
+    )
+
+
+class MasterVoiceProjectRequest(BaseModel):
+    """Payload to execute mastering on mixed audio."""
+
+    profile: str = Field(
+        default="storytelling",
+        description="Target mastering profile.",
+    )
+
+
+class ExportVoiceProjectRequest(BaseModel):
+    """Payload to export final master audio files."""
+
+    formats: list[str] = Field(
+        default=["wav"],
+        description="Target formats to export (e.g. ['wav']).",
+    )
+
+
+class FinalizeVoiceProjectRequest(BaseModel):
+    """Payload to execute end-to-end post-production (prepare_mix -> mix -> master -> export)."""
+
+    mastering_profile: str = Field(
+        default="storytelling",
+        description="Target mastering profile.",
+    )
+    output_formats: list[str] = Field(
+        default=["wav"],
+        description="Target output formats.",
+    )
+    mix_config: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional mix parameter overrides.",
+    )
+
+
 # ---------------------------------------------------------
 # Sub-models & Summary DTOs
 # ---------------------------------------------------------
@@ -127,9 +180,19 @@ class EvaluateVoiceProjectRequest(BaseModel):
 class HumanActionSchema(BaseModel):
     """Structured request for human or AI supervisor action."""
 
-    action_type: str = Field(description="Action type code: pronunciation_review, resource_required, audio_quality_review, script_confirmation")
+    action_type: str = Field(
+        description="Action type code: pronunciation_review, resource_required, audio_quality_review, script_confirmation"
+    )
     reason: str = Field(description="Explanatory reason why action is requested.")
-    items: list[str] = Field(default_factory=list, description="Target entities, terms, or beat IDs requiring attention.")
+    items: list[str] = Field(
+        default_factory=list, description="Target entities, terms, or beat IDs requiring attention."
+    )
+    available_options: list[str] = Field(
+        default_factory=list, description="List of valid resume options for the agent/user."
+    )
+    resume_action: str | None = Field(
+        default=None, description="Suggested method or endpoint to invoke once human action is resolved."
+    )
 
 
 class VoiceProjectBeatsSummary(BaseModel):
@@ -149,6 +212,18 @@ class VoiceProjectResourcesSummary(BaseModel):
     blocked: bool | None = None
     required_gaps_count: int = 0
     recommended_gaps_count: int = 0
+
+
+class ArtifactInfo(BaseModel):
+    """Metadata for an exported audio or YAML artifact."""
+
+    id: str = Field(description="Artifact identifier slug.")
+    type: str = Field(description="Artifact type (e.g. 'final_wav', 'final_mp3', 'mix_wav', 'master_wav', 'manifest').")
+    filename: str = Field(description="File name.")
+    size_bytes: int = Field(default=0, description="File size in bytes.")
+    sha256: str = Field(default="", description="SHA-256 content checksum.")
+    created_at: str = Field(description="ISO 8601 creation timestamp.")
+    download_url: str = Field(description="Safe relative API download URL.")
 
 
 # ---------------------------------------------------------
@@ -191,10 +266,18 @@ class VoiceProjectJobResponse(BaseModel):
     beat_id: str | None = None
     child_job_id: str | None = None
     progress_percent: float = 0.0
+    message: str | None = None
     created_at: str
     updated_at: str
     result: dict[str, Any] | None = None
     error: dict[str, Any] | None = None
+
+
+class VoiceProjectArtifactsListResponse(BaseModel):
+    """Listing of downloadable artifacts generated for a project."""
+
+    project_id: str
+    artifacts: list[ArtifactInfo] = Field(default_factory=list)
 
 
 class VoiceProjectErrorDetail(BaseModel):

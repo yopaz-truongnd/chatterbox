@@ -25,7 +25,14 @@ class ProjectStatus(str, Enum):
     QC_PENDING = "QC_PENDING"
     REVIEW_REQUIRED = "REVIEW_REQUIRED"
     NARRATION_READY = "NARRATION_READY"
+    PREPARING_MIX = "PREPARING_MIX"
     MIX_READY = "MIX_READY"
+    MIXING = "MIXING"
+    MIXED = "MIXED"
+    MASTERING = "MASTERING"
+    MASTERED = "MASTERED"
+    EXPORTING = "EXPORTING"
+    COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
 
@@ -93,23 +100,33 @@ class ProjectState(BaseModel):
     def sync_legacy_status(self) -> None:
         """Derive legacy boolean flags from canonical stage."""
         stage = self.stage
+        all_post_narration = (
+            ProjectStatus.NARRATION_READY,
+            ProjectStatus.PREPARING_MIX,
+            ProjectStatus.MIX_READY,
+            ProjectStatus.MIXING,
+            ProjectStatus.MIXED,
+            ProjectStatus.MASTERING,
+            ProjectStatus.MASTERED,
+            ProjectStatus.EXPORTING,
+            ProjectStatus.COMPLETED,
+        )
         self.status.story_analyzed = stage in (
             ProjectStatus.PLANNED, ProjectStatus.RESOURCE_CHECKING, ProjectStatus.RESOURCE_BLOCKED,
             ProjectStatus.READY_TO_RENDER, ProjectStatus.RENDERING, ProjectStatus.QC_PENDING,
-            ProjectStatus.REVIEW_REQUIRED, ProjectStatus.NARRATION_READY, ProjectStatus.MIX_READY,
+            ProjectStatus.REVIEW_REQUIRED, *all_post_narration,
         )
         self.status.voice_plan_ready = self.status.story_analyzed
         self.status.sound_directed = self.status.story_analyzed
         self.status.resources_checked = stage in (
             ProjectStatus.RESOURCE_BLOCKED, ProjectStatus.READY_TO_RENDER, ProjectStatus.RENDERING,
-            ProjectStatus.QC_PENDING, ProjectStatus.REVIEW_REQUIRED, ProjectStatus.NARRATION_READY,
-            ProjectStatus.MIX_READY,
+            ProjectStatus.QC_PENDING, ProjectStatus.REVIEW_REQUIRED, *all_post_narration,
         )
         self.status.render_ready = stage in (
             ProjectStatus.READY_TO_RENDER, ProjectStatus.RENDERING, ProjectStatus.QC_PENDING,
-            ProjectStatus.REVIEW_REQUIRED, ProjectStatus.NARRATION_READY, ProjectStatus.MIX_READY,
+            ProjectStatus.REVIEW_REQUIRED, *all_post_narration,
         )
-        self.status.narration_ready = stage in (ProjectStatus.NARRATION_READY, ProjectStatus.MIX_READY)
+        self.status.narration_ready = stage in all_post_narration
 
     def to_dict(self) -> dict[str, Any]:
         self.sync_legacy_status()

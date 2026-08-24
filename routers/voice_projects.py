@@ -1,25 +1,35 @@
-"""FastAPI REST Router for Voice Projects (Phase 12).
+"""FastAPI REST Router for Voice Projects (Phase 12-14).
 
 Provides asynchronous, non-blocking HTTP endpoints for VoiceProject lifecycle,
-resource gating, per-beat rendering, QC evaluation, and operation tracking.
+resource gating, per-beat rendering, QC evaluation, mixing, mastering, export,
+and operation tracking.
 """
 
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from schemas.voice_projects import (
+    ArtifactInfo,
     CheckVoiceResourcesRequest,
     CreateVoiceProjectRequest,
     EvaluateVoiceProjectRequest,
+    ExportVoiceProjectRequest,
+    FinalizeVoiceProjectRequest,
     HumanActionSchema,
+    MasterVoiceProjectRequest,
+    MixVoiceProjectRequest,
     PlanVoiceProjectRequest,
+    PrepareMixRequest,
     RenderBeatRequest,
     RenderVoiceProjectRequest,
     UpdateVoiceScriptRequest,
+    VoiceProjectArtifactsListResponse,
     VoiceProjectBeatsSummary,
     VoiceProjectErrorDetail,
     VoiceProjectErrorResponse,
@@ -28,6 +38,7 @@ from schemas.voice_projects import (
     VoiceProjectResourcesSummary,
     VoiceProjectResponse,
 )
+from services.audio_mix_models import MixPlan
 from services.render_models import ProjectStatus
 from services.resource_models import RequirementPriority
 from services.voice_project_dependencies import (
@@ -50,6 +61,7 @@ from services.voice_project_operations import (
     VoiceProjectOperation,
     VoiceProjectOperationManager,
 )
+from services.voice_project_preflight import VoiceProjectPreflight
 from services.voice_renderer import ProviderUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -58,19 +70,23 @@ router = APIRouter(tags=["voice-projects"])
 
 
 def _format_summary_response(summary: VoiceProjectSummary) -> VoiceProjectResponse:
-    """Helper to convert domain VoiceProjectSummary into public schema response."""
-    human_action_schema = None
+    """Transform domain VoiceProjectSummary into public schema response."""
+    human_schema = None
     if summary.human_action:
-        human_action_schema = HumanActionSchema(
-            action_type=summary.human_action.action_type.value,
+        human_schema = HumanActionSchema(
+            action_type=summary.human_action.action_type.value
+            if hasattr(summary.human_action.action_type, "value")
+            else str(summary.human_action.action_type),
             reason=summary.human_action.reason,
             items=summary.human_action.items,
+            available_options=getattr(summary.human_action, "available_options", []),
+            resume_action=getattr(summary.human_action, "resume_action", None),
         )
 
     return VoiceProjectResponse(
         project_id=summary.project_id,
         title=summary.title,
-        stage=summary.stage.value,
+        stage=summary.stage.value if hasattr(summary.stage, "value") else str(summary.stage),
         language=summary.language,
         beats=VoiceProjectBeatsSummary(
             total=summary.total_beats,
@@ -80,60 +96,62 @@ def _format_summary_response(summary: VoiceProjectSummary) -> VoiceProjectRespon
             failed=summary.failed_beats,
         ),
         resources=VoiceProjectResourcesSummary(
-            readiness_score=int(summary.resource_readiness_score) if summary.resource_readiness_score is not None else None,
+            readiness_score=int(summary.resource_readiness_score * 100)
+            if summary.resource_readiness_score is not None
+            else None,
             blocked=summary.resource_blocked,
             required_gaps_count=summary.required_gaps_count,
             recommended_gaps_count=summary.recommended_gaps_count,
         ),
         suggested_action=summary.suggested_action,
-        human_action=human_action_schema,
+        human_action=human_schema,
         last_error=summary.last_error,
     )
 
 
 def _handle_domain_error(exc: Exception, project_id: str | None = None) -> JSONResponse:
-    """Format domain exceptions into structured JSON error responses with appropriate HTTP codes."""
+    """Map domain exceptions to standard structured HTTP error responses."""
+    logger.warning("VoiceProject domain error: %s (%s)", type(exc).__name__, exc)
+
     if isinstance(exc, VoiceProjectNotFound):
         status_code = status.HTTP_404_NOT_FOUND
-        code = "PROJECT_NOT_FOUND"
-    elif isinstance(exc, VoiceProjectAlreadyExists):
-        status_code = status.HTTP_409_CONFLICT
-        code = "PROJECT_ALREADY_EXISTS"
+        error_code = "PROJECT_NOT_FOUND"
     elif isinstance(exc, BeatNotFoundError):
         status_code = status.HTTP_404_NOT_FOUND
-        code = "BEAT_NOT_FOUND"
-    elif isinstance(exc, ResourceBlockedError):
+        error_code = "BEAT_NOT_FOUND"
+    elif isinstance(exc, VoiceProjectAlreadyExists):
         status_code = status.HTTP_409_CONFLICT
-        code = "RESOURCE_BLOCKED"
-    elif isinstance(exc, StaleArtifactError):
-        status_code = status.HTTP_409_CONFLICT
-        code = "STALE_ARTIFACT"
+        error_code = "PROJECT_ALREADY_EXISTS"
     elif isinstance(exc, InvalidProjectStateError):
         status_code = status.HTTP_409_CONFLICT
-        code = "INVALID_PROJECT_STATE"
+        error_code = "INVALID_PROJECT_STATE"
+    elif isinstance(exc, StaleArtifactError):
+        status_code = status.HTTP_409_CONFLICT
+        error_code = "STALE_ARTIFACT"
+    elif isinstance(exc, ResourceBlockedError):
+        status_code = status.HTTP_409_CONFLICT
+        error_code = "RESOURCE_BLOCKED"
     elif isinstance(exc, OperationAlreadyRunningError):
         status_code = status.HTTP_409_CONFLICT
-        code = "OPERATION_ALREADY_RUNNING"
+        error_code = "OPERATION_ALREADY_RUNNING"
     elif isinstance(exc, ProviderUnavailableError):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        code = "PROVIDER_UNAVAILABLE"
+        error_code = "PROVIDER_UNAVAILABLE"
     else:
-        logger.exception("Unexpected error in voice project endpoint: %s", exc)
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        code = "INTERNAL_SERVER_ERROR"
+        error_code = "INTERNAL_ERROR"
 
-    err_payload = VoiceProjectErrorResponse(
-        error=VoiceProjectErrorDetail(
-            code=code,
-            message=str(exc),
-            project_id=project_id,
-        )
+    err_detail = VoiceProjectErrorDetail(
+        code=error_code,
+        message=str(exc),
+        project_id=project_id,
     )
-    return JSONResponse(status_code=status_code, content=err_payload.model_dump(mode="json"))
+    envelope = VoiceProjectErrorResponse(error=err_detail)
+    return JSONResponse(status_code=status_code, content=envelope.model_dump())
 
 
 # =========================================================
-# Project Lifecycle Endpoints
+# 1. Project Management Endpoints (CRUD)
 # =========================================================
 
 
@@ -141,20 +159,21 @@ def _handle_domain_error(exc: Exception, project_id: str | None = None) -> JSONR
     "/api/v1/voice-projects",
     response_model=VoiceProjectResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a new narration voice project",
+    summary="Create Voice Project",
 )
 def create_voice_project(req: CreateVoiceProjectRequest):
-    """Initialize a new voice project workspace with source script."""
+    """Create a new narration voice project workspace with source script."""
     service = get_voice_project_service()
     try:
-        pstate = service.create_project(
+        service.create_project(
             script_text=req.script_text,
             project_id=req.project_id,
             title=req.title,
             language=req.language,
             config=req.config,
         )
-        summary = service.get_project(pstate.project_id)
+        # Fetch summary of newly created project
+        summary = service.get_project(req.project_id or "latest")
         return _format_summary_response(summary)
     except Exception as exc:
         return _handle_domain_error(exc, project_id=req.project_id)
@@ -163,37 +182,41 @@ def create_voice_project(req: CreateVoiceProjectRequest):
 @router.get(
     "/api/v1/voice-projects",
     response_model=list[VoiceProjectResponse],
-    summary="List all voice projects",
+    summary="List Voice Projects",
 )
 def list_voice_projects(
     limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    language: str | None = Query(default=None),
+    stage: str | None = Query(default=None),
 ):
-    """Retrieve summaries of all local voice projects."""
+    """List all managed voice projects with agent-friendly state summaries."""
     store = get_voice_project_store()
     service = get_voice_project_service(store=store)
+    summaries = []
 
-    project_dirs = [p for p in store.root_dir.iterdir() if p.is_dir() and (p / "project.yaml").exists()]
-    project_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-
-    results = []
-    for p_dir in project_dirs[offset : offset + limit]:
+    for proj_id in store.list_projects():
         try:
-            summary = service.get_project(p_dir.name)
-            results.append(_format_summary_response(summary))
-        except Exception:
-            continue
+            summ = service.get_project(proj_id)
+            if language and summ.language != language:
+                continue
+            if stage and summ.stage.value != stage and str(summ.stage) != stage:
+                continue
+            summaries.append(_format_summary_response(summ))
+            if len(summaries) >= limit:
+                break
+        except Exception as e:
+            logger.warning("Failed to load project '%s' in list: %s", proj_id, e)
 
-    return results
+    return summaries
 
 
 @router.get(
     "/api/v1/voice-projects/{project_id}",
     response_model=VoiceProjectResponse,
-    summary="Get project summary and recommended next action",
+    summary="Get Voice Project Summary",
 )
 def get_voice_project(project_id: str):
-    """Get high-level agent-friendly project summary."""
+    """Retrieve structured summary, readiness score, and suggested action for a project."""
     service = get_voice_project_service()
     try:
         summary = service.get_project(project_id)
@@ -205,13 +228,13 @@ def get_voice_project(project_id: str):
 @router.put(
     "/api/v1/voice-projects/{project_id}/script",
     response_model=VoiceProjectResponse,
-    summary="Update project source script",
+    summary="Update Source Script",
 )
-def update_voice_project_script(project_id: str, req: UpdateVoiceScriptRequest):
-    """Update project source script, invalidating downstream artifacts."""
+def update_voice_script(project_id: str, req: UpdateVoiceScriptRequest):
+    """Update source script text, safely invalidating downstream plans."""
     service = get_voice_project_service()
     try:
-        service.update_script(project_id, req.script_text)
+        service.update_script(project_id=project_id, new_script_text=req.script_text)
         summary = service.get_project(project_id)
         return _format_summary_response(summary)
     except Exception as exc:
@@ -219,7 +242,7 @@ def update_voice_project_script(project_id: str, req: UpdateVoiceScriptRequest):
 
 
 # =========================================================
-# Planning Endpoints (Async 202)
+# 2. Asynchronous Operations Endpoints (202 Accepted)
 # =========================================================
 
 
@@ -227,25 +250,36 @@ def update_voice_project_script(project_id: str, req: UpdateVoiceScriptRequest):
     "/api/v1/voice-projects/{project_id}/plan",
     response_model=VoiceProjectOperationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Trigger async story analysis and voice planning",
+    summary="Trigger Voice Planning",
 )
-def plan_voice_project(project_id: str, req: PlanVoiceProjectRequest | None = None):
-    """Enqueue background Voice Planning (Story Analysis, Narration Plan, Sound Direction, Critic)."""
-    service = get_voice_project_service()
-    op_manager = get_voice_project_operation_manager()
+def trigger_voice_plan(project_id: str, req: PlanVoiceProjectRequest | None = None):
+    """Trigger background story analysis, narration segmentation, and sound direction."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
 
     try:
-        op = op_manager.submit(
-            project_id=project_id,
-            operation="plan",
-            task_fn=lambda *a, **kw: service.plan(project_id, config=req.config if req else None),
+        preflight.validate_plan_request(project_id)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+    cfg = req.config if req else None
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "plan",
+            service.plan,
+            project_id,
+            config=cfg,
         )
         return VoiceProjectOperationResponse(
             job_id=op.id,
             project_id=project_id,
-            operation="plan",
+            operation=op.operation,
             status=op.status.value,
-            message="Planning operation queued successfully.",
+            message="Planning task scheduled successfully",
         )
     except Exception as exc:
         return _handle_domain_error(exc, project_id=project_id)
@@ -253,49 +287,56 @@ def plan_voice_project(project_id: str, req: PlanVoiceProjectRequest | None = No
 
 @router.get(
     "/api/v1/voice-projects/{project_id}/plan",
-    summary="Get final reviewed VoicePlan artifact",
+    summary="Get VoicePlan Artifact",
 )
 def get_voice_plan(project_id: str):
-    """Retrieve final compiled VoicePlan artifact dictionary."""
+    """Retrieve compiled VoicePlan JSON/YAML artifact."""
     store = get_voice_project_store()
-    plan = store.load_voice_plan(project_id)
-    if not plan:
-        return _handle_domain_error(
-            InvalidProjectStateError(f"Project '{project_id}' has no VoicePlan. Run plan first."),
-            project_id=project_id,
-        )
-    return plan.to_dict()
-
-
-# =========================================================
-# Resource Checking Endpoints (Async 202)
-# =========================================================
+    try:
+        if not store.project_exists(project_id):
+            raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
+        plan = store.load_voice_plan(project_id)
+        if not plan:
+            raise InvalidProjectStateError(f"Project '{project_id}' has not been planned yet. Run POST /plan first.")
+        return plan.to_dict()
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
 
 
 @router.post(
     "/api/v1/voice-projects/{project_id}/resources/check",
     response_model=VoiceProjectOperationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Trigger async resource readiness check",
+    summary="Trigger Resource & Pronunciation Check",
 )
-def check_voice_project_resources(project_id: str, req: CheckVoiceResourcesRequest | None = None):
-    """Enqueue background Resource Checking against Asset Library and Pronunciation Knowledge."""
-    service = get_voice_project_service()
-    op_manager = get_voice_project_operation_manager()
+def trigger_resource_check(project_id: str, req: CheckVoiceResourcesRequest | None = None):
+    """Trigger background resource evaluation and pronunciation verification."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
 
     try:
-        manifest_path = req.manifest_path if req else None
-        op = op_manager.submit(
-            project_id=project_id,
-            operation="check_resources",
-            task_fn=lambda *a, **kw: service.check_resources(project_id, manifest_path=manifest_path),
+        preflight.validate_resource_check_request(project_id)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+    manifest_path = req.manifest_path if req else None
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "check_resources",
+            service.check_resources,
+            project_id,
+            manifest_path=manifest_path,
         )
         return VoiceProjectOperationResponse(
             job_id=op.id,
             project_id=project_id,
-            operation="check_resources",
+            operation=op.operation,
             status=op.status.value,
-            message="Resource check operation queued successfully.",
+            message="Resource check task scheduled successfully",
         )
     except Exception as exc:
         return _handle_domain_error(exc, project_id=project_id)
@@ -303,105 +344,96 @@ def check_voice_project_resources(project_id: str, req: CheckVoiceResourcesReque
 
 @router.get(
     "/api/v1/voice-projects/{project_id}/resources",
-    summary="Get compiled ResourceReport artifact",
+    summary="Get Resource Report",
 )
 def get_resource_report(project_id: str):
-    """Retrieve compiled ResourceReport artifact dictionary."""
+    """Retrieve full ResourceReport artifact."""
     store = get_voice_project_store()
-    report = store.load_resource_report(project_id)
-    if not report:
-        return _handle_domain_error(
-            InvalidProjectStateError(f"Project '{project_id}' has no ResourceReport. Run check_resources first."),
-            project_id=project_id,
-        )
-    return report.to_dict()
+    try:
+        if not store.project_exists(project_id):
+            raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
+        report = store.load_resource_report(project_id)
+        if not report:
+            raise InvalidProjectStateError(f"Resource report missing for project '{project_id}'. Run POST /resources/check first.")
+        return report.to_dict()
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
 
 
 @router.get(
     "/api/v1/voice-projects/{project_id}/resources/missing",
-    summary="Get missing resource gaps grouped by priority",
+    summary="Get Missing Resource Gaps",
 )
 def get_missing_resources(project_id: str):
-    """Retrieve missing required, recommended, and optional resource gaps."""
+    """Retrieve categorized missing resource gaps."""
     store = get_voice_project_store()
-    report = store.load_resource_report(project_id)
-    if not report:
-        return _handle_domain_error(
-            InvalidProjectStateError(f"Project '{project_id}' has no ResourceReport. Run check_resources first."),
-            project_id=project_id,
-        )
+    try:
+        if not store.project_exists(project_id):
+            raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
+        report = store.load_resource_report(project_id)
+        if not report:
+            raise InvalidProjectStateError(f"Resource report missing for project '{project_id}'. Run check_resources first.")
 
-    req_gaps = [g.model_dump(mode="json") for g in report.missing if g.priority == RequirementPriority.REQUIRED]
-    rec_gaps = [g.model_dump(mode="json") for g in report.missing if g.priority == RequirementPriority.RECOMMENDED]
-    opt_gaps = [g.model_dump(mode="json") for g in report.missing if g.priority == RequirementPriority.OPTIONAL]
+        req_gaps = [g.to_dict() for g in report.missing if g.priority == RequirementPriority.REQUIRED]
+        rec_gaps = [g.to_dict() for g in report.missing if g.priority == RequirementPriority.RECOMMENDED]
 
-    return {
-        "project_id": project_id,
-        "readiness_score": report.readiness.score,
-        "render_blocked": report.readiness.render_blocked,
-        "required": req_gaps,
-        "recommended": rec_gaps,
-        "optional": opt_gaps,
-    }
-
-
-# =========================================================
-# Render & QC Endpoints (Async 202)
-# =========================================================
+        return {
+            "project_id": project_id,
+            "render_blocked": report.readiness.render_blocked,
+            "readiness_score": report.readiness.score,
+            "required": req_gaps,
+            "recommended": rec_gaps,
+        }
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
 
 
 @router.post(
     "/api/v1/voice-projects/{project_id}/render",
     response_model=VoiceProjectOperationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Trigger async narration synthesis and voice QC",
+    summary="Trigger Full Narration Render",
 )
-def render_voice_project(project_id: str, req: RenderVoiceProjectRequest | None = None):
-    """Enqueue background narration synthesis and Voice QC."""
-    req_model = req or RenderVoiceProjectRequest()
+def trigger_render(project_id: str, req: RenderVoiceProjectRequest | None = None):
+    """Trigger background synthesis and QC for project narration beats."""
     store = get_voice_project_store()
-    op_manager = get_voice_project_operation_manager()
+    preflight = VoiceProjectPreflight(store=store)
+    provider_name = req.provider if req else "local"
+    beats = req.beats if req else None
 
     try:
-        # Pre-validate staleness & resource gate before queueing
-        is_stale, reason = store.check_staleness(project_id, for_render=True)
-        if is_stale:
-            raise StaleArtifactError(f"Cannot render project '{project_id}': {reason}")
+        preflight.validate_render_request(project_id=project_id, provider_name=provider_name, beats=beats)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
 
-        report = store.load_resource_report(project_id)
-        if report and report.readiness.render_blocked and not req_model.allow_blocked:
-            missing_terms = [g.term or g.intent or g.id for g in report.missing if g.priority.value == "required"]
-            raise ResourceBlockedError(
-                f"Cannot render project '{project_id}': Resource check is BLOCKED. "
-                f"Missing required resources: {', '.join(missing_terms)}"
-            )
+    op_mgr = get_voice_project_operation_manager()
 
-        provider = resolve_server_tts_provider(req_model.provider)
-        service = get_voice_project_service(store=store, execution_port=provider, provider_name=req_model.provider)
+    try:
+        port = resolve_server_tts_provider(provider_name)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
 
-        def _task(*args, cancellation_token=None, progress_callback=None, **kwargs):
-            return service.render(
-                project_id=project_id,
-                beats=req_model.beats,
-                execution_port=provider,
-                allow_resource_blocked=req_model.allow_blocked,
-                force_rerender=req_model.force_rerender,
-                auto_qc=req_model.auto_qc,
-                progress_callback=progress_callback,
-                cancellation_token=cancellation_token,
-            )
+    service = get_voice_project_service(store=store, execution_port=port, provider_name=provider_name)
+    auto_qc = req.auto_qc if req else True
+    force = req.force_rerender if req else False
 
-        op = op_manager.submit(
-            project_id=project_id,
-            operation="render",
-            task_fn=_task,
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "render",
+            service.render,
+            project_id,
+            beats=beats,
+            auto_qc=auto_qc,
+            force_rerender=force,
+            allow_resource_blocked=False,  # Strict: no public bypass
         )
         return VoiceProjectOperationResponse(
             job_id=op.id,
             project_id=project_id,
-            operation="render",
+            operation=op.operation,
             status=op.status.value,
-            message="Render operation queued successfully.",
+            message="Render operation scheduled successfully",
         )
     except Exception as exc:
         return _handle_domain_error(exc, project_id=project_id)
@@ -411,47 +443,43 @@ def render_voice_project(project_id: str, req: RenderVoiceProjectRequest | None 
     "/api/v1/voice-projects/{project_id}/beats/{beat_id}/render",
     response_model=VoiceProjectOperationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Trigger async selective rendering for a single beat",
+    summary="Trigger Single Beat Render",
 )
-def render_voice_project_beat(project_id: str, beat_id: str, req: RenderBeatRequest | None = None):
-    """Enqueue background selective rendering for a single beat."""
-    req_model = req or RenderBeatRequest()
+def trigger_render_beat(project_id: str, beat_id: str, req: RenderBeatRequest | None = None):
+    """Trigger background synthesis and QC for a single specific beat."""
     store = get_voice_project_store()
-    op_manager = get_voice_project_operation_manager()
+    preflight = VoiceProjectPreflight(store=store)
+    provider_name = req.provider if req else "local"
 
     try:
-        plan = store.load_voice_plan(project_id)
-        if not plan:
-            raise InvalidProjectStateError(f"Project '{project_id}' has no VoicePlan. Run plan first.")
+        preflight.validate_beat_render_request(project_id=project_id, beat_id=beat_id, provider_name=provider_name)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
 
-        matching_beat = next((b for b in plan.beats if b.id == beat_id), None)
-        if not matching_beat:
-            raise BeatNotFoundError(f"Beat '{beat_id}' does not exist in project '{project_id}'.")
+    op_mgr = get_voice_project_operation_manager()
 
-        provider = resolve_server_tts_provider(req_model.provider)
-        service = get_voice_project_service(store=store, execution_port=provider, provider_name=req_model.provider)
+    try:
+        port = resolve_server_tts_provider(provider_name)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
 
-        def _task(*args, cancellation_token=None, progress_callback=None, **kwargs):
-            return service.render_beat(
-                project_id=project_id,
-                beat_id=beat_id,
-                execution_port=provider,
-                allow_resource_blocked=req_model.allow_blocked,
-                progress_callback=progress_callback,
-                cancellation_token=cancellation_token,
-            )
+    service = get_voice_project_service(store=store, execution_port=port, provider_name=provider_name)
 
-        op = op_manager.submit(
-            project_id=project_id,
-            operation="render_beat",
-            task_fn=_task,
+    try:
+        op = op_mgr.submit(
+            project_id,
+            f"render_beat_{beat_id}",
+            service.render_beat,
+            project_id,
+            beat_id,
+            allow_resource_blocked=False,  # Strict: no public bypass
         )
         return VoiceProjectOperationResponse(
             job_id=op.id,
             project_id=project_id,
-            operation="render_beat",
+            operation=op.operation,
             status=op.status.value,
-            message=f"Render beat '{beat_id}' operation queued successfully.",
+            message=f"Beat '{beat_id}' render scheduled successfully",
         )
     except Exception as exc:
         return _handle_domain_error(exc, project_id=project_id)
@@ -461,60 +489,369 @@ def render_voice_project_beat(project_id: str, beat_id: str, req: RenderBeatRequ
     "/api/v1/voice-projects/{project_id}/evaluate",
     response_model=VoiceProjectOperationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Trigger async Voice QC re-evaluation without synthesizing audio",
+    summary="Trigger Voice QC Re-evaluation",
 )
-def evaluate_voice_project(project_id: str, req: EvaluateVoiceProjectRequest | None = None):
-    """Enqueue background Voice QC evaluation on existing renders."""
-    req_model = req or EvaluateVoiceProjectRequest()
-    service = get_voice_project_service()
-    op_manager = get_voice_project_operation_manager()
+def trigger_evaluate(project_id: str, req: EvaluateVoiceProjectRequest | None = None):
+    """Trigger background Voice QC evaluation on existing audio attempts."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
+    beats = req.beats if req else None
 
     try:
-        op = op_manager.submit(
-            project_id=project_id,
-            operation="evaluate",
-            task_fn=lambda *a, **kw: service.evaluate(project_id, beats=req_model.beats),
+        preflight.validate_evaluate_request(project_id=project_id, beats=beats)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "evaluate",
+            service.evaluate,
+            project_id,
+            beats=beats,
         )
         return VoiceProjectOperationResponse(
             job_id=op.id,
             project_id=project_id,
-            operation="evaluate",
+            operation=op.operation,
             status=op.status.value,
-            message="QC evaluation operation queued successfully.",
+            message="QC evaluation task scheduled successfully",
         )
     except Exception as exc:
         return _handle_domain_error(exc, project_id=project_id)
 
 
 # =========================================================
-# Operation Job Status & Cancellation Endpoints
+# 3. Phase 14 Post-Production Endpoints (Mix, Master, Export)
+# =========================================================
+
+
+@router.post(
+    "/api/v1/voice-projects/{project_id}/mix/prepare",
+    response_model=VoiceProjectOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Prepare MixPlan",
+)
+def trigger_prepare_mix(project_id: str, req: PrepareMixRequest | None = None):
+    """Trigger background construction of multi-track MixPlan."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
+    try:
+        preflight.validate_project_exists(project_id)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+    m_prof = req.mastering_profile if req else "storytelling"
+    fmts = req.output_formats if req else ["wav"]
+    m_cfg = req.mix_config if req else None
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "prepare_mix",
+            service.prepare_for_mix,
+            project_id,
+            mix_config=m_cfg,
+            mastering_profile=m_prof,
+            output_formats=fmts,
+        )
+        return VoiceProjectOperationResponse(
+            job_id=op.id,
+            project_id=project_id,
+            operation=op.operation,
+            status=op.status.value,
+            message="Prepare mix task scheduled successfully",
+        )
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+@router.get(
+    "/api/v1/voice-projects/{project_id}/mix-plan",
+    summary="Get MixPlan Artifact",
+)
+def get_mix_plan(project_id: str):
+    """Retrieve constructed MixPlan artifact."""
+    store = get_voice_project_store()
+    try:
+        if not store.project_exists(project_id):
+            raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
+        proj_dir = store.get_project_dir(project_id)
+        plan_file = proj_dir / "mix-plan.yaml"
+        if not plan_file.exists():
+            raise InvalidProjectStateError("MixPlan has not been prepared yet. Run POST /mix/prepare first.")
+        with open(plan_file, "r", encoding="utf-8") as f:
+            plan = MixPlan.from_yaml(f.read())
+        return plan.to_dict()
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+@router.post(
+    "/api/v1/voice-projects/{project_id}/mix",
+    response_model=VoiceProjectOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger Multi-track Audio Mix",
+)
+def trigger_mix(project_id: str, req: MixVoiceProjectRequest | None = None):
+    """Trigger background rendering of multi-track audio mix."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
+    try:
+        preflight.validate_project_exists(project_id)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+    m_cfg = req.mix_config if req else None
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "mix",
+            service.mix,
+            project_id,
+            mix_config=m_cfg,
+        )
+        return VoiceProjectOperationResponse(
+            job_id=op.id,
+            project_id=project_id,
+            operation=op.operation,
+            status=op.status.value,
+            message="Audio mix task scheduled successfully",
+        )
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+@router.post(
+    "/api/v1/voice-projects/{project_id}/master",
+    response_model=VoiceProjectOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger Audio Mastering",
+)
+def trigger_master(project_id: str, req: MasterVoiceProjectRequest | None = None):
+    """Trigger background audio mastering and loudness normalization."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
+    try:
+        preflight.validate_project_exists(project_id)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+    prof = req.profile if req else "storytelling"
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "master",
+            service.master,
+            project_id,
+            profile_name=prof,
+        )
+        return VoiceProjectOperationResponse(
+            job_id=op.id,
+            project_id=project_id,
+            operation=op.operation,
+            status=op.status.value,
+            message="Audio mastering task scheduled successfully",
+        )
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+@router.post(
+    "/api/v1/voice-projects/{project_id}/export",
+    response_model=VoiceProjectOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger Audio Deliverables Export",
+)
+def trigger_export(project_id: str, req: ExportVoiceProjectRequest | None = None):
+    """Trigger background packaging and export of deliverable audio files."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
+    try:
+        preflight.validate_project_exists(project_id)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+    fmts = req.formats if req else ["wav"]
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "export",
+            service.export,
+            project_id,
+            formats=fmts,
+        )
+        return VoiceProjectOperationResponse(
+            job_id=op.id,
+            project_id=project_id,
+            operation=op.operation,
+            status=op.status.value,
+            message="Audio export task scheduled successfully",
+        )
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+@router.post(
+    "/api/v1/voice-projects/{project_id}/finalize",
+    response_model=VoiceProjectOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger Full Post-Production Finalization",
+)
+def trigger_finalize(project_id: str, req: FinalizeVoiceProjectRequest | None = None):
+    """Trigger complete pipeline (prepare_mix -> mix -> master -> export) in a single background job."""
+    store = get_voice_project_store()
+    preflight = VoiceProjectPreflight(store=store)
+    try:
+        preflight.validate_project_exists(project_id)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+    op_mgr = get_voice_project_operation_manager()
+    service = get_voice_project_service(store=store)
+    m_prof = req.mastering_profile if req else "storytelling"
+    fmts = req.output_formats if req else ["wav"]
+    m_cfg = req.mix_config if req else None
+
+    try:
+        op = op_mgr.submit(
+            project_id,
+            "finalize",
+            service.finalize,
+            project_id,
+            mix_config=m_cfg,
+            mastering_profile=m_prof,
+            output_formats=fmts,
+        )
+        return VoiceProjectOperationResponse(
+            job_id=op.id,
+            project_id=project_id,
+            operation=op.operation,
+            status=op.status.value,
+            message="Finalization pipeline scheduled successfully",
+        )
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+# =========================================================
+# 4. Artifacts Discovery & Safe File Download
+# =========================================================
+
+
+@router.get(
+    "/api/v1/voice-projects/{project_id}/artifacts",
+    response_model=VoiceProjectArtifactsListResponse,
+    summary="List Generated Artifacts",
+)
+def list_project_artifacts(project_id: str):
+    """List all available deliverable audio and plan artifacts for a project."""
+    service = get_voice_project_service()
+    try:
+        items = service.list_artifacts(project_id)
+        return VoiceProjectArtifactsListResponse(
+            project_id=project_id,
+            artifacts=[ArtifactInfo(**item) for item in items],
+        )
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+@router.get(
+    "/api/v1/voice-projects/{project_id}/artifacts/{artifact_id}",
+    summary="Download Specific Project Artifact",
+)
+def download_project_artifact(project_id: str, artifact_id: str):
+    """Safely download an artifact audio or YAML file with path traversal protection."""
+    store = get_voice_project_store()
+    try:
+        if not store.project_exists(project_id):
+            raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
+        proj_dir = store.get_project_dir(project_id).resolve()
+
+        # Map known artifact IDs to relative paths
+        artifact_map = {
+            "final_wav": proj_dir / "exports" / "FINAL.wav",
+            "final_mp3": proj_dir / "exports" / "FINAL.mp3",
+            "mix_plan": proj_dir / "mix-plan.yaml",
+            "master_wav": proj_dir / "mix" / "master.wav",
+            "premaster_wav": proj_dir / "mix" / "premaster.wav",
+            "export_manifest": proj_dir / "exports" / "export-manifest.yaml",
+        }
+
+        target_file = artifact_map.get(artifact_id)
+        if not target_file:
+            # Check if artifact_id matches an attempt or custom file inside project_dir
+            target_file = (proj_dir / artifact_id).resolve()
+
+        target_file = target_file.resolve()
+
+        # Security check: prevent directory traversal outside proj_dir
+        if not str(target_file).startswith(str(proj_dir)) or not target_file.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Artifact '{artifact_id}' not found for project '{project_id}'.",
+            )
+
+        media_type = "audio/wav" if target_file.suffix == ".wav" else "application/octet-stream"
+        if target_file.suffix in (".yaml", ".yml"):
+            media_type = "application/x-yaml"
+
+        return FileResponse(
+            path=str(target_file),
+            media_type=media_type,
+            filename=target_file.name,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+# =========================================================
+# 5. Operation Jobs Tracking & Cancellation
 # =========================================================
 
 
 @router.get(
     "/api/v1/voice-project-jobs/{job_id}",
     response_model=VoiceProjectJobResponse,
-    summary="Get background operation job status and progress",
+    summary="Get Operation Job Status",
 )
 def get_voice_project_job(job_id: str):
-    """Retrieve detailed status, progress, stage, result, or error of an asynchronous operation."""
-    op_manager = get_voice_project_operation_manager()
-    op = op_manager.get_operation(job_id)
+    """Retrieve execution status, current active beat, child TTS job ID, and progress percentage."""
+    op_mgr = get_voice_project_operation_manager()
+    op = op_mgr.get_operation(job_id)
     if not op:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Operation job '{job_id}' not found.",
+            detail=f"Voice project operation job '{job_id}' not found.",
         )
 
     return VoiceProjectJobResponse(
         id=op.id,
         project_id=op.project_id,
         operation=op.operation,
-        status=op.status.value,
+        status=op.status.value if hasattr(op.status, "value") else str(op.status),
         stage=op.stage,
         beat_id=op.beat_id,
         child_job_id=op.child_job_id,
         progress_percent=op.progress_percent,
+        message=op.message,
         created_at=op.created_at,
         updated_at=op.updated_at,
         result=op.result,
@@ -524,12 +861,15 @@ def get_voice_project_job(job_id: str):
 
 @router.post(
     "/api/v1/voice-project-jobs/{job_id}/cancel",
-    summary="Cancel a running or queued background operation",
+    summary="Cancel Operation Job",
 )
 def cancel_voice_project_job(job_id: str):
-    """Request cooperative cancellation of a background project operation."""
-    op_manager = get_voice_project_operation_manager()
-    success, msg = op_manager.cancel_operation(job_id)
+    """Request cooperative cancellation of an active voice project operation."""
+    op_mgr = get_voice_project_operation_manager()
+    success, message = op_mgr.cancel_operation(job_id)
     if not success:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
-    return {"job_id": job_id, "status": "cancelled", "message": msg}
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"success": False, "message": message},
+        )
+    return {"success": True, "message": message}
