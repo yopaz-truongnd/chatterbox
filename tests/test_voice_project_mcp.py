@@ -46,11 +46,34 @@ class TestVoiceProjectMCP(unittest.TestCase):
             "chatterbox_voice_produce",
             "chatterbox_voice_workflow_status",
             "chatterbox_voice_workflow_resume",
+            "chatterbox_voice_workflow_approve",
             "chatterbox_voice_workflow_cancel",
         ]
 
         for expected in expected_tools:
             self.assertIn(expected, tool_names)
+
+    def test_mcp_produce_maps_top_level_policy_fields(self):
+        captured = {}
+
+        def request_fn(path, method="GET", data=None):
+            captured.update({"path": path, "method": method, "data": data})
+            return {"workflow_id": "vwf_test", "status": "running"}
+
+        result = handle_voice_project_tool(
+            "chatterbox_voice_produce",
+            {
+                "script_text": "A quiet valley.",
+                "provider": "fake",
+                "mixing_profile": "dramatic",
+                "require_final_approval": True,
+            },
+            request_fn=request_fn,
+        )
+
+        self.assertFalse(result["isError"])
+        self.assertEqual(captured["data"]["policy"]["mixing_profile"], "dramatic")
+        self.assertTrue(captured["data"]["policy"]["require_final_approval"])
 
     def test_mcp_full_agent_workflow_including_finalize(self):
         # Clean script with no missing proper noun gaps

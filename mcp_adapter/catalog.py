@@ -610,9 +610,34 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "type": "string",
                     "description": "TTS provider ('local', 'gemini', 'fake'). Default: 'local'.",
                 },
+                "retry_budget": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Maximum TTS/QC attempts per beat.",
+                },
+                "auto_accept_qc_pass": {
+                    "type": "boolean",
+                    "description": "Whether QC-passed narration is accepted without a human gate.",
+                },
+                "allow_resource_substitute": {
+                    "type": "boolean",
+                    "description": "Allow semantic substitution for missing audio resources.",
+                },
+                "mixing_profile": {
+                    "type": "string",
+                    "description": "Mixing profile (for example, storytelling or dramatic).",
+                },
                 "mastering_profile": {
                     "type": "string",
                     "description": "Mastering dynamics profile (default: 'storytelling').",
+                },
+                "output_formats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "require_final_approval": {
+                    "type": "boolean",
+                    "description": "Pause after mastering for explicit final approval.",
                 },
             },
             "required": ["script_text"],
@@ -658,6 +683,24 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                 },
             },
             "required": ["workflow_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_workflow_approve",
+        "description": "Submit an explicit approval decision for narration or final master audio.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string"},
+                "action": {
+                    "type": "string",
+                    "enum": ["approve_narration", "approve_final_audio"],
+                },
+                "approved": {"type": "boolean"},
+                "artifact_id": {"type": "string"},
+                "artifact_sha256": {"type": "string"},
+            },
+            "required": ["workflow_id", "action", "approved"],
         },
     },
 ]

@@ -44,8 +44,8 @@ class MCPServerTestCase(unittest.TestCase):
             "chatterbox_get_events",
         }
         self.assertTrue(expected_tools.issubset(tool_names), f"Missing tools: {expected_tools - tool_names}")
-        # 16 original tools + 19 Voice Project & Workflow tools added in Phase 13-15
-        self.assertEqual(len(tools), 35)
+        # 16 original tools + 20 Voice Project & Workflow tools added in Phase 13-15
+        self.assertEqual(len(tools), 36)
 
     def test_list_characters_handles_dict_and_list_responses(self):
         # 1. Dict response format (standard from /api/v1/characters)
@@ -296,8 +296,8 @@ class MCPServerTestCase(unittest.TestCase):
             # 2. Tools list RPC
             tools_res = send_and_recv({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
             tools = tools_res.get("result", {}).get("tools", [])
-            # 16 original tools + 19 Voice Project & Workflow tools added in Phase 13-15
-            self.assertEqual(len(tools), 35)
+            # 16 original tools + 20 Voice Project & Workflow tools added in Phase 13-15
+            self.assertEqual(len(tools), 36)
             tool_names = {t["name"] for t in tools}
             self.assertIn("chatterbox_list_characters", tool_names)
             self.assertIn("chatterbox_generate_tts", tool_names)

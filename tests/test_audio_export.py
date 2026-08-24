@@ -10,6 +10,7 @@ from services.audio_export import AudioExportService
 from services.audio_mix_models import ExportProfile
 from services.tts.base import CancellationToken
 from services.voice_project_models import ExportDependencyUnavailableError
+from services.voice_project_models import compute_file_sha256
 from services.wave_audio_mixer import _write_wav_samples
 
 
@@ -43,6 +44,7 @@ class TestAudioExport(unittest.TestCase):
         self.assertTrue(manifest_file.exists())
         self.assertEqual(len(manifest.artifacts), 1)
         self.assertEqual(manifest.artifacts[0].artifact_id, "final_wav")
+        self.assertEqual(manifest.source_master_sha256, compute_file_sha256(master_wav))
 
     def test_audio_export_probes_actual_sample_rate_for_broadcast_master_48khz(self):
         """Verify that a 48 kHz broadcast master records actual 48000 Hz in manifest."""

@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from schemas.voice_workflows import (
+    ApproveVoiceWorkflowRequest,
     CreateVoiceWorkflowRequest,
     VoiceWorkflowResponse,
     WorkflowPolicySchema,
@@ -17,6 +18,7 @@ from schemas.voice_workflows import (
 )
 from services.voice_project_workflow import VoiceProjectWorkflowService
 from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy
+from services.voice_project_models import InvalidProjectStateError
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +31,13 @@ def _format_workflow_response(state: VoiceWorkflowState) -> VoiceWorkflowRespons
         workflow_id=state.workflow_id,
         project_id=state.project_id,
         status=state.status.value if hasattr(state.status, "value") else str(state.status),
-        policy=WorkflowPolicySchema(
-            provider=state.policy.provider,
-            retry_budget=state.policy.retry_budget,
-            auto_accept_qc_pass=state.policy.auto_accept_qc_pass,
-            output_formats=state.policy.output_formats,
-            mastering_profile=state.policy.mastering_profile,
-        ),
+        policy=WorkflowPolicySchema.model_validate(state.policy.model_dump()),
         steps=[
             WorkflowStepSchema(
                 name=s.name,
                 status=s.status,
+                operation_id=s.operation_id,
+                progress_percent=s.progress_percent,
                 started_at=s.started_at,
                 completed_at=s.completed_at,
                 result_summary=s.result_summary,
@@ -66,13 +64,7 @@ def _format_workflow_response(state: VoiceWorkflowState) -> VoiceWorkflowRespons
 def create_voice_workflow(req: CreateVoiceWorkflowRequest):
     """Launch autonomous end-to-end production workflow."""
     service = VoiceProjectWorkflowService()
-    policy = WorkflowPolicy(
-        provider=req.policy.provider,
-        retry_budget=req.policy.retry_budget,
-        auto_accept_qc_pass=req.policy.auto_accept_qc_pass,
-        output_formats=req.policy.output_formats,
-        mastering_profile=req.policy.mastering_profile,
-    )
+    policy = WorkflowPolicy.model_validate(req.policy.model_dump())
     state = service.start_workflow(
         script_text=req.script_text,
         project_id=req.project_id,
@@ -111,11 +103,39 @@ def resume_voice_workflow(workflow_id: str):
     try:
         state = service.resume_workflow(workflow_id)
         return _format_workflow_response(state)
+    except InvalidProjectStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot resume workflow: {str(exc)}",
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot resume workflow: {str(exc)}",
         )
+
+
+@router.post(
+    "/api/v1/voice-workflows/{workflow_id}/approve",
+    response_model=VoiceWorkflowResponse,
+    summary="Approve Workflow Human Gate",
+)
+def approve_voice_workflow(workflow_id: str, req: ApproveVoiceWorkflowRequest):
+    """Record an explicit human decision and continue the workflow."""
+    service = VoiceProjectWorkflowService()
+    try:
+        state = service.approve_workflow(
+            workflow_id,
+            action=req.action,
+            approved=req.approved,
+            artifact_id=req.artifact_id,
+            artifact_sha256=req.artifact_sha256,
+        )
+        return _format_workflow_response(state)
+    except InvalidProjectStateError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 @router.post(

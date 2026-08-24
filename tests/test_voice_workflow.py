@@ -6,9 +6,11 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 from services.voice_project_workflow import VoiceProjectWorkflowService
-from services.voice_project_workflow_models import WorkflowPolicy, WorkflowStatus
+from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
+from services.voice_project_models import InvalidProjectStateError
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 
@@ -65,6 +67,9 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertIsNotNone(final_state.human_action)
         self.assertEqual(final_state.human_action["action_type"], "resource_required")
         self.assertIn("Qiongqi", final_state.human_action["items"])
+        resource_step = next(step for step in final_state.steps if step.name == "check_resources")
+        self.assertEqual(resource_step.status, "failed")
+        self.assertIsNotNone(resource_step.operation_id)
 
     def test_workflow_require_final_approval_human_gate_and_resume(self):
         script = "The morning sun rose gently over the calm green valley."
@@ -83,13 +88,135 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertEqual(final_state.human_action["action_type"], "final_audio_approval")
         self.assertEqual(final_state.human_action["resume_action"], "export")
 
-        # 2. Resume workflow: should execute export and transition to COMPLETED
-        resumed_state = self.service.resume_workflow(state.workflow_id)
+        approval_item = final_state.human_action["items"][0]
+        self.assertEqual(approval_item["artifact_id"], "master_wav")
+        self.assertTrue(approval_item["sha256"])
+        master_path = self.service.project_store.get_project_dir("wf_approval_01") / "mix" / "master.wav"
+        self.assertTrue(master_path.exists())
+
+        # 2. Generic resume cannot bypass the approval gate.
+        with self.assertRaises(InvalidProjectStateError):
+            self.service.resume_workflow(state.workflow_id)
+
+        # 3. Explicit approval executes export and transitions to COMPLETED.
+        resumed_state = self.service.approve_workflow(
+            state.workflow_id,
+            action="approve_final_audio",
+            approved=True,
+            artifact_id="master_wav",
+            artifact_sha256=approval_item["sha256"],
+        )
         self.assertEqual(resumed_state.status, WorkflowStatus.RUNNING)
 
         completed_state = self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.COMPLETED,))
         self.assertEqual(completed_state.status, WorkflowStatus.COMPLETED)
         self.assertTrue(any(a["id"] == "final_wav" for a in completed_state.result["artifacts"]))
+
+    def test_qc_always_runs_when_narration_requires_manual_acceptance(self):
+        state = self.service.start_workflow(
+            script_text="The morning sun rose gently over the calm green valley.",
+            project_id="wf_narration_approval",
+            policy=WorkflowPolicy(provider="fake", auto_accept_qc_pass=False),
+        )
+
+        waiting = self._wait_for_workflow(
+            state.workflow_id,
+            target_statuses=(WorkflowStatus.WAITING_FOR_HUMAN,),
+        )
+        self.assertEqual(waiting.human_action["action_type"], "narration_acceptance")
+        manifest = self.service.project_store.load_manifest("wf_narration_approval")
+        self.assertTrue(manifest.beats)
+        self.assertTrue(all(beat.status.value == "passed" for beat in manifest.beats.values()))
+
+        with self.assertRaises(InvalidProjectStateError):
+            self.service.resume_workflow(state.workflow_id)
+
+        self.service.approve_workflow(
+            state.workflow_id,
+            action="approve_narration",
+            approved=True,
+        )
+        completed = self._wait_for_workflow(state.workflow_id)
+        self.assertEqual(completed.status, WorkflowStatus.COMPLETED)
+
+    def test_final_approval_rejects_changed_master(self):
+        state = self.service.start_workflow(
+            script_text="The morning sun rose gently over the calm green valley.",
+            project_id="wf_changed_master",
+            policy=WorkflowPolicy(provider="fake", require_final_approval=True),
+        )
+        waiting = self._wait_for_workflow(
+            state.workflow_id,
+            target_statuses=(WorkflowStatus.WAITING_FOR_HUMAN,),
+        )
+        item = waiting.human_action["items"][0]
+        master_path = self.service.project_store.get_project_dir("wf_changed_master") / "mix" / "master.wav"
+        master_path.write_bytes(master_path.read_bytes() + b"changed")
+
+        with self.assertRaises(InvalidProjectStateError):
+            self.service.approve_workflow(
+                state.workflow_id,
+                action="approve_final_audio",
+                approved=True,
+                artifact_id="master_wav",
+                artifact_sha256=item["sha256"],
+            )
+
+        self.assertEqual(self.service.get_workflow(state.workflow_id).status, WorkflowStatus.WAITING_FOR_HUMAN)
+
+    def test_terminal_state_cannot_be_overwritten(self):
+        state = self.service.start_workflow(
+            script_text="The morning sun rose gently over the calm green valley.",
+            project_id="wf_terminal_guard",
+            policy=WorkflowPolicy(provider="fake"),
+        )
+        completed = self._wait_for_workflow(state.workflow_id)
+        self.assertEqual(completed.status, WorkflowStatus.COMPLETED)
+
+        stale = completed.model_copy(deep=True)
+        stale.status = WorkflowStatus.FAILED
+        self.assertFalse(self.wf_store.save_workflow(stale))
+        self.assertEqual(self.service.get_workflow(state.workflow_id).status, WorkflowStatus.COMPLETED)
+
+    def test_transition_is_atomic_across_store_instances(self):
+        state = VoiceWorkflowState(
+            workflow_id="vwf_atomic_claim",
+            project_id="atomic_claim",
+            status=WorkflowStatus.WAITING_FOR_HUMAN,
+        )
+        self.wf_store.save_workflow(state)
+        second_store = VoiceProjectWorkflowStore(root_dir=self.wf_store.root_dir)
+        barrier = threading.Barrier(2)
+        outcomes = []
+
+        def claim(store):
+            barrier.wait()
+            try:
+                store.transition_workflow(
+                    state.workflow_id,
+                    WorkflowStatus.WAITING_FOR_HUMAN,
+                    lambda current: setattr(current, "status", WorkflowStatus.RUNNING),
+                )
+                outcomes.append("claimed")
+            except InvalidProjectStateError:
+                outcomes.append("rejected")
+
+        threads = [threading.Thread(target=claim, args=(store,)) for store in (self.wf_store, second_store)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        self.assertCountEqual(outcomes, ["claimed", "rejected"])
+
+    def test_workflow_persistence_failure_is_not_silenced(self):
+        state = VoiceWorkflowState(
+            workflow_id="vwf_write_failure",
+            project_id="write_failure",
+        )
+        with mock.patch("pathlib.Path.replace", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                self.wf_store.save_workflow(state)
 
     def test_workflow_cancellation_propagates(self):
         script = "The morning sun rose gently over the calm green valley."

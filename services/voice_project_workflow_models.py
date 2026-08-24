@@ -56,7 +56,7 @@ class WorkflowPolicy(BaseModel):
     """Guiding execution rules and constraints for the autonomous agent."""
 
     provider: str = "local"
-    retry_budget: int = 2
+    retry_budget: int = Field(default=2, ge=1)
     auto_accept_qc_pass: bool = True
     allow_resource_substitute: bool = True
     require_final_approval: bool = False

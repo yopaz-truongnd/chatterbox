@@ -18,13 +18,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import logging
-from pathlib import Path
 import threading
 import time
 from typing import Any, Callable
 import uuid
 
-from services.audio_mix_models import ExportManifest
 from services.render_models import ProjectStatus, RenderStatus
 from services.voice_project_dependencies import (
     get_voice_project_operation_manager,
@@ -32,9 +30,8 @@ from services.voice_project_dependencies import (
     get_voice_project_store,
 )
 from services.voice_project_models import (
-    HumanActionType,
     InvalidProjectStateError,
-    ProviderUnavailableError,
+    compute_file_sha256,
 )
 from services.voice_project_operations import OperationStatus, VoiceProjectOperationManager
 from services.voice_project_store import VoiceProjectStore
@@ -150,26 +147,19 @@ class VoiceProjectWorkflowService:
 
     def resume_workflow(self, workflow_id: str) -> VoiceWorkflowState:
         """Resume workflow execution after a human gate (e.g. pronunciation provided, final approval) has been resolved."""
-        state = self.store.get_workflow(workflow_id)
-        if not state:
-            raise ValueError(f"Workflow '{workflow_id}' not found.")
+        def resume(state: VoiceWorkflowState) -> None:
+            action_type = state.human_action.get("action_type") if state.human_action else None
+            if action_type in ("final_audio_approval", "narration_acceptance"):
+                raise InvalidProjectStateError(
+                    f"Workflow '{workflow_id}' requires an explicit approval decision before resume."
+                )
+            resume_action = state.human_action.get("resume_action") if state.human_action else None
+            state.status = WorkflowStatus.RUNNING
+            state.human_action = None
+            state.suggested_action = f"Resuming workflow execution from {resume_action or 'next step'}..."
+            state.updated_at = datetime.now(timezone.utc).isoformat()
 
-        if state.status != WorkflowStatus.WAITING_FOR_HUMAN:
-            raise InvalidProjectStateError(
-                f"Workflow '{workflow_id}' is in status '{state.status.value}'; only workflows in 'waiting_for_human' can be resumed."
-            )
-
-        resume_action = state.human_action.get("resume_action") if state.human_action else None
-        if state.human_action and state.human_action.get("action_type") == "final_audio_approval":
-            for s in state.steps:
-                if s.name == WorkflowStepName.MASTER.value:
-                    s.result_summary["approved"] = True
-
-        state.status = WorkflowStatus.RUNNING
-        state.human_action = None
-        state.suggested_action = f"Resuming workflow execution from {resume_action or 'next step'}..."
-        state.updated_at = datetime.now(timezone.utc).isoformat()
-        self.store.save_workflow(state)
+        state = self.store.transition_workflow(workflow_id, WorkflowStatus.WAITING_FOR_HUMAN, resume)
 
         # Launch background resume loop
         threading.Thread(
@@ -179,6 +169,64 @@ class VoiceProjectWorkflowService:
             name=f"WorkflowResume-{workflow_id}",
         ).start()
 
+        return state
+
+    def approve_workflow(
+        self,
+        workflow_id: str,
+        action: str,
+        approved: bool,
+        artifact_id: str | None = None,
+        artifact_sha256: str | None = None,
+    ) -> VoiceWorkflowState:
+        """Persist an explicit approval decision and resume the workflow."""
+        def approve(state: VoiceWorkflowState) -> None:
+            if not state.human_action:
+                raise InvalidProjectStateError(f"Workflow '{workflow_id}' is not waiting for approval.")
+            action_type = state.human_action.get("action_type")
+            expected_action = {
+                "final_audio_approval": "approve_final_audio",
+                "narration_acceptance": "approve_narration",
+            }.get(action_type)
+            if not expected_action or action != expected_action:
+                raise InvalidProjectStateError(
+                    f"Approval action '{action}' does not match pending gate '{action_type}'."
+                )
+            if not approved:
+                state.suggested_action = "Approval was declined; rerender or cancel the workflow."
+                return
+
+            if action_type == "final_audio_approval":
+                item = (state.human_action.get("items") or [{}])[0]
+                expected_sha = item.get("sha256")
+                master_path = self.project_store.get_project_dir(state.project_id) / "mix" / "master.wav"
+                current_sha = compute_file_sha256(master_path)
+                if artifact_id != "master_wav" or not artifact_sha256:
+                    raise InvalidProjectStateError(
+                        "Final audio approval requires artifact_id='master_wav' and artifact_sha256."
+                    )
+                if artifact_sha256 != expected_sha or current_sha != expected_sha:
+                    raise InvalidProjectStateError("Master audio changed after review; review the current artifact again.")
+
+            step_name = WorkflowStepName.MASTER.value if action_type == "final_audio_approval" else WorkflowStepName.RENDER.value
+            for step in state.steps:
+                if step.name == step_name:
+                    step.result_summary["approved"] = True
+                    break
+            state.status = WorkflowStatus.RUNNING
+            state.human_action = None
+            state.suggested_action = "Approval recorded; resuming workflow execution."
+            state.updated_at = datetime.now(timezone.utc).isoformat()
+
+        state = self.store.transition_workflow(workflow_id, WorkflowStatus.WAITING_FOR_HUMAN, approve)
+        if not approved:
+            return state
+        threading.Thread(
+            target=self._execute_workflow_loop,
+            args=(workflow_id, None, None, None),
+            daemon=True,
+            name=f"WorkflowApproval-{workflow_id}",
+        ).start()
         return state
 
     def _mark_step(
@@ -362,6 +410,7 @@ class VoiceProjectWorkflowService:
                 # Human Gate: Resource Blocked
                 if render_blocked:
                     missing_terms = required_missing or ["Unverified pronunciation/audio asset"]
+                    state = self.store.get_workflow(workflow_id) or state
                     state.status = WorkflowStatus.WAITING_FOR_HUMAN
                     state.human_action = {
                         "action_type": "resource_required",
@@ -371,12 +420,12 @@ class VoiceProjectWorkflowService:
                         "resume_action": "check_resources",
                     }
                     state.suggested_action = f"Add pronunciations or resources for: {', '.join(missing_terms[:3])}"
-                    self._mark_step(
-                        workflow_id,
-                        WorkflowStepName.CHECK_RESOURCES.value,
-                        "failed",
-                        error={"code": "RESOURCE_BLOCKED", "message": "Required resources missing"},
-                    )
+                    for step in state.steps:
+                        if step.name == WorkflowStepName.CHECK_RESOURCES.value:
+                            step.status = "failed"
+                            step.completed_at = datetime.now(timezone.utc).isoformat()
+                            step.error = {"code": "RESOURCE_BLOCKED", "message": "Required resources missing"}
+                            break
                     self.store.save_workflow(state)
                     return  # Pause workflow until user/agent resumes
 
@@ -399,7 +448,8 @@ class VoiceProjectWorkflowService:
                     "render",
                     service.render,
                     project_id,
-                    auto_qc=state.policy.auto_accept_qc_pass,
+                    auto_qc=True,
+                    max_retries=state.policy.retry_budget,
                 )
                 if render_res is None:
                     return
@@ -413,6 +463,7 @@ class VoiceProjectWorkflowService:
                     review_ids = [
                         bid for bid, b in manifest.beats.items() if b.status == RenderStatus.NEEDS_REVIEW
                     ]
+                    state = self.store.get_workflow(workflow_id) or state
                     state.status = WorkflowStatus.WAITING_FOR_HUMAN
                     state.human_action = {
                         "action_type": "audio_quality_review",
@@ -422,12 +473,33 @@ class VoiceProjectWorkflowService:
                         "resume_action": "evaluate",
                     }
                     state.suggested_action = f"Review quality for beats: {', '.join(review_ids)}"
-                    self._mark_step(workflow_id, WorkflowStepName.RENDER.value, "failed", error={"code": "REVIEW_REQUIRED"})
+                    for step in state.steps:
+                        if step.name == WorkflowStepName.RENDER.value:
+                            step.status = "failed"
+                            step.completed_at = datetime.now(timezone.utc).isoformat()
+                            step.error = {"code": "REVIEW_REQUIRED"}
+                            break
                     self.store.save_workflow(state)
                     return
 
                 if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
                     raise RuntimeError(f"Rendering did not achieve NARRATION_READY; ended in '{stage_str}'.")
+
+                if not state.policy.auto_accept_qc_pass:
+                    manifest = self.project_store.load_manifest(project_id)
+                    passed_beats = [bid for bid, beat in manifest.beats.items() if beat.status == RenderStatus.PASSED]
+                    state = self.store.get_workflow(workflow_id) or state
+                    state.status = WorkflowStatus.WAITING_FOR_HUMAN
+                    state.human_action = {
+                        "action_type": "narration_acceptance",
+                        "reason": "Narration passed QC and requires explicit acceptance before mixing.",
+                        "items": passed_beats,
+                        "available_options": ["approve", "rerender", "cancel_workflow"],
+                        "resume_action": "prepare_mix",
+                    }
+                    state.suggested_action = "Review and approve the QC-passed narration beats."
+                    self.store.save_workflow(state)
+                    return
 
             state = self.store.get_workflow(workflow_id)
             if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
@@ -484,17 +556,23 @@ class VoiceProjectWorkflowService:
             is_approved = master_step and master_step.result_summary.get("approved")
 
             if state.policy.require_final_approval and not is_approved:
-                proj_dir = self.project_store.get_project_dir(project_id)
-                master_path = str(proj_dir / "master" / "master.wav")
+                master_path = self.project_store.get_project_dir(project_id) / "mix" / "master.wav"
+                master_sha256 = compute_file_sha256(master_path)
+                if not master_sha256:
+                    raise RuntimeError("Master audio is missing before final approval.")
                 state.status = WorkflowStatus.WAITING_FOR_HUMAN
                 state.human_action = {
                     "action_type": "final_audio_approval",
                     "reason": "Master audio rendered and awaiting final director approval before export.",
-                    "items": [master_path],
+                    "items": [{
+                        "artifact_id": "master_wav",
+                        "sha256": master_sha256,
+                        "download_url": f"/api/v1/voice-projects/{project_id}/artifacts/master_wav",
+                    }],
                     "available_options": ["approve", "rerender", "cancel_workflow"],
                     "resume_action": "export",
                 }
-                state.suggested_action = f"Listen and approve master audio: {master_path}"
+                state.suggested_action = "Listen to and explicitly approve the master audio."
                 self.store.save_workflow(state)
                 return
 

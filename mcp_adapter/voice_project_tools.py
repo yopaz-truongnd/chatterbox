@@ -229,7 +229,17 @@ def handle_voice_project_tool(
         script_text = args.get("script_text", "").strip()
         if not script_text:
             return _error_content("Field 'script_text' is required.", error_code="VALIDATION_ERROR")
-        res = _execute_rest_request(request_fn, "POST", "/api/v1/voice-workflows", data=args)
+        payload = dict(args)
+        policy_fields = {
+            "provider", "retry_budget", "auto_accept_qc_pass", "allow_resource_substitute",
+            "mixing_profile", "mastering_profile", "output_formats", "require_final_approval",
+        }
+        policy = dict(payload.pop("policy", {}) or {})
+        for field in policy_fields:
+            if field in payload:
+                policy[field] = payload.pop(field)
+        payload["policy"] = policy
+        res = _execute_rest_request(request_fn, "POST", "/api/v1/voice-workflows", data=payload)
         return _handle_response(res)
 
     elif name == "chatterbox_voice_workflow_status":
@@ -244,6 +254,23 @@ def handle_voice_project_tool(
         if not workflow_id:
             return _error_content("Field 'workflow_id' is required.", error_code="VALIDATION_ERROR")
         res = _execute_rest_request(request_fn, "POST", f"/api/v1/voice-workflows/{workflow_id}/resume")
+        return _handle_response(res)
+
+    elif name == "chatterbox_voice_workflow_approve":
+        workflow_id = args.get("workflow_id", "").strip()
+        if not workflow_id:
+            return _error_content("Field 'workflow_id' is required.", error_code="VALIDATION_ERROR")
+        payload = {
+            key: args.get(key)
+            for key in ("action", "approved", "artifact_id", "artifact_sha256")
+            if key in args
+        }
+        res = _execute_rest_request(
+            request_fn,
+            "POST",
+            f"/api/v1/voice-workflows/{workflow_id}/approve",
+            data=payload,
+        )
         return _handle_response(res)
 
     elif name == "chatterbox_voice_workflow_cancel":

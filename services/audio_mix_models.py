@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+import os
+import tempfile
 from typing import Any
 import wave
 import yaml
@@ -193,8 +195,17 @@ class ExportManifest(BaseModel):
     def save_yaml(self, path: Path | str) -> None:
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            f.write(self.to_yaml())
+        tmp_name = ""
+        try:
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=p.parent, delete=False) as f:
+                tmp_name = f.name
+                f.write(self.to_yaml())
+                f.flush()
+                os.fsync(f.fileno())
+            Path(tmp_name).replace(p)
+        finally:
+            if tmp_name and Path(tmp_name).exists():
+                Path(tmp_name).unlink()
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ExportManifest:

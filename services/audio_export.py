@@ -256,6 +256,7 @@ class AudioExportService:
             project_id=project_id,
             profiles=export_profiles,
             artifacts=artifacts,
+            source_master_sha256=compute_file_sha256(src_master),
         )
 
         manifest_path = out_dir / "export-manifest.yaml"

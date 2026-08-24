@@ -368,10 +368,13 @@ class VoiceProjectService:
         allow_resource_blocked: bool = False,
         force_rerender: bool = False,
         auto_qc: bool = True,
+        max_retries: int = 3,
         progress_callback: Any | None = None,
         cancellation_token: CancellationToken | None = None,
     ) -> VoiceRenderResult:
         """Render narration beats through injected TTSExecutionPort with Voice QC verification."""
+        if max_retries < 1:
+            raise ValueError("max_retries must be at least 1")
         state = self.store.get_project_state(project_id)
 
         # 1. Staleness Check
@@ -433,6 +436,7 @@ class VoiceProjectService:
                     resource_report=report,
                     beats_filter=beats,
                     auto_qc=auto_qc,
+                    max_retries=max_retries,
                     allow_resource_blocked=allow_resource_blocked,
                     force_rerender=force_rerender,
                     progress_callback=progress_callback,
@@ -1028,4 +1032,3 @@ class VoiceProjectService:
             })
 
         return artifacts
-

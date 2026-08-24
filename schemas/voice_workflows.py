@@ -19,6 +19,7 @@ class WorkflowPolicySchema(BaseModel):
     )
     retry_budget: int = Field(
         default=2,
+        ge=1,
         description="Maximum automated QC retry budget per narration beat.",
     )
     auto_accept_qc_pass: bool = Field(
@@ -101,3 +102,12 @@ class VoiceWorkflowResponse(BaseModel):
     updated_at: str
     result: dict[str, Any] | None = None
     error: dict[str, Any] | None = None
+
+
+class ApproveVoiceWorkflowRequest(BaseModel):
+    """Explicit decision for a workflow human-approval gate."""
+
+    action: str
+    approved: bool
+    artifact_id: str | None = None
+    artifact_sha256: str | None = None
