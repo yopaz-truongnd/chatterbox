@@ -1,0 +1,57 @@
+version: 1
+
+substitutions:
+  # Ambience substitutions
+  ancient_dark_atmosphere:
+    - dark_temple_ambience
+    - dark_wind_atmosphere
+    - mysterious_cave_drone
+    - mystical_chamber_tone
+
+  mysterious_environment:
+    - eerie_wind_whisper
+    - ominous_hollow_drone
+    - deep_fog_ambience
+
+  cold_mountain_wind:
+    - icy_wind
+    - mountain_gale
+    - howling_blizzard
+
+  ancient_temple_drone:
+    - sacred_hall_ambience
+    - mystical_chamber_tone
+    - ritual_drone
+
+  underworld_abyss:
+    - dark_void_hum
+    - ominous_rumble
+    - subterranean_echo
+
+  # SFX substitutions
+  supernatural_reveal_riser:
+    - mystical_dark_riser
+    - dark_tension_riser
+    - cinematic_supernatural_swell
+    - eerie_crescendo
+
+  dark_supernatural_impact:
+    - heavy_doom_hit
+    - mythic_sub_boom
+    - dramatic_dark_thud
+    - cinematic_slam
+
+  ancient_whoosh:
+    - spirit_pass_whoosh
+    - mystical_air_sweep
+    - heavy_wind_whoosh
+
+  mythological_creature_roar:
+    - beast_growl_deep
+    - monster_distant_bellow
+    - dragon_sub_rumble
+
+  divine_light_sparkle:
+    - celestial_shimmer
+    - ethereal_chime
+    - sacred_resonance

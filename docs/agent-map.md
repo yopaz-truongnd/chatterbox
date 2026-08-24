@@ -76,15 +76,61 @@ Invariant xử lý segment:
 - Desktop application: `apps/desktop.py`, `ui/`, `utils/`
 - Gradio applications: `apps/gradio/`
 
+## Resource Management & Pronunciation Knowledge (Phases 4-6)
+
+Dùng cho asset manifest, resolution từ narrative intent sang local assets, candidate scoring, intent substitution graph, pronunciation verification cho proper nouns mythology, asset ingest và shopping list.
+
+- Primary Services:
+  - `services/resource_models.py` — Domain models cho Manifest, Requirements, Candidates, Resolutions, Gaps, Pronunciation, Reports.
+  - `services/resource_manager.py` — Extract requirements từ Directed VoicePlan, scoring candidate (intent, intensity, duration, tags, usage), substitution graph, gap report & readiness calculation.
+  - `services/pronunciation_knowledge.py` — Từ điển proper nouns, alias lookup, trạng thái kiểm duyệt (verified / unverified / rejected), phát hiện knowledge gap và tiêm pronunciation override vào VoiceDirection.
+  - `services/asset_ingest.py` — Trích xuất thông tin tệp audio, nạp asset vào manifest, quản lý lịch sử sử dụng (usage tracking) và tổng hợp Resource Shopping List đa dự án.
+  - `services/resource_doctor.py` — Chẩn đoán sức khỏe hệ thống tài nguyên, kiểm tra liên kết file, trùng lặp ID/path/hash và cảnh báo thiếu tag/intent.
+- Configuration & Knowledge:
+  - `assets/manifest.yaml` — Danh mục âm thanh mẫu (Ambience, SFX, Music).
+  - `rules/resource-substitution.yaml` — Đồ thị thay thế ý định âm thanh (Sound Intent Substitution Graph).
+  - `rules/resource-selection.yaml` — Trọng số chấm điểm, ngưỡng thay thế và chính sách chống lặp (Anti-repeat).
+  - `knowledge/pronunciation.yaml` — Cơ sở tri thức phát âm thần thoại (Zhulong, Taotie, Qiongqi, Nuwa, Fuxi,...).
+- Tests:
+  - `tests/test_resource_manager.py`
+  - `tests/test_pronunciation_knowledge.py`
+  - `tests/test_asset_ingest.py`
+  - `tests/test_resource_system_e2e.py`
+
+## CLI Workflow, TTS Provider & Per-Beat Renderer, Voice QC (Phases 7-9)
+
+Dùng cho CLI workspace orchestration, TTS provider abstraction (Fake & Gemini), per-beat audio rendering, Voice QC 3-layer (Signal, Content, Direction), deterministic retries, render manifest và candidate selection.
+
+- Primary Services:
+  - `services/render_models.py` — Domain models cho ProjectState, TTSRenderRequest, TTSRenderResult, RenderManifest, QC Results.
+  - `services/tts/base.py`, `services/tts/fake.py`, `services/tts/gemini.py` — TTS Provider protocol và adapter (FakeTTSProvider offline test, GeminiTTSProvider centralized direction mapping).
+  - `services/voice_renderer.py` — Per-beat renderer, render readiness gate, selective rerender, idempotency & resume.
+  - `services/voice_qc.py` — 3-layer Voice QC (Signal: clipping/RMS/silence, Content: Whisper WER/omissions/proper noun risk, Direction: WPM/duration range), deterministic retry policy & candidate selection.
+  - `services/voice_cli.py` — CLI Orchestrator (`voice new`, `inspect`, `plan`, `resources`, `resources missing`, `assets ingest`, `doctor`, `render`, `rerender`, `qc`).
+  - `voice_cli.py` — Executable root CLI wrapper.
+- Tests:
+  - `tests/test_voice_cli.py`
+  - `tests/test_voice_renderer.py`
+  - `tests/test_voice_qc.py`
+  - `tests/test_voice_pipeline_e2e.py`
+
 ## Ownership Rules
 
-- Audio tensors và signal QC thuộc `services/audio.py`.
-- Whisper STT và Speech Content Critic thuộc `services/critic.py`.
-- Narration Plan & Pronunciation Scanner thuộc `services/narration_planner.py`.
-- Kịch bản & phân đoạn ngữ nghĩa thuộc `services/project_script.py`.
-- Batch candidate generation & retry sequencing thuộc `services/batch_runner.py` và `inference_runner.py`.
-- Worker state và technical events thuộc `services/job_manager.py`.
+- `services/project_requirements.py` sở hữu heuristic trích xuất và câu hỏi làm rõ.
+- `services/project_script.py` sở hữu script outline và phân đoạn ngữ nghĩa.
+- `services/narration_planner.py` sở hữu việc phát hiện phát âm và gán thông số Narration Plan.
+- `services/voice_plan.py` sở hữu schema hợp đồng VoicePlan và khả năng tương thích ngược.
+- `services/story_analyzer.py` sở hữu phân tích kịch bản thành StoryBeat và gán role.
+- `services/sound_director.py` sở hữu đạo diễn âm thanh (Ambience, SFX, Silence) theo mạch kịch bản.
+- `services/director_critic.py` sở hữu kiểm duyệt và tự động sửa xung đột âm thanh.
+- `services/resource_manager.py` sở hữu việc trích xuất yêu cầu tài nguyên, tính điểm chấm chọn và đồ thị thay thế.
+- `services/pronunciation_knowledge.py` sở hữu cơ sở tri thức phát âm tên riêng thần thoại.
+- `services/asset_ingest.py` & `services/resource_doctor.py` sở hữu nạp tài nguyên và chẩn đoán thư viện.
+- `services/voice_renderer.py` & `services/tts/` sở hữu render voice narration theo từng beat.
+- `services/voice_qc.py` sở hữu kiểm định chất lượng âm thanh 3 lớp và chính sách retry.
+- `services/voice_cli.py` sở hữu giao diện dòng lệnh orchestration layer.
+- `JobManager` sở hữu tiến trình kỹ thuật chạy inference TTS và phát sinh sự kiện `EventBus`.
+- Các router `routers/`, adapter MCP `mcp_adapter/`, UI `webui/` và CLI `services/voice_cli.py` tuyệt đối không chứa business logic; chỉ đóng vai trò validate, chuyển đổi hoặc hiển thị dữ liệu.
 - Product state và confirmation gates thuộc `services/project_planner.py`.
 - HTTP validation thuộc `routers/`.
 - MCP chỉ đóng vai trò adapter chuyển đổi giao thức, định nghĩa schema trong `mcp_adapter/catalog.py`.
-
