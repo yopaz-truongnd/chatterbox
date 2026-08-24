@@ -95,6 +95,25 @@ class VoiceProjectStore:
         yaml_content = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
         VoiceProjectStore._atomic_write_text(file_path, yaml_content)
 
+    def project_exists(self, project_id: str) -> bool:
+        """Check if a project workspace and state file exists."""
+        try:
+            self.validate_project_id(project_id)
+            state_path = self.get_project_dir(project_id) / "project.yaml"
+            return state_path.exists()
+        except Exception:
+            return False
+
+    def list_projects(self) -> list[str]:
+        """Return all project IDs located under root_dir."""
+        if not self.root_dir.exists():
+            return []
+        res = []
+        for p in sorted(self.root_dir.iterdir()):
+            if p.is_dir() and (p / "project.yaml").exists():
+                res.append(p.name)
+        return res
+
     # ==========================================
     # Workspace & State Management
     # ==========================================

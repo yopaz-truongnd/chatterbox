@@ -1,7 +1,8 @@
-"""Voice Project Server Dependency Wiring (Phase 12).
+"""Voice Project Server Dependency Wiring (Phase 12-13 Hardened).
 
 Provides composition roots and dependency injection factories for FastAPI REST API
-and MCP Agent servers, guaranteeing in-process JobManager execution for 'local' TTS.
+and MCP Agent servers, strictly enforcing in-process JobExecutionGateway for 'local' TTS
+with zero silent fallbacks to HTTP loopback or FakeTTSProvider in production.
 """
 
 from __future__ import annotations
@@ -11,15 +12,15 @@ from pathlib import Path
 from typing import Any
 
 from services.tts.base import TTSExecutionPort
-from services.tts.chatterbox_job import ChatterboxJobProvider
+from services.tts.chatterbox_job import ChatterboxJobProvider, DefaultJobManagerGateway
 from services.tts.fake import FakeTTSProvider
 from services.tts.gemini import GeminiTTSProvider
-from services.tts.provider_factory import create_tts_provider
 from services.voice_project_operations import VoiceProjectOperationManager
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_store import VoiceProjectStore
+from services.voice_renderer import ProviderUnavailableError
 
-# Shared OperationManager singleton across REST and MCP
+# Shared OperationManager singleton across the server process
 _GLOBAL_OPERATION_MANAGER: VoiceProjectOperationManager | None = None
 
 
@@ -28,7 +29,6 @@ def get_voice_project_store(root_dir: str | Path | None = None) -> VoiceProjectS
     if root_dir:
         base_dir = Path(root_dir)
     else:
-        # Check environment or default to ./projects
         data_dir = os.getenv("CHATTERBOX_API_DATA_DIR")
         if data_dir:
             base_dir = Path(data_dir) / "projects"
@@ -41,7 +41,9 @@ def get_voice_project_operation_manager() -> VoiceProjectOperationManager:
     """Provide shared VoiceProjectOperationManager singleton."""
     global _GLOBAL_OPERATION_MANAGER
     if _GLOBAL_OPERATION_MANAGER is None:
-        _GLOBAL_OPERATION_MANAGER = VoiceProjectOperationManager(max_workers=4)
+        data_dir = os.getenv("CHATTERBOX_API_DATA_DIR")
+        ops_dir = Path(data_dir) / "operations" if data_dir else Path("projects/operations")
+        _GLOBAL_OPERATION_MANAGER = VoiceProjectOperationManager(max_workers=4, operations_dir=ops_dir)
     return _GLOBAL_OPERATION_MANAGER
 
 
@@ -50,23 +52,31 @@ def resolve_server_tts_provider(
     model: str | None = None,
     voice: str | None = None,
 ) -> TTSExecutionPort:
-    """Resolve TTS Execution Port for server process, ensuring local uses in-process JobManager."""
+    """Resolve TTS Execution Port for server process, guaranteeing strict provider resolution.
+
+    - 'local': Uses DefaultJobManagerGateway wrapping in-process JobManager. Fails loudly with
+      ProviderUnavailableError if JobManager is not initialized. No silent fallback to HTTP or Fake.
+    - 'gemini': Uses GeminiTTSProvider with cloud credentials.
+    - 'fake': Explicit test mock provider (only selected when provider='fake').
+    """
     normalized_name = (provider_name or "local").lower().strip()
 
     if normalized_name in ("local", "chatterbox-job", "in-process", "job"):
-        # Resolve JobManager from api_app singleton
-        gateway = None
+        jm = None
         try:
             import api_app
-            gateway = getattr(api_app, "job_manager", None)
+            jm = getattr(api_app, "job_manager", None)
         except Exception:
-            gateway = None
+            jm = None
 
-        if gateway is not None:
-            return ChatterboxJobProvider(gateway=gateway, default_model=model or "nano")
-        if os.getenv("CHATTERBOX_IN_PROCESS") == "1" or os.getenv("CHATTERBOX_TEST_MODE") == "1":
-            return FakeTTSProvider()
-        return create_tts_provider("chatterbox-http", model=model, voice=voice)
+        if jm is None:
+            raise ProviderUnavailableError(
+                "Local TTS provider requires the in-process JobManager runtime which is not currently available. "
+                "Ensure the FastAPI server is running or explicitly select provider='fake' for test suites."
+            )
+
+        gateway = DefaultJobManagerGateway(jm)
+        return ChatterboxJobProvider(gateway=gateway, default_model=model or "nano")
 
     if normalized_name == "gemini":
         return GeminiTTSProvider(model_name=model, voice_name=voice)
@@ -74,8 +84,9 @@ def resolve_server_tts_provider(
     if normalized_name in ("fake", "fake-tts", "test"):
         return FakeTTSProvider()
 
-    # Fallback to general factory
-    return create_tts_provider(normalized_name, model=model, voice=voice)
+    raise ProviderUnavailableError(
+        f"Unsupported or unconfigured TTS provider '{provider_name}'. Supported providers: 'local', 'gemini', 'fake'."
+    )
 
 
 def get_voice_project_service(
@@ -83,9 +94,15 @@ def get_voice_project_service(
     store: VoiceProjectStore | None = None,
     execution_port: TTSExecutionPort | None = None,
 ) -> VoiceProjectService:
-    """Create VoiceProjectService configured for server/MCP execution."""
+    """Create VoiceProjectService configured for server execution."""
     actual_store = store or get_voice_project_store()
-    actual_port = execution_port or resolve_server_tts_provider(provider_name)
+    actual_port = execution_port
+    if actual_port is None:
+        try:
+            actual_port = resolve_server_tts_provider(provider_name)
+        except Exception:
+            actual_port = None
+
     return VoiceProjectService(
         store=actual_store,
         execution_port=actual_port,
