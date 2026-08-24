@@ -14,7 +14,7 @@ from services.render_models import (
     TTSRenderRequest,
     TTSRenderResult,
 )
-from services.tts.base import TTSProvider
+from services.tts.base import CancellationToken, ProgressCallback, TTSProvider
 
 
 class FakeTTSProvider(TTSProvider):
@@ -56,7 +56,25 @@ class FakeTTSProvider(TTSProvider):
             supports_seed=True,
         )
 
-    def render(self, request: TTSRenderRequest, output_dir: Path) -> TTSRenderResult:
+    def render(
+        self,
+        request: TTSRenderRequest,
+        output_dir: Path,
+        progress_callback: ProgressCallback | None = None,
+        cancellation_token: CancellationToken | None = None,
+    ) -> TTSRenderResult:
+        if cancellation_token and cancellation_token.is_cancelled():
+            return TTSRenderResult(
+                success=False,
+                provider="fake",
+                model="fake-tts-v1",
+                audio_path=None,
+                error="Render cancelled by cancellation token",
+                retryable=False,
+            )
+
+        if progress_callback:
+            progress_callback("generating", 50.0, {"beat_id": request.beat_id})
         self.render_call_count += 1
         self.rendered_requests.append(request)
 

@@ -29,6 +29,7 @@ dependencies = [
     "omegaconf",
     "pydantic>=2.0",
     "PyYAML>=6.0",
+    "google-genai>=0.1.0",
 ]
 
 [project.optional-dependencies]

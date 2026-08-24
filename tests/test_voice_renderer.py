@@ -28,6 +28,7 @@ from services.resource_models import (
     ResourceReport,
 )
 from services.render_models import (
+    ProviderErrorType,
     RenderManifest,
     RenderStatus,
     TTSRenderRequest,
@@ -209,14 +210,13 @@ class TestVoiceRendererPhase8(unittest.TestCase):
 
         self.assertEqual(payload["text"], "When Zhulong opened its eyes.")
         self.assertEqual(payload["voice_profile"], "mythology_narrator_male")
-        self.assertIn("Emotion/Tone: dramatic", payload["system_instruction"])
-        self.assertIn("Energy Level (1-5): 4.2", payload["system_instruction"])
-        self.assertIn("Pace Multiplier: 0.92", payload["system_instruction"])
-        self.assertIn("Target Pacing: 130 WPM", payload["system_instruction"])
+        self.assertIn("Tone/Emotion: dramatic", payload["system_instruction"])
+        self.assertIn("strong, authoritative", payload["system_instruction"])
+        self.assertIn("130 words per minute", payload["system_instruction"])
         self.assertIn("Zhulong", payload["system_instruction"])
 
-    def test_gemini_provider_unimplemented_error(self):
-        gemini_provider = GeminiTTSProvider(api_key="mock_key", model_name="flash-tts")
+    def test_gemini_provider_unconfigured_error(self):
+        gemini_provider = GeminiTTSProvider(api_key="", model_name="gemini-3.1-flash-tts-preview")
         req = TTSRenderRequest(
             project_id="proj_g",
             beat_id="B01",
@@ -225,7 +225,8 @@ class TestVoiceRendererPhase8(unittest.TestCase):
         res = gemini_provider.render(req, self.temp_dir)
         self.assertFalse(res.success)
         self.assertIsNone(res.audio_path)
-        self.assertIn("not yet implemented", res.error.lower())
+        self.assertEqual(res.error_type, ProviderErrorType.AUTH_ERROR)
+        self.assertFalse(res.retryable)
 
     def test_renderer_retries_on_transient_provider_failure(self):
         # Beat B01 fails on attempt 1 (transient), then succeeds on attempt 2

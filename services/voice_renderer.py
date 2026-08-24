@@ -26,7 +26,8 @@ from services.render_models import (
     RenderStatus,
     TTSRenderRequest,
 )
-from services.tts.base import TTSProvider
+from services.tts.base import CancellationToken, ProgressCallback, TTSExecutionPort, TTSProvider
+from services.tts.provider_factory import create_tts_provider
 from services.voice_qc import evaluate_beat_qc, select_best_candidate
 
 
@@ -118,11 +119,13 @@ def render_single_beat_attempt(
     project_dir: Path,
     project_id: str,
     beat: Beat,
-    provider: TTSProvider,
+    provider: TTSExecutionPort | TTSProvider,
     attempt_id: int,
     voice_profile: str = "mythology_narrator_male",
     pronunciation_overrides: dict[str, str] | None = None,
     retry_adjustment: dict[str, Any] | None = None,
+    progress_callback: ProgressCallback | None = None,
+    cancellation_token: CancellationToken | None = None,
 ) -> RenderAttempt:
     """Render a single attempt for a beat using the chosen TTS provider."""
     beat_render_dir = project_dir / "renders" / beat.id
@@ -137,7 +140,12 @@ def render_single_beat_attempt(
         retry_adjustment=retry_adjustment,
     )
 
-    result = provider.render(request, beat_render_dir)
+    result = provider.render(
+        request,
+        beat_render_dir,
+        progress_callback=progress_callback,
+        cancellation_token=cancellation_token,
+    )
 
     status = RenderStatus.RENDERED if result.success else RenderStatus.FAILED
 
@@ -158,7 +166,9 @@ def render_single_beat_attempt(
             "director_note": request.director_note,
         },
         error=result.error,
+        error_type=result.error_type,
         retryable=result.retryable,
+        retry_after_seconds=result.retry_after_seconds,
     )
 
     # Save attempt metadata json
@@ -172,7 +182,7 @@ def render_single_beat_attempt(
 def render_project_narration(
     project_dir: Path,
     plan: VoicePlan,
-    provider: TTSProvider,
+    provider: TTSExecutionPort | TTSProvider | None = None,
     resource_report: ResourceReport | None = None,
     beats_filter: list[str] | None = None,
     auto_qc: bool = True,
@@ -180,8 +190,11 @@ def render_project_narration(
     force_rerender: bool = False,
     allow_resource_blocked: bool = False,
     force: bool = False,
+    progress_callback: ProgressCallback | None = None,
+    cancellation_token: CancellationToken | None = None,
 ) -> tuple[RenderManifest, ProjectState | None]:
     """Render project narration beats with resource gating, auto-QC, and resumption."""
+    provider = provider or create_tts_provider()
     force_rerender = force_rerender or force
     project_dir = Path(project_dir)
     project_id = plan.project.id or project_dir.name
@@ -223,6 +236,9 @@ def render_project_narration(
         retry_adjustment: dict[str, Any] | None = None
 
         while current_attempt_id <= max_retries:
+            if cancellation_token and cancellation_token.is_cancelled():
+                break
+
             attempt = render_single_beat_attempt(
                 project_dir=project_dir,
                 project_id=project_id,
@@ -232,6 +248,8 @@ def render_project_narration(
                 voice_profile=voice_profile,
                 pronunciation_overrides=pronunciation_overrides,
                 retry_adjustment=retry_adjustment,
+                progress_callback=progress_callback,
+                cancellation_token=cancellation_token,
             )
 
             if attempt.status == RenderStatus.FAILED:

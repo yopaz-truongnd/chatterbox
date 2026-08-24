@@ -180,7 +180,7 @@ class TestVoiceCLIPhase7(unittest.TestCase):
         import os
         old_key = os.environ.pop("GEMINI_API_KEY", None)
         try:
-            exit_code = main(["render", str(proj_dir)])
+            exit_code = main(["render", str(proj_dir), "--force"])
             # Must return EXIT_PROVIDER_UNAVAILABLE (4), NOT fall back to fake!
             self.assertEqual(exit_code, EXIT_PROVIDER_UNAVAILABLE)
         finally:
@@ -198,7 +198,7 @@ class TestVoiceCLIPhase7(unittest.TestCase):
         proj_dir = projects_root / "qc_persist_proj"
         main(["plan", str(proj_dir)])
         # Render with fake provider
-        main(["render", str(proj_dir), "--fake"])
+        main(["render", str(proj_dir), "--fake", "--force"])
 
         # Now run standalone QC
         exit_code = main(["qc", str(proj_dir)])
@@ -276,6 +276,11 @@ class TestVoiceCLIPhase7(unittest.TestCase):
             self.assertEqual(entry.id, "sfx_supernatural_boom")
             self.assertIn("dark_supernatural_impact", entry.intents)
             self.assertIn("magic", entry.tags)
+
+    def test_cli_rejects_chatterbox_job_provider(self):
+        # CLI must not expose in-process provider
+        with self.assertRaises(SystemExit):
+            main(["render", str(self.temp_dir), "--provider", "chatterbox-job"])
 
 
 if __name__ == "__main__":

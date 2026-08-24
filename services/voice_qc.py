@@ -1,21 +1,27 @@
-"""Voice Quality Control (QC) Service (Phase 9).
+"""Voice Quality Control (QC) Service (Phase 9 & Phase 10B).
 
-Performs 3-layer automated evaluation:
-1. Signal QC (loudness, peak ceiling, clipping, silence ratio)
-2. Content QC (Whisper/STT accuracy, missing words, hallucinations, proper noun risks)
-3. Direction QC (WPM, pacing, duration tolerance vs StoryBeat direction)
-
-Provides deterministic retry policies and candidate selection.
+Thin adapter layer integrating with canonical AudioCandidateEvaluator:
+- Reuses services.audio.evaluate_audio_signal for Signal QC.
+- Reuses services.critic.evaluate_speech_content for Content QC.
+- Integrates Direction QC layer and maps to BeatQCResult.
+- Provides deterministic candidate ranking and retry adjustment.
 """
 
 from __future__ import annotations
 
 import math
 from pathlib import Path
-import re
 from typing import Any
 import wave
 
+from services.audio import evaluate_audio_signal, load_and_resample_audio
+from services.audio_candidate_evaluator import (
+    AudioCandidateEvaluator,
+    CandidateEvaluation,
+    evaluate_direction_layer,
+    rank_candidates,
+)
+from services.critic import evaluate_speech_content
 from services.render_models import (
     BeatQCResult,
     ContentQCResult,
@@ -25,7 +31,6 @@ from services.render_models import (
     SignalQCResult,
 )
 from services.voice_plan import Beat
-from services.critic import evaluate_speech_content
 
 
 # QC Weights
@@ -48,83 +53,56 @@ def evaluate_signal_qc(audio_path: str | Path) -> SignalQCResult:
             issues=["Audio file does not exist"],
         )
 
-    try:
-        with wave.open(str(path), "rb") as wf:
-            n_channels = wf.getnchannels()
-            sampwidth = wf.getsampwidth()
-            framerate = wf.getframerate()
-            n_frames = wf.getnframes()
-            raw_bytes = wf.readframes(n_frames)
-
-        duration = n_frames / max(1, framerate)
-        if duration <= 0.05:
-            return SignalQCResult(
-                passed=False,
-                duration=duration,
-                issues=["Audio duration is zero or too short (<50ms)"],
-            )
-
-        # Decode 16-bit PCM samples
-        if sampwidth == 2:
-            import struct
-            fmt = f"<{n_frames * n_channels}h"
-            samples = struct.unpack(fmt, raw_bytes)
-            max_val = 32768.0
-        else:
-            # Fallback
-            samples = [0]
-            max_val = 1.0
-
-        if not samples:
-            return SignalQCResult(passed=False, duration=duration, issues=["Empty audio samples"])
-
-        abs_samples = [abs(s) / max_val for s in samples]
-        peak = max(abs_samples)
-        peak_dbfs = 20.0 * math.log10(max(1e-6, peak))
-
-        # RMS calculation
-        sum_sq = sum(s ** 2 for s in abs_samples)
-        rms = math.sqrt(sum_sq / len(samples))
-        rms_dbfs = 20.0 * math.log10(max(1e-6, rms))
-
-        # Silence ratio (samples below -50dB)
-        silence_threshold = 10.0 ** (-50.0 / 20.0)
-        silent_count = sum(1 for s in abs_samples if s < silence_threshold)
-        silence_ratio = silent_count / len(samples)
-
-        clipping_detected = peak >= 0.995 or any(abs(s) >= 32760 for s in samples)
-
-        issues: list[str] = []
-        warnings: list[str] = []
-
-        if clipping_detected:
-            issues.append(f"Severe clipping detected (peak {peak_dbfs:.1f} dBFS)")
-        if rms_dbfs < -45.0:
-            issues.append(f"Audio is nearly silent or too quiet (RMS {rms_dbfs:.1f} dBFS)")
-        elif rms_dbfs > -10.0:
-            warnings.append(f"Audio is slightly hot/loud (RMS {rms_dbfs:.1f} dBFS)")
-
-        if silence_ratio > 0.65:
-            issues.append(f"Excessive silence detected ({silence_ratio * 100:.1f}%)")
-
-        passed = len(issues) == 0
-
-        return SignalQCResult(
-            passed=passed,
-            duration=round(duration, 3),
-            peak_dbfs=round(peak_dbfs, 2),
-            rms_dbfs=round(rms_dbfs, 2),
-            clipping_detected=clipping_detected,
-            silence_ratio=round(silence_ratio, 3),
-            issues=issues,
-            warnings=warnings,
-        )
-    except Exception as exc:
+    tensor, err = load_and_resample_audio(path, target_sr=24000)
+    if tensor is None or tensor.numel() == 0:
         return SignalQCResult(
             passed=False,
             duration=0.0,
-            issues=[f"Signal inspection failed: {exc}"],
+            peak_dbfs=-100.0,
+            rms_dbfs=-100.0,
+            clipping_detected=True,
+            silence_ratio=1.0,
+            issues=[err or "Empty audio samples"],
         )
+
+    eval_dict = evaluate_audio_signal(
+        tensor,
+        sample_rate=24000,
+        min_rms_db=-38.0,
+        max_rms_db=-10.0,
+        max_silence_edge_s=0.35,
+    )
+
+    # Calculate silence ratio
+    duration = eval_dict["duration_seconds"]
+    lead = eval_dict.get("leading_silence_s", 0.0)
+    trail = eval_dict.get("trailing_silence_s", 0.0)
+    silence_ratio = round((lead + trail) / max(0.01, duration), 3) if duration > 0 else 1.0
+
+    peak = eval_dict.get("peak", 0.0)
+    peak_dbfs = round(20.0 * math.log10(max(1e-6, peak)), 2)
+    rms_dbfs = eval_dict.get("rms_db", -100.0)
+
+    clipping_detected = peak >= 0.995 or any("clipping" in i.lower() for i in eval_dict.get("issues", []))
+
+    issues = list(eval_dict.get("issues", []))
+    warnings = list(eval_dict.get("warnings", []))
+
+    if silence_ratio > 0.65 and "Audio is silent" not in "".join(issues):
+        issues.append(f"Excessive silence detected ({silence_ratio * 100:.1f}%)")
+
+    passed = eval_dict.get("passed", False) and len(issues) == 0
+
+    return SignalQCResult(
+        passed=passed,
+        duration=round(duration, 3),
+        peak_dbfs=peak_dbfs,
+        rms_dbfs=rms_dbfs,
+        clipping_detected=clipping_detected,
+        silence_ratio=silence_ratio,
+        issues=issues,
+        warnings=warnings,
+    )
 
 
 def evaluate_content_qc(
@@ -133,61 +111,52 @@ def evaluate_content_qc(
     target_wpm: float | None = None,
     pronunciation_overrides: dict[str, str] | None = None,
 ) -> ContentQCResult:
-    """Layer 2: Content QC comparing speech transcript against original Beat script text."""
-    path = Path(audio_path)
-    if not path.exists():
-        return ContentQCResult(
-            passed=False,
-            wer=1.0,
-            accuracy_percent=0.0,
-            issues=["Audio file not found for content QC"],
-        )
-
-    # Use existing speech content evaluator from services/critic.py
-    eval_res = evaluate_speech_content(
-        audio_source=path,
+    """Layer 2: Content QC comparing Whisper ASR transcription against reference script."""
+    eval_dict = evaluate_speech_content(
+        audio_source=audio_path,
+        sr=24000,
         reference_text=reference_script,
         target_wpm=target_wpm,
     )
 
-    transcription = eval_res.get("transcription", "")
-    accuracy = float(eval_res.get("accuracy_percent", 100.0))
-    wer = round(max(0.0, 1.0 - (accuracy / 100.0)), 3)
-    missing = eval_res.get("missing_words", [])
-    repeated = eval_res.get("repeated_words", [])
-    actual_wpm = float(eval_res.get("actual_wpm", 138.0))
-    issues = list(eval_res.get("issues", []))
-    warnings = list(eval_res.get("warnings", []))
+    accuracy = float(eval_dict.get("accuracy_percent", 100.0))
+    missing = eval_dict.get("missing_words", [])
+    repeated = eval_dict.get("repeated_words", [])
+    transcription = eval_dict.get("transcription", "")
+    actual_wpm = int(eval_dict.get("actual_wpm", target_wpm or 138))
 
-    # Pronunciation risk check: verify required proper nouns appear in transcript
-    risk_flags: list[str] = []
+    ref_words = [w for w in reference_script.split() if w.strip()]
+    ref_count = max(1, len(ref_words))
+    wer = round(len(missing) / float(ref_count), 3)
+
+    issues: list[str] = []
+    warnings: list[str] = list(eval_dict.get("warnings", []))
+
+    if missing:
+        issues.append(f"Missing words: {', '.join(missing[:5])}")
+    if repeated:
+        issues.append(f"Repeated words: {', '.join(repeated[:5])}")
+
+    # Check pronunciation risks
+    proper_noun_risks: list[str] = []
     if pronunciation_overrides:
-        hyp_lower = transcription.lower()
-        for proper_noun in pronunciation_overrides.keys():
-            # Check if proper noun or its phonetic parts exist
-            noun_norm = proper_noun.lower()
-            if noun_norm not in hyp_lower:
-                risk_flags.append(f"Proper noun '{proper_noun}' might be mispronounced or omitted in transcript")
-                warnings.append(f"Pronunciation check flag: {proper_noun}")
+        for term in pronunciation_overrides:
+            if term.lower() in reference_script.lower() and term.lower() not in transcription.lower():
+                proper_noun_risks.append(term)
+                warnings.append(f"Pronunciation term '{term}' may be mispronounced or missing")
 
-    # Enforce tight content quality thresholds
-    if wer > 0.15:
-        issues.append(f"WER exceeds maximum allowed threshold ({wer * 100:.1f}% > 15.0%)")
-    if len(missing) > 1:
-        issues.append(f"Multiple missing words detected ({len(missing)} words omitted)")
-
-    passed = len(issues) == 0 and accuracy >= 85.0 and wer <= 0.15
+    passed = (accuracy >= 85.0) and (wer <= 0.15) and (len(missing) == 0)
 
     return ContentQCResult(
         passed=passed,
+        accuracy_percent=round(accuracy, 1),
         wer=wer,
-        accuracy_percent=accuracy,
-        transcription=transcription,
         missing_words=missing,
         repeated_words=repeated,
-        actual_wpm=actual_wpm,
-        target_wpm=target_wpm,
-        pronunciation_risk_flags=risk_flags,
+        pronunciation_risk_flags=proper_noun_risks,
+        transcription=transcription,
+        actual_wpm=float(actual_wpm),
+        target_wpm=float(target_wpm or 138),
         issues=issues,
         warnings=warnings,
     )
@@ -196,49 +165,34 @@ def evaluate_content_qc(
 def evaluate_direction_qc(
     beat: Beat,
     actual_duration: float,
-    actual_wpm: float,
+    actual_wpm: int | float,
 ) -> DirectionQCResult:
-    """Layer 3: Direction QC evaluating duration tolerance and pace vs StoryBeat direction."""
-    words = beat.script.text.split()
-    word_count = max(1, len(words))
+    """Layer 3: Direction QC comparing actual audio delivery vs StoryBeat direction."""
+    target_wpm = beat.voice.target_wpm if beat.voice and beat.voice.target_wpm else 138
+    pace = beat.voice.pace if beat.voice and beat.voice.pace else 1.0
 
-    # Target pace & target WPM
-    voice_dir = beat.voice
-    pace = voice_dir.pace or 1.0
-    target_wpm = voice_dir.target_wpm or 138.0
+    dir_dict = evaluate_direction_layer(
+        duration=actual_duration,
+        reference_text=beat.script.text,
+        target_wpm=target_wpm,
+        pace=pace,
+        emotion=beat.voice.emotion if beat.voice else None,
+        energy=beat.voice.energy if beat.voice else None,
+    )
 
-    # Expected duration
-    expected_dur = (word_count / (target_wpm / 60.0)) / pace
-    # Standard tolerance range (+/- 35%)
-    dur_min = max(0.4, expected_dur * 0.65)
-    dur_max = max(1.2, expected_dur * 1.35)
-
-    issues: list[str] = []
-    warnings: list[str] = []
-
-    # Extreme deviation triggers failure (issue); mild deviation triggers warning
-    if actual_duration < expected_dur * 0.50:
-        issues.append(f"Extreme fast pacing error ({actual_duration:.2f}s < 50% of expected {expected_dur:.2f}s)")
-    elif actual_duration > expected_dur * 1.75:
-        issues.append(f"Extreme slow pacing error ({actual_duration:.2f}s > 175% of expected {expected_dur:.2f}s)")
-    elif actual_duration < dur_min:
-        warnings.append(f"Beat rendered slightly fast ({actual_duration:.2f}s < min {dur_min:.2f}s)")
-    elif actual_duration > dur_max:
-        warnings.append(f"Beat rendered slightly slow ({actual_duration:.2f}s > max {dur_max:.2f}s)")
-
-    if actual_wpm < 50.0 or actual_wpm > 260.0:
-        issues.append(f"Extreme WPM deviation ({actual_wpm:.1f} WPM)")
-
-    passed = len(issues) == 0
+    expected_duration = dir_dict["expected_duration"]
+    duration_tolerance = 0.35
+    min_dur = round(expected_duration * (1.0 - duration_tolerance), 2)
+    max_dur = round(expected_duration * (1.0 + duration_tolerance), 2)
 
     return DirectionQCResult(
-        passed=passed,
-        expected_duration_range=(round(dur_min, 2), round(dur_max, 2)),
+        passed=dir_dict["passed"],
+        expected_duration_range=(min_dur, max_dur),
         actual_duration=round(actual_duration, 2),
-        expected_wpm=round(target_wpm, 1),
-        actual_wpm=round(actual_wpm, 1),
-        issues=issues,
-        warnings=warnings,
+        expected_wpm=float(target_wpm),
+        actual_wpm=float(actual_wpm),
+        issues=dir_dict["issues"],
+        warnings=dir_dict["warnings"],
     )
 
 
@@ -249,62 +203,119 @@ def evaluate_beat_qc(
     max_retries: int = 3,
     pronunciation_overrides: dict[str, str] | None = None,
 ) -> BeatQCResult:
-    """Run full 3-layer Voice QC on a rendered StoryBeat audio attempt."""
-    # 1. Signal QC
-    signal_res = evaluate_signal_qc(audio_path)
+    """Run canonical 3-layer Voice QC on a rendered StoryBeat audio attempt via AudioCandidateEvaluator."""
+    evaluator = AudioCandidateEvaluator(profile="voice_director", auto_fix_signal=False)
 
-    # 2. Content QC
-    target_wpm = float(beat.voice.target_wpm) if beat.voice and beat.voice.target_wpm else None
-    content_res = evaluate_content_qc(
-        audio_path=audio_path,
-        reference_script=beat.script.text,
-        target_wpm=target_wpm,
-        pronunciation_overrides=pronunciation_overrides,
+    direction_params = {
+        "target_wpm": beat.voice.target_wpm if beat.voice and beat.voice.target_wpm else 138,
+        "pace": beat.voice.pace if beat.voice and beat.voice.pace else 1.0,
+        "emotion": beat.voice.emotion if beat.voice else None,
+        "energy": beat.voice.energy if beat.voice else None,
+    }
+
+    # Run evaluation ONCE (single Whisper ASR pass, single signal pass)
+    cand_eval = evaluator.evaluate(
+        audio_source=audio_path,
+        reference_text=beat.script.text,
+        direction=direction_params,
+        pronunciation=pronunciation_overrides,
+        sample_rate=24000,
     )
 
-    # 3. Direction QC
-    direction_res = evaluate_direction_qc(
-        beat=beat,
-        actual_duration=signal_res.duration,
-        actual_wpm=content_res.actual_wpm,
+    # 1. Map directly to SignalQCResult from cand_eval.signal (Zero duplicate DSP)
+    sig_data = cand_eval.signal
+    duration = cand_eval.duration
+    lead = sig_data.get("leading_silence_s", 0.0)
+    trail = sig_data.get("trailing_silence_s", 0.0)
+    silence_ratio = round((lead + trail) / max(0.01, duration), 3) if duration > 0 else 1.0
+    peak = sig_data.get("peak", 0.0)
+    peak_dbfs = round(20.0 * math.log10(max(1e-6, peak)), 2)
+    rms_dbfs = sig_data.get("rms_db", -100.0)
+    clipping_detected = peak >= 0.995 or any("clipping" in i.lower() for i in sig_data.get("issues", []))
+
+    signal_res = SignalQCResult(
+        passed=bool(sig_data.get("passed", False)),
+        duration=duration,
+        peak_dbfs=peak_dbfs,
+        rms_dbfs=rms_dbfs,
+        clipping_detected=clipping_detected,
+        silence_ratio=silence_ratio,
+        issues=list(sig_data.get("issues", [])),
+        warnings=list(sig_data.get("warnings", [])),
     )
 
-    # Compute overall QC score (0 - 100)
-    sig_score = 100.0 if signal_res.passed else max(0.0, 100.0 - 30.0 * len(signal_res.issues))
-    cnt_score = max(0.0, min(100.0, content_res.accuracy_percent - (15.0 * len(content_res.issues))))
-    dir_score = 100.0 if direction_res.passed else 70.0
+    # 2. Map directly to ContentQCResult from cand_eval.content (Zero duplicate Whisper ASR)
+    cnt_data = cand_eval.content
+    accuracy = float(cnt_data.get("accuracy_percent", 100.0))
+    missing = list(cnt_data.get("missing_words", []))
+    repeated = list(cnt_data.get("repeated_words", []))
+    transcription = cnt_data.get("transcription", "")
+    actual_wpm = float(cnt_data.get("actual_wpm", direction_params["target_wpm"]))
+    ref_words = [w for w in beat.script.text.split() if w.strip()]
+    wer = round(len(missing) / float(max(1, len(ref_words))), 3)
 
-    qc_score = round(
-        (sig_score * SIGNAL_WEIGHT) + (cnt_score * CONTENT_WEIGHT) + (dir_score * DIRECTION_WEIGHT),
-        1,
+    pron_risks = list(cnt_data.get("pronunciation_risk_flags", []))
+    if not pron_risks and pronunciation_overrides:
+        for term in pronunciation_overrides:
+            if term.lower() in beat.script.text.lower() and term.lower() not in transcription.lower():
+                pron_risks.append(term)
+
+    content_res = ContentQCResult(
+        passed=bool(cnt_data.get("passed", False)),
+        accuracy_percent=round(accuracy, 1),
+        wer=wer,
+        missing_words=missing,
+        repeated_words=repeated,
+        pronunciation_risk_flags=pron_risks,
+        transcription=transcription,
+        actual_wpm=actual_wpm,
+        target_wpm=float(direction_params["target_wpm"]),
+        issues=list(cnt_data.get("issues", [])),
+        warnings=list(cnt_data.get("warnings", [])),
     )
 
-    # Determine Verdict & Retry Adjustment
+    # 3. Map directly to DirectionQCResult from cand_eval.direction
+    dir_data = cand_eval.direction or {}
+    expected_dur = dir_data.get("expected_duration", duration)
+    min_dur = round(expected_dur * 0.65, 2)
+    max_dur = round(expected_dur * 1.35, 2)
+
+    direction_res = DirectionQCResult(
+        passed=bool(dir_data.get("passed", True)),
+        expected_duration_range=(min_dur, max_dur),
+        actual_duration=round(duration, 2),
+        expected_wpm=float(direction_params["target_wpm"]),
+        actual_wpm=float(dir_data.get("actual_wpm", actual_wpm)),
+        issues=list(dir_data.get("issues", [])),
+        warnings=list(dir_data.get("warnings", [])),
+    )
+
     verdict: QCVerdict
     retry_reason: str | None = None
     retry_adjustment: dict[str, Any] | None = None
 
-    if signal_res.passed and content_res.passed and direction_res.passed:
+    if cand_eval.passed:
         verdict = QCVerdict.PASS
+        retry_reason = None
+        retry_adjustment = None
     else:
-        # Failure detected
-        all_issues = signal_res.issues + content_res.issues + direction_res.issues
+        all_issues = cand_eval.issues or (signal_res.issues + content_res.issues + direction_res.issues)
         retry_reason = "; ".join(all_issues) if all_issues else "Quality score below threshold"
 
         if attempt_id < max_retries:
             verdict = QCVerdict.RETRY
-            # Deterministic adjustment
-            retry_adjustment = {}
-            if content_res.missing_words or content_res.wer > 0.15:
-                retry_adjustment["director_note"] = "Enunciate clearly and preserve every word without omission."
-            if signal_res.clipping_detected:
-                retry_adjustment["energy_adjustment"] = -0.5
-            if direction_res.actual_duration > direction_res.expected_duration_range[1]:
-                retry_adjustment["pace_multiplier"] = 1.10
-            elif direction_res.actual_duration < direction_res.expected_duration_range[0]:
-                retry_adjustment["pace_multiplier"] = 0.90
+            retry_adjustment = cand_eval.retry_adjustment or {}
+            if not retry_adjustment:
+                if content_res.missing_words or content_res.wer > 0.15:
+                    retry_adjustment["director_note"] = "Enunciate clearly and preserve every word without omission."
+                if signal_res.clipping_detected:
+                    retry_adjustment["energy_adjustment"] = -0.5
+                if direction_res.actual_duration > direction_res.expected_duration_range[1]:
+                    retry_adjustment["pace_multiplier"] = 1.10
+                elif direction_res.actual_duration < direction_res.expected_duration_range[0]:
+                    retry_adjustment["pace_multiplier"] = 0.90
         else:
-            # Exceeded retry budget
+            retry_adjustment = None
             if any(signal_res.clipping_detected or "silent" in i.lower() for i in signal_res.issues):
                 verdict = QCVerdict.FAIL
             else:
@@ -317,7 +328,7 @@ def evaluate_beat_qc(
         content=content_res,
         direction=direction_res,
         verdict=verdict,
-        qc_score=qc_score,
+        qc_score=cand_eval.score,
         retry_reason=retry_reason,
         retry_adjustment=retry_adjustment,
     )
