@@ -114,6 +114,18 @@ def load_manifest(path: str | Path | None = None) -> ResourceManifest:
         raise ValueError(f"Malformed manifest YAML at {path}: {e}") from e
 
 
+def save_manifest(manifest: ResourceManifest, path: str | Path | None = None) -> None:
+    """Save ResourceManifest to assets/manifest.yaml or given path."""
+    if not path:
+        path = Path(__file__).resolve().parent.parent / "assets" / "manifest.yaml"
+    else:
+        path = Path(path)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(manifest.to_yaml())
+
+
 def load_substitution_rules(path: str | Path | None = None) -> dict[str, list[str]]:
     """Load substitution graph from rules/resource-substitution.yaml or given path."""
     if not path:

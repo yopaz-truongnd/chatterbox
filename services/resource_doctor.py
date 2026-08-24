@@ -156,6 +156,51 @@ def diagnose_resources(
                 else:
                     seen_aliases[alias_norm] = key
 
+    # 3. Check TTS Provider Configuration (Local Chatterbox Default & Gemini Optional)
+    try:
+        from services.tts.chatterbox_http import ChatterboxHttpProvider
+        local_provider = ChatterboxHttpProvider()
+        local_health = local_provider.healthcheck()
+        if not local_health.available:
+            warnings.append(
+                DoctorIssue(
+                    severity="warning",
+                    component="tts_provider",
+                    message=f"Local Chatterbox API Provider (default) is not reachable: {local_health.message}",
+                    details=local_health.details,
+                )
+            )
+    except Exception as exc:
+        warnings.append(
+            DoctorIssue(
+                severity="warning",
+                component="tts_provider",
+                message=f"Failed to inspect Local Chatterbox TTS Provider: {exc}",
+            )
+        )
+
+    try:
+        from services.tts.gemini import GeminiTTSProvider
+        gemini_provider = GeminiTTSProvider()
+        gemini_health = gemini_provider.healthcheck()
+        if not gemini_health.configured:
+            warnings.append(
+                DoctorIssue(
+                    severity="warning",
+                    component="tts_provider",
+                    message=f"Gemini TTS Provider (optional) not configured: {gemini_health.message}",
+                    details=gemini_health.details,
+                )
+            )
+    except Exception as exc:
+        warnings.append(
+            DoctorIssue(
+                severity="warning",
+                component="tts_provider",
+                message=f"Failed to inspect Gemini TTS Provider: {exc}",
+            )
+        )
+
     healthy = len(issues) == 0
 
     return DoctorReport(
