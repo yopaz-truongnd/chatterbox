@@ -156,8 +156,14 @@ class VoiceProjectStore:
 
         state = ProjectState.from_dict(data)
 
-        # Recover from transient state if process crashed during operations
-        if recover_transient and state.stage in (ProjectStatus.PLANNING, ProjectStatus.RESOURCE_CHECKING):
+        # Recover from transient state if process crashed during active operations
+        transient_stages = (
+            ProjectStatus.PLANNING,
+            ProjectStatus.RESOURCE_CHECKING,
+            ProjectStatus.RENDERING,
+            ProjectStatus.QC_PENDING,
+        )
+        if recover_transient and state.stage in transient_stages:
             logger.warning(
                 "Project '%s' was loaded in transient state '%s'; rolling back to '%s'",
                 project_id,
@@ -352,14 +358,15 @@ class VoiceProjectStore:
             if state.artifacts.voice_plan_source_sha256 != state.artifacts.source_sha256:
                 return True, "VoicePlan is stale relative to current source script (re-plan required)"
 
-        # 3. Check Resource Report vs VoicePlan hash (only required during rendering)
+        # 3. Check Resource Report vs VoicePlan hash (required during rendering)
         if for_render:
             report_path = proj_dir / "resource-report.yaml"
-            if report_path.exists() and plan_path.exists():
-                if state.artifacts.resource_report_sha256 and compute_file_sha256(report_path) != state.artifacts.resource_report_sha256:
-                    return True, "Resource report has been modified on disk (check-resources required)"
-                if state.artifacts.resource_report_voice_plan_sha256 != state.artifacts.voice_plan_sha256:
-                    return True, "Resource report is stale relative to current VoicePlan (check-resources required)"
+            if not report_path.exists():
+                return True, "Resource report is missing (check-resources required)"
+            if state.artifacts.resource_report_sha256 and compute_file_sha256(report_path) != state.artifacts.resource_report_sha256:
+                return True, "Resource report has been modified on disk (check-resources required)"
+            if state.artifacts.resource_report_voice_plan_sha256 != state.artifacts.voice_plan_sha256:
+                return True, "Resource report is stale relative to current VoicePlan (check-resources required)"
 
             manifest_path = proj_dir / "render-manifest.yaml"
             if manifest_path.exists() and state.artifacts.render_manifest_sha256:

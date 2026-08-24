@@ -133,7 +133,7 @@ class TestVoiceProjectServicePhase11(unittest.TestCase):
         self.service.create_project(self.script_content, "unready_proj")
         self.service.plan("unready_proj")
 
-        with self.assertRaises(InvalidProjectStateError):
+        with self.assertRaises((InvalidProjectStateError, StaleArtifactError)):
             self.service.render("unready_proj")
 
     def test_plan_rejects_transient_state(self):
@@ -187,6 +187,33 @@ class TestVoiceProjectServicePhase11(unittest.TestCase):
 
         self.assertEqual(result.stage, ProjectStatus.FAILED)
         self.assertEqual(result.failed_beats, 1)
+
+    def test_render_unknown_beat_ids_raises_beat_not_found(self):
+        self.service.create_project(self.script_content, "unk_render_proj")
+        self.service.plan("unk_render_proj")
+        self.service.check_resources("unk_render_proj")
+
+        with self.assertRaises(BeatNotFoundError):
+            self.service.render("unk_render_proj", beats=["B999_UNKNOWN"])
+
+    def test_evaluate_unknown_beat_ids_raises_beat_not_found(self):
+        self.service.create_project(self.script_content, "unk_eval_proj")
+        self.service.plan("unk_eval_proj")
+        self.service.check_resources("unk_eval_proj")
+        self.service.render("unk_eval_proj")
+
+        with self.assertRaises(BeatNotFoundError):
+            self.service.evaluate("unk_eval_proj", beats=["B999_UNKNOWN"])
+
+    def test_render_rejects_when_resource_report_missing_even_if_status_failed(self):
+        self.service.create_project(self.script_content, "failed_no_rep_proj")
+        self.service.plan("failed_no_rep_proj")
+        state = self.store.get_project_state("failed_no_rep_proj")
+        state.stage = ProjectStatus.FAILED
+        self.store.save_project_state(state)
+
+        with self.assertRaises((InvalidProjectStateError, StaleArtifactError)):
+            self.service.render("failed_no_rep_proj")
 
 
 if __name__ == "__main__":

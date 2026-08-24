@@ -51,10 +51,10 @@ from services.voice_project_models import (
     VoiceRenderResult,
 )
 from services.voice_project_store import VoiceProjectStore
+from services.voice_qc import evaluate_beat_qc
 from services.voice_renderer import (
     ProviderUnavailableError,
     ResourceBlockedError,
-    evaluate_beat_qc,
     render_project_narration,
     select_best_candidate,
 )
@@ -356,8 +356,20 @@ class VoiceProjectService:
         if not plan:
             raise InvalidProjectStateError(f"Project '{project_id}' has no VoicePlan. Run plan() first.")
 
+        if beats:
+            valid_ids = {b.id for b in plan.beats}
+            unknown_ids = set(beats) - valid_ids
+            if unknown_ids:
+                raise BeatNotFoundError(
+                    f"Beat ID(s) not found in project '{project_id}': {', '.join(sorted(unknown_ids))}"
+                )
+
         report = self.store.load_resource_report(project_id)
-        if report and report.readiness.render_blocked and not allow_resource_blocked:
+        if report is None:
+            raise InvalidProjectStateError(
+                f"Cannot render project '{project_id}': Resource report is missing. Run check_resources() first."
+            )
+        if report.readiness.render_blocked and not allow_resource_blocked:
             missing_terms = [g.term or g.intent or g.id for g in report.missing if g.priority.value == "required"]
             raise ResourceBlockedError(
                 f"Cannot render project '{project_id}': Resource check is BLOCKED. "
@@ -481,6 +493,14 @@ class VoiceProjectService:
         plan = self.store.load_voice_plan(project_id)
         if not plan:
             raise InvalidProjectStateError(f"Project '{project_id}' has no VoicePlan. Run plan() first.")
+
+        if beats:
+            valid_ids = {b.id for b in plan.beats}
+            unknown_ids = set(beats) - valid_ids
+            if unknown_ids:
+                raise BeatNotFoundError(
+                    f"Beat ID(s) not found in project '{project_id}': {', '.join(sorted(unknown_ids))}"
+                )
 
         report = self.store.load_resource_report(project_id)
         pron_overrides = report.pronunciation_overrides if report else {}

@@ -139,6 +139,58 @@ class TestVoiceProjectStorePhase11(unittest.TestCase):
         self.assertEqual(recovered_state.stage, ProjectStatus.PLANNED)
         self.assertIsNotNone(recovered_state.error)
 
+    def test_transient_state_crash_recovery_rendering_and_qc_pending(self):
+        state = self.store.create_workspace("p2", self.sample_script)
+        state.stage = ProjectStatus.READY_TO_RENDER
+        state.last_stable_stage = ProjectStatus.READY_TO_RENDER
+        self.store.save_project_state(state)
+
+        # Simulate crash during RENDERING
+        state.stage = ProjectStatus.RENDERING
+        proj_dir = self.store.get_project_dir("p2")
+        with open(proj_dir / "project.yaml", "w", encoding="utf-8") as f:
+            f.write(state.to_yaml())
+
+        recovered_rendering = self.store.recover_transient_state("p2")
+        self.assertEqual(recovered_rendering.stage, ProjectStatus.READY_TO_RENDER)
+        self.assertIn("Recovered from interrupted", recovered_rendering.error)
+
+        # Simulate crash during QC_PENDING
+        recovered_rendering.stage = ProjectStatus.QC_PENDING
+        with open(proj_dir / "project.yaml", "w", encoding="utf-8") as f:
+            f.write(recovered_rendering.to_yaml())
+
+        recovered_qc = self.store.recover_transient_state("p2")
+        self.assertEqual(recovered_qc.stage, ProjectStatus.READY_TO_RENDER)
+        self.assertIn("Recovered from interrupted", recovered_qc.error)
+
+    def test_check_staleness_for_render_missing_resource_report(self):
+        self.store.create_workspace("p3", self.sample_script)
+        plan = VoicePlan(
+            version=1,
+            project=ProjectMetadata(id="p3", title="P3", source_script=self.sample_script),
+            voice=VoiceMetadata(profile="default", provider="chatterbox-http", model="auto"),
+            global_direction=GlobalDirection(
+                tone="epic",
+                base_pace=1.0,
+                dramatic_level=3,
+                max_energy=5.0,
+                avoid_overacting=True,
+            ),
+            beats=[],
+        )
+        self.store.save_voice_plan("p3", plan)
+
+        # Without resource-report.yaml, check_staleness(for_render=False) should pass
+        is_stale_plan_only, _ = self.store.check_staleness("p3", for_render=False)
+        self.assertFalse(is_stale_plan_only)
+
+        # But check_staleness(for_render=True) must fail with missing report
+        is_stale_render, reason = self.store.check_staleness("p3", for_render=True)
+        self.assertTrue(is_stale_render)
+        self.assertIn("missing", reason.lower())
+
+
     def test_detects_voice_plan_modified_on_disk(self):
         self.store.create_workspace("p1", self.sample_script)
         plan = VoicePlan(
