@@ -51,26 +51,26 @@ DEFAULT_SOUND_POLICY = {
 
 def load_sound_policy(policy_path: str | None = None) -> dict[str, Any]:
     """Load sound policy from rules/sound-director.yaml if present, else fallback to defaults."""
+    import copy
     if not policy_path:
         # Resolve standard path rules/sound-director.yaml relative to project root
         policy_path = str(Path(__file__).resolve().parent.parent / "rules" / "sound-director.yaml")
 
-    policy = dict(DEFAULT_SOUND_POLICY)
+    policy = copy.deepcopy(DEFAULT_SOUND_POLICY)
     if os.path.exists(policy_path):
         try:
             with open(policy_path, "r", encoding="utf-8") as f:
                 loaded = yaml.safe_load(f)
                 if loaded and isinstance(loaded, dict):
                     # Merge keys
-                    if "general" in loaded:
+                    if "general" in loaded and isinstance(loaded["general"], dict):
                         policy["general"].update(loaded["general"])
-                    if "density" in loaded:
+                    if "density" in loaded and isinstance(loaded["density"], dict):
                         policy["density"].update(loaded["density"])
-                    if "roles" in loaded:
+                    if "roles" in loaded and isinstance(loaded["roles"], dict):
                         policy["roles"].update(loaded["roles"])
         except Exception as e:
-            import sys
-            print(f"WARNING: failed to load sound policy YAML at {policy_path}: {e}", file=sys.stderr)
+            raise ValueError(f"Malformed sound policy YAML at {policy_path}: {e}") from e
     return policy
 
 

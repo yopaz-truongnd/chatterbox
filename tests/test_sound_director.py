@@ -209,3 +209,49 @@ class SoundDirectorTestCase(unittest.TestCase):
         for idx, beat in enumerate(fixed_plan.beats):
             self.assertEqual(beat.id, story_beats[idx].id)
             self.assertEqual(beat.role, story_beats[idx].role)
+
+    def test_load_sound_policy_no_global_default_mutation(self):
+        import copy
+        import tempfile
+        from services.sound_director import DEFAULT_SOUND_POLICY
+
+        original_policy = copy.deepcopy(DEFAULT_SOUND_POLICY)
+
+        custom_policy_yaml = (
+            "version: 2\n"
+            "general:\n"
+            "  voice_priority: 999\n"
+            "density:\n"
+            "  max_prominent_sfx_per_minute: 99\n"
+            "roles:\n"
+            "  hook:\n"
+            "    ambience: custom_preferred\n"
+        )
+
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tf:
+            tf.write(custom_policy_yaml)
+            tf_path = tf.name
+
+        try:
+            loaded = load_sound_policy(tf_path)
+            self.assertEqual(loaded["general"]["voice_priority"], 999)
+            self.assertEqual(loaded["density"]["max_prominent_sfx_per_minute"], 99)
+            self.assertEqual(loaded["roles"]["hook"]["ambience"], "custom_preferred")
+
+            # Assert DEFAULT_SOUND_POLICY was NOT mutated
+            self.assertEqual(DEFAULT_SOUND_POLICY, original_policy)
+            self.assertEqual(DEFAULT_SOUND_POLICY["general"]["voice_priority"], 100)
+            self.assertEqual(DEFAULT_SOUND_POLICY["density"]["max_prominent_sfx_per_minute"], 5)
+            self.assertEqual(DEFAULT_SOUND_POLICY["roles"]["hook"]["ambience"], "preferred")
+
+            # Call loader without override and assert clean defaults
+            pristine = load_sound_policy(policy_path="/non/existent/sound-director.yaml")
+            self.assertEqual(pristine["general"]["voice_priority"], 100)
+        finally:
+            import os
+            if os.path.exists(tf_path):
+                os.unlink(tf_path)
+
+
+if __name__ == "__main__":
+    unittest.main()
