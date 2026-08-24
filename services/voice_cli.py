@@ -31,6 +31,7 @@ from services.narration_planner import compile_narration_plan
 from services.sound_director import direct_sound
 from services.director_critic import critique_voice_plan, apply_director_fixes
 from services.resource_models import (
+    IngestMetadata,
     RequirementPriority,
     ResourceCategory,
     ResourceReport,
@@ -40,6 +41,7 @@ from services.resource_manager import (
     load_selection_rules,
     load_substitution_rules,
     resolve_project_resources,
+    save_manifest,
 )
 from services.pronunciation_knowledge import load_pronunciation_knowledge
 from services.asset_ingest import ingest_asset
@@ -124,9 +126,9 @@ def cmd_new(args: argparse.Namespace) -> int:
         plan_res = execute_plan(project_dir)
         if plan_res != EXIT_SUCCESS:
             return plan_res
-        res_res = execute_resources(project_dir)
-        if res_res != EXIT_SUCCESS and res_res != EXIT_RESOURCE_BLOCKED:
-            return res_res
+        res_code, _ = execute_resources(project_dir)
+        if res_code not in (EXIT_SUCCESS, EXIT_RESOURCE_BLOCKED):
+            return res_code
 
     if args.json:
         print(json.dumps({
@@ -461,17 +463,24 @@ def cmd_assets_ingest(args: argparse.Namespace) -> int:
 
     intents = [args.intent] if args.intent else [file_path.stem]
     tags = args.tag if args.tag else []
+    res_id = f"{category.value}_{_slugify(file_path.stem)}"
+
+    metadata = IngestMetadata(
+        resource_id=res_id,
+        category=category,
+        intents=intents,
+        tags=tags,
+        intensity=args.intensity,
+        loopable=args.loopable,
+    )
 
     try:
-        updated_manifest, entry = ingest_asset(
+        entry, updated_manifest = ingest_asset(
+            file_path=file_path,
+            metadata=metadata,
             manifest=manifest,
-            source_audio_path=file_path,
-            category=category,
-            intents=intents,
-            tags=tags,
-            intensity=args.intensity,
-            loopable=args.loopable,
         )
+        save_manifest(updated_manifest)
         if args.json:
             print(json.dumps({"status": "success", "entry": entry.model_dump(mode="json")}, indent=2))
         else:

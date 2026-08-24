@@ -220,6 +220,63 @@ class TestVoiceCLIPhase7(unittest.TestCase):
         self.assertEqual(proj_data["stage"], ProjectStatus.NARRATION_READY.value)
         self.assertTrue(proj_data["status"]["narration_ready"])
 
+    def test_voice_new_auto_flag_returns_int_exit_code(self):
+        projects_root = self.temp_dir / "projects"
+        exit_code = main([
+            "new",
+            str(self.script_file),
+            "--project-id", "auto_proj",
+            "--output-dir", str(projects_root),
+            "--auto",
+        ])
+        # Must return an integer exit code (0 or 3)
+        self.assertIsInstance(exit_code, int)
+        self.assertIn(exit_code, (EXIT_SUCCESS, EXIT_RESOURCE_BLOCKED))
+
+        proj_dir = projects_root / "auto_proj"
+        self.assertTrue((proj_dir / "voice-plan.yaml").exists())
+        self.assertTrue((proj_dir / "resource-report.yaml").exists())
+
+    def test_voice_assets_ingest_persists_to_manifest(self):
+        # Create a dummy WAV file to ingest
+        import wave
+        dummy_wav = self.temp_dir / "supernatural_boom.wav"
+        with wave.open(str(dummy_wav), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            wf.writeframes(b"\x00\x00" * 24000)  # 1s
+
+        # Temporary manifest path
+        temp_manifest_path = self.temp_dir / "test_manifest.yaml"
+        with open(temp_manifest_path, "w", encoding="utf-8") as f:
+            f.write("version: 1\nresources: []\n")
+
+        # Mock load_manifest and save_manifest to use temp_manifest_path
+        from services.resource_manager import load_manifest, save_manifest
+        import unittest.mock as mock
+
+        with mock.patch("services.voice_cli.load_manifest", lambda: load_manifest(temp_manifest_path)), \
+             mock.patch("services.voice_cli.save_manifest", lambda m: save_manifest(m, temp_manifest_path)):
+
+            exit_code = main([
+                "assets_ingest",
+                str(dummy_wav),
+                "--category", "sfx",
+                "--intent", "dark_supernatural_impact",
+                "--tag", "magic",
+                "--intensity", "4",
+            ])
+            self.assertEqual(exit_code, EXIT_SUCCESS)
+
+            # Re-read manifest from disk to verify persistence
+            reloaded = load_manifest(temp_manifest_path)
+            self.assertEqual(len(reloaded.resources), 1)
+            entry = reloaded.resources[0]
+            self.assertEqual(entry.id, "sfx_supernatural_boom")
+            self.assertIn("dark_supernatural_impact", entry.intents)
+            self.assertIn("magic", entry.tags)
+
 
 if __name__ == "__main__":
     unittest.main()
