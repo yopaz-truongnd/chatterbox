@@ -30,9 +30,13 @@ from services.audio_mix_models import (
     VoiceClip,
 )
 from services.render_models import RenderManifest, RenderStatus
-from services.resource_models import ResourceReport
-from services.voice_plan import VoicePlan
-from services.voice_project_models import InvalidProjectStateError, compute_file_sha256
+from services.resource_manager import resolve_asset_file_path
+from services.resource_models import RequirementPriority, ResourceReport
+from services.voice_plan import SFXPlacement as PlanSFXPlacement, VoicePlan
+from services.voice_project_models import (
+    InvalidProjectStateError,
+    compute_file_sha256,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -220,14 +224,12 @@ class MixPlanBuilder:
                     entry = res.selected
                     f_obj = getattr(entry, "file", None)
                     if f_obj and getattr(f_obj, "path", None):
-                        asset_path = Path(f_obj.path)
-                        if not asset_path.is_absolute():
-                            asset_path = project_root / asset_path
+                        asset_path = resolve_asset_file_path(f_obj.path, project_dir=project_root)
                         if asset_path.exists():
                             ambience_clips.append(
                                 AmbienceClip(
                                     resource_id=getattr(entry, "id", "ambience"),
-                                    source_path=str(asset_path.relative_to(project_root) if asset_path.is_relative_to(project_root) else asset_path),
+                                    source_path=str(asset_path),
                                     source_sha256=compute_file_sha256(asset_path),
                                     start_ms=0.0,
                                     end_ms=current_time_ms,
@@ -268,9 +270,7 @@ class MixPlanBuilder:
                     )
 
                 if res_match and res_match.selected and res_match.selected.file and res_match.selected.file.path:
-                    sfx_path = Path(res_match.selected.file.path)
-                    if not sfx_path.is_absolute():
-                        sfx_path = project_root / sfx_path
+                    sfx_path = resolve_asset_file_path(res_match.selected.file.path, project_dir=project_root)
                     if sfx_path.exists():
                         sfx_duration = get_wav_duration_ms(sfx_path)
                         sfx_sha = compute_file_sha256(sfx_path)

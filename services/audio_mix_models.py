@@ -10,8 +10,25 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
+import wave
 import yaml
 from pydantic import BaseModel, Field
+
+
+def get_wav_duration_ms(wav_path: Path | str) -> float:
+    """Calculate exact duration of a WAV file in milliseconds."""
+    p = Path(wav_path)
+    if not p.exists():
+        return 0.0
+    try:
+        with wave.open(str(p), "rb") as wf:
+            frames = wf.getnframes()
+            rate = wf.getframerate()
+            if rate <= 0:
+                return 0.0
+            return (frames / float(rate)) * 1000.0
+    except Exception:
+        return 0.0
 
 
 class SFXPlacement(str, Enum):
@@ -162,6 +179,7 @@ class ExportManifest(BaseModel):
     """Manifest of final delivered audio deliverables."""
 
     project_id: str
+    profiles: list[ExportProfile] = Field(default_factory=list)
     artifacts: list[MixArtifact] = Field(default_factory=list)
     source_master_sha256: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -171,6 +189,12 @@ class ExportManifest(BaseModel):
 
     def to_yaml(self) -> str:
         return yaml.safe_dump(self.to_dict(), sort_keys=False, allow_unicode=True)
+
+    def save_yaml(self, path: Path | str) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(self.to_yaml())
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ExportManifest:

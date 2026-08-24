@@ -19,6 +19,7 @@ class WorkflowStatus(str, Enum):
     WAITING_FOR_HUMAN = "waiting_for_human"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLING = "cancelling"
     CANCELLED = "cancelled"
     INTERRUPTED = "interrupted"
 

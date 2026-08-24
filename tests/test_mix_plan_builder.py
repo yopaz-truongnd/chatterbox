@@ -152,6 +152,61 @@ class TestMixPlanBuilder(unittest.TestCase):
         if len(plan.beats) > 1:
             self.assertTrue(any(sr.duration_ms == 2500.0 for sr in mix_plan.silence_regions))
 
+    def test_mix_plan_resolves_relative_asset_path_from_assets_catalog(self):
+        """Verify that relative asset paths like 'sfx/impact/thunder.wav' are resolved correctly."""
+        script = "The morning sun rose gently over the calm green valley."
+        self.service.create_project(project_id="rel_asset_proj", script_text=script)
+        self.service.plan("rel_asset_proj")
+        self.service.check_resources("rel_asset_proj")
+        self.service.render("rel_asset_proj")
+
+        proj_dir = self.store.get_project_dir("rel_asset_proj")
+        plan = self.store.load_voice_plan("rel_asset_proj")
+        manifest = self.store.load_manifest("rel_asset_proj")
+
+        # Create assets catalog in temporary dir
+        mock_assets_dir = Path(self.temp_dir.name) / "catalog_assets"
+        rel_sfx_file = mock_assets_dir / "sfx" / "impact" / "thunder.wav"
+        _create_mock_wav(rel_sfx_file, duration_s=1.2)
+        os.environ["CHATTERBOX_ASSETS_DIR"] = str(mock_assets_dir)
+
+        b0 = plan.beats[0]
+        b0.sfx = [SFXIntent(intent="thunder", placement=PlanSFXPlacement.PRE)]
+
+        # Relative path without leading slash
+        res_report = ResourceReport(
+            project_id="rel_asset_proj",
+            readiness=ReadinessReport(score=100),
+            resolved=[
+                ResourceResolution(
+                    type=ResourceCategory.SFX,
+                    requested_intent="thunder",
+                    beat_id=b0.id,
+                    status=ResolutionStatus.EXACT,
+                    selected=ResourceEntry(
+                        id="sfx_rel_01",
+                        category=ResourceCategory.SFX,
+                        intents=["thunder"],
+                        file=ResourceFile(path="sfx/impact/thunder.wav", format="wav"),
+                        properties=ResourceProperties(duration=1.2),
+                    ),
+                )
+            ],
+        )
+
+        builder = MixPlanBuilder()
+        mix_plan = builder.build(
+            project_id="rel_asset_proj",
+            voice_plan=plan,
+            render_manifest=manifest,
+            proj_dir=proj_dir,
+            resource_report=res_report,
+        )
+
+        self.assertEqual(len(mix_plan.sfx_clips), 1)
+        self.assertEqual(mix_plan.sfx_clips[0].resource_id, "sfx_rel_01")
+        self.assertTrue(Path(mix_plan.sfx_clips[0].source_path).exists())
+
     def test_mix_plan_fails_if_beats_unrendered(self):
         script = "The morning sun rose gently over the calm green valley."
         self.service.create_project(project_id="unrendered_proj", script_text=script)

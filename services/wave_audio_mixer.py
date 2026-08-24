@@ -21,7 +21,8 @@ from typing import Any, Callable
 import uuid
 import wave
 
-from services.audio_mix_models import MixPlan
+from services.audio_mix_models import DuckingRule, MixPlan
+from services.resource_manager import resolve_asset_file_path
 from services.tts.base import CancellationToken, ProgressCallback
 
 logger = logging.getLogger(__name__)
@@ -115,44 +116,43 @@ class WaveAudioMixer:
                 logger.info("Mix cancelled before processing voice clip '%s'.", vclip.beat_id)
                 return target_path
 
-            clip_path = Path(vclip.source_path)
-            if not clip_path.is_absolute():
-                clip_path = project_root / clip_path
+            clip_path = resolve_asset_file_path(vclip.source_path, project_dir=project_root)
+            if not clip_path.exists():
+                raise FileNotFoundError(f"Voice clip audio file not found at: '{clip_path}'.")
 
-            if clip_path.exists():
-                samples, clip_sr, _ = _read_wav_samples(clip_path)
-                gain = _db_to_linear(vclip.gain_db)
+            samples, clip_sr, _ = _read_wav_samples(clip_path)
+            gain = _db_to_linear(vclip.gain_db)
 
-                # Resample simple linear if sample rate mismatch
-                if clip_sr != sample_rate and clip_sr > 0:
-                    ratio = sample_rate / float(clip_sr)
-                    new_len = int(len(samples) * ratio)
-                    resampled = []
-                    for i in range(new_len):
-                        src_idx = i / ratio
-                        idx_low = int(src_idx)
-                        idx_high = min(idx_low + 1, len(samples) - 1)
-                        frac = src_idx - idx_low
-                        resampled.append(samples[idx_low] * (1.0 - frac) + samples[idx_high] * frac)
-                    samples = resampled
+            # Resample simple linear if sample rate mismatch
+            if clip_sr != sample_rate and clip_sr > 0:
+                ratio = sample_rate / float(clip_sr)
+                new_len = int(len(samples) * ratio)
+                resampled = []
+                for i in range(new_len):
+                    src_idx = i / ratio
+                    idx_low = int(src_idx)
+                    idx_high = min(idx_low + 1, len(samples) - 1)
+                    frac = src_idx - idx_low
+                    resampled.append(samples[idx_low] * (1.0 - frac) + samples[idx_high] * frac)
+                samples = resampled
 
-                # Apply Fade In / Fade Out
-                fade_in_samples = int((vclip.fade_in_ms / 1000.0) * sample_rate)
-                fade_out_samples = int((vclip.fade_out_ms / 1000.0) * sample_rate)
+            # Apply Fade In / Fade Out
+            fade_in_samples = int((vclip.fade_in_ms / 1000.0) * sample_rate)
+            fade_out_samples = int((vclip.fade_out_ms / 1000.0) * sample_rate)
 
-                for i in range(min(fade_in_samples, len(samples))):
-                    samples[i] *= i / float(fade_in_samples)
+            for i in range(min(fade_in_samples, len(samples))):
+                samples[i] *= i / float(fade_in_samples)
 
-                for i in range(min(fade_out_samples, len(samples))):
-                    idx = len(samples) - 1 - i
-                    samples[idx] *= i / float(fade_out_samples)
+            for i in range(min(fade_out_samples, len(samples))):
+                idx = len(samples) - 1 - i
+                samples[idx] *= i / float(fade_out_samples)
 
-                # Overlay into master buffer at start_ms
-                start_sample = int((vclip.start_ms / 1000.0) * sample_rate)
-                for i, smp in enumerate(samples):
-                    target_idx = start_sample + i
-                    if target_idx < len(master_buffer):
-                        master_buffer[target_idx] += smp * gain
+            # Overlay into master buffer at start_ms
+            start_sample = int((vclip.start_ms / 1000.0) * sample_rate)
+            for i, smp in enumerate(samples):
+                target_idx = start_sample + i
+                if target_idx < len(master_buffer):
+                    master_buffer[target_idx] += smp * gain
 
             processed_clips += 1
             if progress_callback and total_clips > 0:
@@ -164,96 +164,95 @@ class WaveAudioMixer:
             if cancellation_token and cancellation_token.is_cancelled():
                 return target_path
 
-            amb_path = Path(amb.source_path)
-            if not amb_path.is_absolute():
-                amb_path = project_root / amb_path
+            amb_path = resolve_asset_file_path(amb.source_path, project_dir=project_root)
+            if not amb_path.exists():
+                raise FileNotFoundError(f"Ambience clip audio file not found at: '{amb_path}'.")
 
-            if amb_path.exists():
-                amb_samples, amb_sr, _ = _read_wav_samples(amb_path)
-                if amb_samples:
-                    # Resample if needed
-                    if amb_sr != sample_rate and amb_sr > 0:
-                        ratio = sample_rate / float(amb_sr)
-                        new_len = int(len(amb_samples) * ratio)
-                        resampled = []
-                        for i in range(new_len):
-                            src_idx = i / ratio
-                            idx_low = int(src_idx)
-                            idx_high = min(idx_low + 1, len(amb_samples) - 1)
-                            frac = src_idx - idx_low
-                            resampled.append(amb_samples[idx_low] * (1.0 - frac) + amb_samples[idx_high] * frac)
-                        amb_samples = resampled
+            amb_samples, amb_sr, _ = _read_wav_samples(amb_path)
+            if amb_samples:
+                # Resample if needed
+                if amb_sr != sample_rate and amb_sr > 0:
+                    ratio = sample_rate / float(amb_sr)
+                    new_len = int(len(amb_samples) * ratio)
+                    resampled = []
+                    for i in range(new_len):
+                        src_idx = i / ratio
+                        idx_low = int(src_idx)
+                        idx_high = min(idx_low + 1, len(amb_samples) - 1)
+                        frac = src_idx - idx_low
+                        resampled.append(amb_samples[idx_low] * (1.0 - frac) + amb_samples[idx_high] * frac)
+                    amb_samples = resampled
 
-                    start_sample = int((amb.start_ms / 1000.0) * sample_rate)
-                    end_sample = int((amb.end_ms / 1000.0) * sample_rate)
-                    total_amb_len = max(0, end_sample - start_sample)
+                start_sample = int((amb.start_ms / 1000.0) * sample_rate)
+                end_sample = int((amb.end_ms / 1000.0) * sample_rate)
+                total_amb_len = max(0, end_sample - start_sample)
 
-                    if total_amb_len > 0:
-                        # Construct ducking envelope across this ambience timeline
-                        duck_gain_db = -12.0
-                        attack_ms = 50.0
-                        release_ms = 200.0
-                        if plan.ducking_rules:
-                            duck_gain_db = plan.ducking_rules[0].duck_gain_db
-                            attack_ms = plan.ducking_rules[0].attack_ms
-                            release_ms = plan.ducking_rules[0].release_ms
+                if total_amb_len > 0:
+                    # Construct ducking envelope across this ambience timeline
+                    duck_gain_db = -12.0
+                    attack_ms = 50.0
+                    release_ms = 200.0
+                    if plan.ducking_rules:
+                        duck_gain_db = plan.ducking_rules[0].duck_gain_db
+                        attack_ms = plan.ducking_rules[0].attack_ms
+                        release_ms = plan.ducking_rules[0].release_ms
 
-                        duck_min_linear = _db_to_linear(duck_gain_db)
-                        attack_samples = max(1, int((attack_ms / 1000.0) * sample_rate))
-                        release_samples = max(1, int((release_ms / 1000.0) * sample_rate))
+                    duck_min_linear = _db_to_linear(duck_gain_db)
+                    attack_samples = max(1, int((attack_ms / 1000.0) * sample_rate))
+                    release_samples = max(1, int((release_ms / 1000.0) * sample_rate))
 
-                        # Build baseline duck envelope (1.0 = full volume)
-                        duck_envelope = [1.0] * total_amb_len
+                    # Build baseline duck envelope (1.0 = full volume)
+                    duck_envelope = [1.0] * total_amb_len
 
-                        # Apply ducking for every overlapping voice clip
-                        for vclip in plan.voice_clips:
-                            v_start_ms = vclip.start_ms
-                            v_end_ms = vclip.start_ms + vclip.duration_ms
+                    # Apply ducking for every overlapping voice clip
+                    for vclip in plan.voice_clips:
+                        v_start_ms = vclip.start_ms
+                        v_end_ms = vclip.start_ms + vclip.duration_ms
 
-                            v_start_samp = int((v_start_ms / 1000.0) * sample_rate) - start_sample
-                            v_end_samp = int((v_end_ms / 1000.0) * sample_rate) - start_sample
+                        v_start_samp = int((v_start_ms / 1000.0) * sample_rate) - start_sample
+                        v_end_samp = int((v_end_ms / 1000.0) * sample_rate) - start_sample
 
-                            # Ducking region with attack and release
-                            duck_start = max(0, v_start_samp - attack_samples)
-                            duck_end = min(total_amb_len, v_end_samp + release_samples)
+                        # Ducking region with attack and release
+                        duck_start = max(0, v_start_samp - attack_samples)
+                        duck_end = min(total_amb_len, v_end_samp + release_samples)
 
-                            for s_i in range(duck_start, duck_end):
-                                if s_i < v_start_samp:
-                                    # Attack ramp
-                                    frac = (s_i - duck_start) / float(attack_samples)
-                                    cur_duck = 1.0 - (1.0 - duck_min_linear) * frac
-                                elif s_i <= v_end_samp:
-                                    # Full duck
-                                    cur_duck = duck_min_linear
-                                else:
-                                    # Release ramp
-                                    frac = (s_i - v_end_samp) / float(release_samples)
-                                    cur_duck = duck_min_linear + (1.0 - duck_min_linear) * frac
+                        for s_i in range(duck_start, duck_end):
+                            if s_i < v_start_samp:
+                                # Attack ramp
+                                frac = (s_i - duck_start) / float(attack_samples)
+                                cur_duck = 1.0 - (1.0 - duck_min_linear) * frac
+                            elif s_i <= v_end_samp:
+                                # Full duck
+                                cur_duck = duck_min_linear
+                            else:
+                                # Release ramp
+                                frac = (s_i - v_end_samp) / float(release_samples)
+                                cur_duck = duck_min_linear + (1.0 - duck_min_linear) * frac
 
-                                duck_envelope[s_i] = min(duck_envelope[s_i], cur_duck)
+                            duck_envelope[s_i] = min(duck_envelope[s_i], cur_duck)
 
-                        # Base gain & fade
-                        base_gain = _db_to_linear(amb.gain_db)
-                        fade_in_samp = int((amb.fade_in_ms / 1000.0) * sample_rate)
-                        fade_out_samp = int((amb.fade_out_ms / 1000.0) * sample_rate)
-                        orig_len = len(amb_samples)
+                    # Base gain & fade
+                    base_gain = _db_to_linear(amb.gain_db)
+                    fade_in_samp = int((amb.fade_in_ms / 1000.0) * sample_rate)
+                    fade_out_samp = int((amb.fade_out_ms / 1000.0) * sample_rate)
+                    orig_len = len(amb_samples)
 
-                        for s_i in range(total_amb_len):
-                            target_idx = start_sample + s_i
-                            if target_idx >= len(master_buffer):
-                                break
+                    for s_i in range(total_amb_len):
+                        target_idx = start_sample + s_i
+                        if target_idx >= len(master_buffer):
+                            break
 
-                            # Loop or clamp sample
-                            raw_s = amb_samples[s_i % orig_len] if amb.loop else (amb_samples[s_i] if s_i < orig_len else 0.0)
+                        # Loop or clamp sample
+                        raw_s = amb_samples[s_i % orig_len] if amb.loop else (amb_samples[s_i] if s_i < orig_len else 0.0)
 
-                            # Fade in / out
-                            fade = 1.0
-                            if s_i < fade_in_samp and fade_in_samp > 0:
-                                fade = s_i / float(fade_in_samp)
-                            elif total_amb_len - s_i < fade_out_samp and fade_out_samp > 0:
-                                fade = (total_amb_len - s_i) / float(fade_out_samp)
+                        # Fade in / out
+                        fade = 1.0
+                        if s_i < fade_in_samp and fade_in_samp > 0:
+                            fade = s_i / float(fade_in_samp)
+                        elif total_amb_len - s_i < fade_out_samp and fade_out_samp > 0:
+                            fade = (total_amb_len - s_i) / float(fade_out_samp)
 
-                            master_buffer[target_idx] += raw_s * base_gain * fade * duck_envelope[s_i]
+                        master_buffer[target_idx] += raw_s * base_gain * fade * duck_envelope[s_i]
 
             processed_clips += 1
             if progress_callback and total_clips > 0:
@@ -266,31 +265,30 @@ class WaveAudioMixer:
                 return target_path
 
             if sfx.source_path:
-                sfx_path = Path(sfx.source_path)
-                if not sfx_path.is_absolute():
-                    sfx_path = project_root / sfx_path
+                sfx_path = resolve_asset_file_path(sfx.source_path, project_dir=project_root)
+                if not sfx_path.exists():
+                    raise FileNotFoundError(f"SFX clip audio file not found at: '{sfx_path}'.")
 
-                if sfx_path.exists():
-                    s_samples, s_sr, _ = _read_wav_samples(sfx_path)
-                    s_gain = _db_to_linear(sfx.gain_db)
+                s_samples, s_sr, _ = _read_wav_samples(sfx_path)
+                s_gain = _db_to_linear(sfx.gain_db)
 
-                    if s_sr != sample_rate and s_sr > 0:
-                        ratio = sample_rate / float(s_sr)
-                        new_len = int(len(s_samples) * ratio)
-                        resampled = []
-                        for i in range(new_len):
-                            src_idx = i / ratio
-                            idx_low = int(src_idx)
-                            idx_high = min(idx_low + 1, len(s_samples) - 1)
-                            frac = src_idx - idx_low
-                            resampled.append(s_samples[idx_low] * (1.0 - frac) + s_samples[idx_high] * frac)
-                        s_samples = resampled
+                if s_sr != sample_rate and s_sr > 0:
+                    ratio = sample_rate / float(s_sr)
+                    new_len = int(len(s_samples) * ratio)
+                    resampled = []
+                    for i in range(new_len):
+                        src_idx = i / ratio
+                        idx_low = int(src_idx)
+                        idx_high = min(idx_low + 1, len(s_samples) - 1)
+                        frac = src_idx - idx_low
+                        resampled.append(s_samples[idx_low] * (1.0 - frac) + s_samples[idx_high] * frac)
+                    s_samples = resampled
 
-                    s_start_sample = int((sfx.start_ms / 1000.0) * sample_rate)
-                    for i, smp in enumerate(s_samples):
-                        target_idx = s_start_sample + i
-                        if target_idx < len(master_buffer):
-                            master_buffer[target_idx] += smp * s_gain
+                s_start_sample = int((sfx.start_ms / 1000.0) * sample_rate)
+                for i, smp in enumerate(s_samples):
+                    target_idx = s_start_sample + i
+                    if target_idx < len(master_buffer):
+                        master_buffer[target_idx] += smp * s_gain
 
             processed_clips += 1
             if progress_callback and total_clips > 0:

@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 import unittest
 
@@ -65,6 +66,31 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertEqual(final_state.human_action["action_type"], "resource_required")
         self.assertIn("Qiongqi", final_state.human_action["items"])
 
+    def test_workflow_require_final_approval_human_gate_and_resume(self):
+        script = "The morning sun rose gently over the calm green valley."
+        policy = WorkflowPolicy(provider="fake", require_final_approval=True)
+
+        state = self.service.start_workflow(
+            script_text=script,
+            project_id="wf_approval_01",
+            policy=policy,
+        )
+
+        # 1. Workflow must pause before export at WAITING_FOR_HUMAN
+        final_state = self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.WAITING_FOR_HUMAN,))
+        self.assertEqual(final_state.status, WorkflowStatus.WAITING_FOR_HUMAN)
+        self.assertIsNotNone(final_state.human_action)
+        self.assertEqual(final_state.human_action["action_type"], "final_audio_approval")
+        self.assertEqual(final_state.human_action["resume_action"], "export")
+
+        # 2. Resume workflow: should execute export and transition to COMPLETED
+        resumed_state = self.service.resume_workflow(state.workflow_id)
+        self.assertEqual(resumed_state.status, WorkflowStatus.RUNNING)
+
+        completed_state = self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.COMPLETED,))
+        self.assertEqual(completed_state.status, WorkflowStatus.COMPLETED)
+        self.assertTrue(any(a["id"] == "final_wav" for a in completed_state.result["artifacts"]))
+
     def test_workflow_cancellation_propagates(self):
         script = "The morning sun rose gently over the calm green valley."
         policy = WorkflowPolicy(provider="fake")
@@ -78,8 +104,26 @@ class TestVoiceWorkflow(unittest.TestCase):
         success, msg = self.service.cancel_workflow(state.workflow_id)
         self.assertTrue(success)
 
-        curr = self.service.get_workflow(state.workflow_id)
-        self.assertEqual(curr.status, WorkflowStatus.CANCELLED)
+        # Wait for workflow to settle to CANCELLED
+        settled_state = self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.CANCELLED,))
+        self.assertEqual(settled_state.status, WorkflowStatus.CANCELLED)
+
+    def test_workflow_cancellation_race_condition_never_regresses_status(self):
+        """Stress test: rapid cancel during concurrent background worker execution."""
+        script = "The morning sun rose gently over the calm green valley."
+        policy = WorkflowPolicy(provider="fake")
+
+        for i in range(5):
+            state = self.service.start_workflow(
+                script_text=script,
+                project_id=f"wf_race_{i}",
+                policy=policy,
+            )
+            time.sleep(0.01)  # allow thread to spin up
+            self.service.cancel_workflow(state.workflow_id)
+
+            settled = self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.CANCELLED,))
+            self.assertEqual(settled.status, WorkflowStatus.CANCELLED)
 
     def test_workflow_fails_safely_on_invalid_provider(self):
         script = "The morning sun rose gently over the calm green valley."
@@ -95,7 +139,7 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertEqual(final_state.status, WorkflowStatus.FAILED)
         self.assertIsNotNone(final_state.error)
 
-    def _wait_for_workflow(self, wf_id: str, target_statuses=(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED), max_retries=60):
+    def _wait_for_workflow(self, wf_id: str, target_statuses=(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED), max_retries=100):
         for _ in range(max_retries):
             st = self.service.get_workflow(wf_id)
             if st and st.status in target_statuses:

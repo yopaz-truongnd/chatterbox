@@ -25,13 +25,25 @@ class WorkflowPolicySchema(BaseModel):
         default=True,
         description="Automatically accept and select audio attempts that achieve a passing QC verdict.",
     )
-    output_formats: list[str] = Field(
-        default=["wav"],
-        description="Target deliverables audio formats (e.g. ['wav']).",
+    allow_resource_substitute: bool = Field(
+        default=True,
+        description="Allow automatic semantic substitution of missing SFX and ambience assets.",
+    )
+    mixing_profile: str = Field(
+        default="storytelling",
+        description="Mixing profile name for timeline timing and ducking rules.",
     )
     mastering_profile: str = Field(
         default="storytelling",
         description="Mastering dynamics and loudness profile name.",
+    )
+    output_formats: list[str] = Field(
+        default_factory=lambda: ["wav"],
+        description="Target deliverables audio formats (e.g. ['wav', 'mp3']).",
+    )
+    require_final_approval: bool = Field(
+        default=False,
+        description="Pause workflow for human director approval after mastering before final deliverable export.",
     )
 
 

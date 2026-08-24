@@ -39,6 +39,7 @@ from services.resource_manager import (
     load_manifest,
     load_selection_rules,
     load_substitution_rules,
+    resolve_asset_file_path,
     resolve_project_resources,
 )
 from services.sound_director import direct_sound
@@ -289,6 +290,7 @@ class VoiceProjectService:
         self,
         project_id: str,
         manifest_path: Path | str | None = None,
+        allow_substitutions: bool = True,
     ) -> ResourceCheckResult:
         """Resolve requirements from Directed VoicePlan against Asset Library & Pronunciation Knowledge."""
         state = self.store.get_project_state(project_id)
@@ -310,7 +312,7 @@ class VoiceProjectService:
                 proj_dir = self.store.get_project_dir(project_id)
                 resource_manifest = load_manifest(manifest_path)
                 pron_knowledge = load_pronunciation_knowledge()
-                sub_rules = load_substitution_rules()
+                sub_rules = load_substitution_rules() if allow_substitutions else {}
                 sel_rules = load_selection_rules()
 
                 report = resolve_project_resources(
@@ -754,6 +756,22 @@ class VoiceProjectService:
                 raise MixPlanStaleError(f"MixPlan audio file missing: '{clip_file}'.")
             if vclip.source_sha256 and compute_file_sha256(clip_file) != vclip.source_sha256:
                 raise MixPlanStaleError(f"MixPlan is stale: audio file content changed for beat '{vclip.beat_id}'. Run prepare_for_mix().")
+
+        # 3. Check each ambience clip source file and hash
+        for amb in mix_plan.ambience_clips:
+            amb_file = resolve_asset_file_path(amb.source_path, project_dir=proj_dir)
+            if not amb_file.exists():
+                raise MixPlanStaleError(f"MixPlan is stale: ambience asset missing at '{amb_file}'. Run prepare_for_mix().")
+            if amb.source_sha256 and compute_file_sha256(amb_file) != amb.source_sha256:
+                raise MixPlanStaleError(f"MixPlan is stale: ambience asset '{amb.resource_id}' changed on disk. Run prepare_for_mix().")
+
+        # 4. Check each SFX clip source file and hash
+        for sfx in mix_plan.sfx_clips:
+            sfx_file = resolve_asset_file_path(sfx.source_path, project_dir=proj_dir)
+            if not sfx_file.exists():
+                raise MixPlanStaleError(f"MixPlan is stale: SFX asset missing at '{sfx_file}'. Run prepare_for_mix().")
+            if sfx.source_sha256 and compute_file_sha256(sfx_file) != sfx.source_sha256:
+                raise MixPlanStaleError(f"MixPlan is stale: SFX asset '{sfx.resource_id}' changed on disk. Run prepare_for_mix().")
 
         with self.store.get_project_lock(project_id):
             state.stage = ProjectStatus.MIXING

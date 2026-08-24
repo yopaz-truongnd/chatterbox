@@ -7,7 +7,8 @@ Coordinates the end-to-end voice story production lifecycle through VoiceProject
 4. Per-beat TTS synthesis and 3-layer Voice QC
 5. Multi-track mix timeline preparation & crossfade rendering
 6. Dynamics mastering (loudness normalization & true-peak limiter)
-7. Deliverables packaging (FINAL.wav, FINAL.mp3, export-manifest.yaml)
+7. Final Director Approval Human Gate (optional policy)
+8. Deliverables packaging (FINAL.wav, FINAL.mp3, export-manifest.yaml)
 
 Coordinates every step cleanly through VoiceProjectOperationManager to guarantee
 project serialization, progress reporting, and immediate cancellation propagation.
@@ -47,6 +48,14 @@ from services.voice_project_workflow_models import (
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 logger = logging.getLogger(__name__)
+
+
+def _is_step_completed(state: VoiceWorkflowState, step_name: str) -> bool:
+    """Check if a specific workflow step has completed."""
+    for s in state.steps:
+        if s.name == step_name and s.status == "completed":
+            return True
+    return False
 
 
 class VoiceProjectWorkflowService:
@@ -110,7 +119,7 @@ class VoiceProjectWorkflowService:
         return self.store.get_workflow(workflow_id)
 
     def cancel_workflow(self, workflow_id: str) -> tuple[bool, str]:
-        """Cancel an in-flight workflow and terminate active operations."""
+        """Cancel an in-flight workflow: transition to CANCELLING, cancel active op, wait for terminal, then mark CANCELLED."""
         state = self.store.get_workflow(workflow_id)
         if not state:
             return False, f"Workflow '{workflow_id}' not found."
@@ -118,20 +127,29 @@ class VoiceProjectWorkflowService:
         if state.status in (WorkflowStatus.COMPLETED, WorkflowStatus.CANCELLED, WorkflowStatus.FAILED):
             return False, f"Workflow '{workflow_id}' is already in terminal state '{state.status.value}'."
 
-        state.status = WorkflowStatus.CANCELLED
+        if state.status == WorkflowStatus.CANCELLING:
+            return True, f"Workflow '{workflow_id}' is already cancelling."
+
+        state.status = WorkflowStatus.CANCELLING
         state.updated_at = datetime.now(timezone.utc).isoformat()
-        state.error = {"code": "WORKFLOW_CANCELLED", "message": "Workflow was cancelled by user."}
+        state.error = {"code": "WORKFLOW_CANCELLED", "message": "Workflow cancellation requested by user."}
         self.store.save_workflow(state)
 
-        # Cancel active project operations if running
+        # Signal cancellation to active child operation if running
         active_job = self.op_manager._project_active_op.get(state.project_id)
         if active_job:
             self.op_manager.cancel_operation(active_job)
 
-        return True, f"Workflow '{workflow_id}' cancelled."
+        # If workflow was in WAITING_FOR_HUMAN (no active background op running), mark CANCELLED immediately
+        if not active_job:
+            state.status = WorkflowStatus.CANCELLED
+            state.updated_at = datetime.now(timezone.utc).isoformat()
+            self.store.save_workflow(state)
+
+        return True, f"Workflow '{workflow_id}' cancelling."
 
     def resume_workflow(self, workflow_id: str) -> VoiceWorkflowState:
-        """Resume workflow execution after a human gate (e.g. pronunciation provided) has been resolved."""
+        """Resume workflow execution after a human gate (e.g. pronunciation provided, final approval) has been resolved."""
         state = self.store.get_workflow(workflow_id)
         if not state:
             raise ValueError(f"Workflow '{workflow_id}' not found.")
@@ -141,9 +159,15 @@ class VoiceProjectWorkflowService:
                 f"Workflow '{workflow_id}' is in status '{state.status.value}'; only workflows in 'waiting_for_human' can be resumed."
             )
 
+        resume_action = state.human_action.get("resume_action") if state.human_action else None
+        if state.human_action and state.human_action.get("action_type") == "final_audio_approval":
+            for s in state.steps:
+                if s.name == WorkflowStepName.MASTER.value:
+                    s.result_summary["approved"] = True
+
         state.status = WorkflowStatus.RUNNING
         state.human_action = None
-        state.suggested_action = "Resuming workflow execution..."
+        state.suggested_action = f"Resuming workflow execution from {resume_action or 'next step'}..."
         state.updated_at = datetime.now(timezone.utc).isoformat()
         self.store.save_workflow(state)
 
@@ -159,18 +183,17 @@ class VoiceProjectWorkflowService:
 
     def _mark_step(
         self,
-        state: VoiceWorkflowState,
+        workflow_id: str,
         step_name: str,
         status: str,
         result_summary: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
     ) -> None:
-        """Update individual step record within workflow state."""
-        fresh_state = self.store.get_workflow(state.workflow_id)
+        """Update individual step record within fresh workflow state."""
+        fresh_state = self.store.get_workflow(workflow_id)
         if not fresh_state:
             return
-        if fresh_state.status == WorkflowStatus.CANCELLED:
-            state.status = WorkflowStatus.CANCELLED
+        if fresh_state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
             return
 
         for step in fresh_state.steps:
@@ -200,21 +223,28 @@ class VoiceProjectWorkflowService:
     ) -> Any:
         """Submit operation through operation manager and wait synchronously for completion with cancellation polling."""
         state = self.store.get_workflow(workflow_id)
-        if not state or state.status == WorkflowStatus.CANCELLED:
+        if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
             return None
 
-        self._mark_step(state, step_name, "running")
+        self._mark_step(workflow_id, step_name, "running")
         op = self.op_manager.submit(state.project_id, op_name, fn, *args, **kwargs)
 
-        for s in state.steps:
+        fresh_state = self.store.get_workflow(workflow_id)
+        if not fresh_state or fresh_state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            self.op_manager.cancel_operation(op.id)
+            self._wait_for_op_terminal_and_cancel_wf(workflow_id, op.id)
+            return None
+
+        for s in fresh_state.steps:
             if s.name == step_name:
                 s.operation_id = op.id
-        self.store.save_workflow(state)
+        self.store.save_workflow(fresh_state)
 
         while True:
             fresh_state = self.store.get_workflow(workflow_id)
-            if not fresh_state or fresh_state.status == WorkflowStatus.CANCELLED:
+            if not fresh_state or fresh_state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 self.op_manager.cancel_operation(op.id)
+                self._wait_for_op_terminal_and_cancel_wf(workflow_id, op.id)
                 return None
 
             curr_op = self.op_manager.get_operation(op.id)
@@ -228,17 +258,38 @@ class VoiceProjectWorkflowService:
                 self.store.save_workflow(fresh_state)
 
             if curr_op.status == OperationStatus.COMPLETED:
-                self._mark_step(fresh_state, step_name, "completed", result_summary={"operation_id": op.id})
+                self._mark_step(workflow_id, step_name, "completed", result_summary={"operation_id": op.id})
                 return curr_op.result
             elif curr_op.status in (OperationStatus.FAILED, OperationStatus.INTERRUPTED):
                 err = curr_op.error or {"code": "OPERATION_FAILED", "message": "Operation failed"}
-                self._mark_step(fresh_state, step_name, "failed", error=err)
+                self._mark_step(workflow_id, step_name, "failed", error=err)
                 raise RuntimeError(f"Workflow step '{step_name}' failed: {err.get('message')}")
             elif curr_op.status == OperationStatus.CANCELLED:
-                self._mark_step(fresh_state, step_name, "failed", error={"code": "CANCELLED", "message": "Operation cancelled"})
+                self._mark_step(workflow_id, step_name, "failed", error={"code": "CANCELLED", "message": "Operation cancelled"})
+                self._wait_for_op_terminal_and_cancel_wf(workflow_id, op.id)
                 return None
 
             time.sleep(0.03)
+
+    def _wait_for_op_terminal_and_cancel_wf(self, workflow_id: str, op_id: str, max_wait_s: float = 10.0) -> None:
+        """Wait for active operation to reach terminal state before transitioning workflow to CANCELLED."""
+        start_t = time.time()
+        while time.time() - start_t < max_wait_s:
+            curr_op = self.op_manager.get_operation(op_id)
+            if not curr_op or curr_op.status in (
+                OperationStatus.CANCELLED,
+                OperationStatus.FAILED,
+                OperationStatus.COMPLETED,
+                OperationStatus.INTERRUPTED,
+            ):
+                break
+            time.sleep(0.05)
+
+        fresh_state = self.store.get_workflow(workflow_id)
+        if fresh_state and fresh_state.status != WorkflowStatus.CANCELLED:
+            fresh_state.status = WorkflowStatus.CANCELLED
+            fresh_state.updated_at = datetime.now(timezone.utc).isoformat()
+            self.store.save_workflow(fresh_state)
 
     def _execute_workflow_loop(
         self,
@@ -257,8 +308,8 @@ class VoiceProjectWorkflowService:
             project_id = state.project_id
 
             # 1. Step: CREATE_PROJECT
-            if script_text:
-                self._mark_step(state, WorkflowStepName.CREATE_PROJECT.value, "running")
+            if script_text and not _is_step_completed(state, WorkflowStepName.CREATE_PROJECT.value):
+                self._mark_step(workflow_id, WorkflowStepName.CREATE_PROJECT.value, "running")
                 if not self.project_store.project_exists(project_id):
                     service.create_project(
                         script_text=script_text,
@@ -266,162 +317,185 @@ class VoiceProjectWorkflowService:
                         title=title,
                         language=language or "en",
                     )
-                self._mark_step(state, WorkflowStepName.CREATE_PROJECT.value, "completed", {"project_id": project_id})
+                self._mark_step(workflow_id, WorkflowStepName.CREATE_PROJECT.value, "completed", {"project_id": project_id})
 
-            # Check for cancellation
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # 2. Step: PLAN (via OperationManager)
-            p_state = self.project_store.get_project_state(project_id)
-            if p_state.stage == ProjectStatus.NEW or not self.project_store.load_voice_plan(project_id):
-                plan_res = self._run_workflow_op(
-                    workflow_id,
-                    WorkflowStepName.PLAN.value,
-                    "plan",
-                    service.plan,
-                    project_id,
-                )
-                if plan_res is None:
-                    return
+            if not _is_step_completed(state, WorkflowStepName.PLAN.value):
+                p_state = self.project_store.get_project_state(project_id)
+                if p_state.stage == ProjectStatus.NEW or not self.project_store.load_voice_plan(project_id):
+                    plan_res = self._run_workflow_op(
+                        workflow_id,
+                        WorkflowStepName.PLAN.value,
+                        "plan",
+                        service.plan,
+                        project_id,
+                    )
+                    if plan_res is None:
+                        return
 
-            # Check for cancellation
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # 3. Step: CHECK_RESOURCES (via OperationManager)
-            res_report = self._run_workflow_op(
-                workflow_id,
-                WorkflowStepName.CHECK_RESOURCES.value,
-                "check_resources",
-                service.check_resources,
-                project_id,
-            )
-            if res_report is None:
-                return
-
-            render_blocked = res_report.get("render_blocked", False) if isinstance(res_report, dict) else getattr(res_report, "render_blocked", False)
-            required_missing = res_report.get("required_missing", []) if isinstance(res_report, dict) else getattr(res_report, "required_missing", [])
-            recommended_missing = res_report.get("recommended_missing", []) if isinstance(res_report, dict) else getattr(res_report, "recommended_missing", [])
-            readiness_score = res_report.get("readiness_score", 100.0) if isinstance(res_report, dict) else getattr(res_report, "readiness_score", 100.0)
-
-            # Human Gate: Resource Blocked
-            if render_blocked:
-                missing_terms = required_missing or ["Unverified pronunciation/audio asset"]
-                state.status = WorkflowStatus.WAITING_FOR_HUMAN
-                state.human_action = {
-                    "action_type": "resource_required",
-                    "reason": "Required audio assets or proper noun pronunciations are unverified",
-                    "items": missing_terms,
-                    "available_options": ["add_pronunciation", "cancel_workflow"],
-                    "resume_action": "check_resources",
-                }
-                state.suggested_action = f"Add pronunciations or resources for: {', '.join(missing_terms[:3])}"
-                self._mark_step(
-                    state,
+            if not _is_step_completed(state, WorkflowStepName.CHECK_RESOURCES.value):
+                res_report = self._run_workflow_op(
+                    workflow_id,
                     WorkflowStepName.CHECK_RESOURCES.value,
-                    "failed",
-                    error={"code": "RESOURCE_BLOCKED", "message": "Required resources missing"},
+                    "check_resources",
+                    service.check_resources,
+                    project_id,
+                    allow_substitutions=state.policy.allow_resource_substitute,
                 )
-                self.store.save_workflow(state)
-                return  # Pause workflow until user/agent resumes
+                if res_report is None:
+                    return
 
-            self._mark_step(
-                state,
-                WorkflowStepName.CHECK_RESOURCES.value,
-                "completed",
-                {"readiness_score": readiness_score, "gaps_count": len(required_missing) + len(recommended_missing)},
-            )
+                render_blocked = res_report.get("render_blocked", False) if isinstance(res_report, dict) else getattr(res_report, "render_blocked", False)
+                required_missing = res_report.get("required_missing", []) if isinstance(res_report, dict) else getattr(res_report, "required_missing", [])
+                recommended_missing = res_report.get("recommended_missing", []) if isinstance(res_report, dict) else getattr(res_report, "recommended_missing", [])
+                readiness_score = res_report.get("readiness_score", 100.0) if isinstance(res_report, dict) else getattr(res_report, "readiness_score", 100.0)
 
-            # Check for cancellation
+                # Human Gate: Resource Blocked
+                if render_blocked:
+                    missing_terms = required_missing or ["Unverified pronunciation/audio asset"]
+                    state.status = WorkflowStatus.WAITING_FOR_HUMAN
+                    state.human_action = {
+                        "action_type": "resource_required",
+                        "reason": "Required audio assets or proper noun pronunciations are unverified",
+                        "items": missing_terms,
+                        "available_options": ["add_pronunciation", "cancel_workflow"],
+                        "resume_action": "check_resources",
+                    }
+                    state.suggested_action = f"Add pronunciations or resources for: {', '.join(missing_terms[:3])}"
+                    self._mark_step(
+                        workflow_id,
+                        WorkflowStepName.CHECK_RESOURCES.value,
+                        "failed",
+                        error={"code": "RESOURCE_BLOCKED", "message": "Required resources missing"},
+                    )
+                    self.store.save_workflow(state)
+                    return  # Pause workflow until user/agent resumes
+
+                self._mark_step(
+                    workflow_id,
+                    WorkflowStepName.CHECK_RESOURCES.value,
+                    "completed",
+                    {"readiness_score": readiness_score, "gaps_count": len(required_missing) + len(recommended_missing)},
+                )
+
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # 4. Step: RENDER (via OperationManager)
-            render_res = self._run_workflow_op(
-                workflow_id,
-                WorkflowStepName.RENDER.value,
-                "render",
-                service.render,
-                project_id,
-                auto_qc=True,
-            )
-            if render_res is None:
-                return
+            if not _is_step_completed(state, WorkflowStepName.RENDER.value):
+                render_res = self._run_workflow_op(
+                    workflow_id,
+                    WorkflowStepName.RENDER.value,
+                    "render",
+                    service.render,
+                    project_id,
+                    auto_qc=state.policy.auto_accept_qc_pass,
+                )
+                if render_res is None:
+                    return
 
-            stage_val = render_res.get("stage") if isinstance(render_res, dict) else getattr(render_res, "stage", None)
-            stage_str = stage_val.value if hasattr(stage_val, "value") else str(stage_val)
+                stage_val = render_res.get("stage") if isinstance(render_res, dict) else getattr(render_res, "stage", None)
+                stage_str = stage_val.value if hasattr(stage_val, "value") else str(stage_val)
 
-            # Human Gate: Quality Review Required
-            if stage_str == ProjectStatus.REVIEW_REQUIRED.value:
-                manifest = self.project_store.load_manifest(project_id)
-                review_ids = [
-                    bid for bid, b in manifest.beats.items() if b.status == RenderStatus.NEEDS_REVIEW
-                ]
-                state.status = WorkflowStatus.WAITING_FOR_HUMAN
-                state.human_action = {
-                    "action_type": "audio_quality_review",
-                    "reason": "One or more rendered beats did not achieve passing QC score",
-                    "items": review_ids,
-                    "available_options": ["accept_beat", "rerender_beat", "cancel_workflow"],
-                    "resume_action": "evaluate",
-                }
-                state.suggested_action = f"Review quality for beats: {', '.join(review_ids)}"
-                self._mark_step(state, WorkflowStepName.RENDER.value, "failed", error={"code": "REVIEW_REQUIRED"})
-                self.store.save_workflow(state)
-                return
+                # Human Gate: Quality Review Required
+                if stage_str == ProjectStatus.REVIEW_REQUIRED.value:
+                    manifest = self.project_store.load_manifest(project_id)
+                    review_ids = [
+                        bid for bid, b in manifest.beats.items() if b.status == RenderStatus.NEEDS_REVIEW
+                    ]
+                    state.status = WorkflowStatus.WAITING_FOR_HUMAN
+                    state.human_action = {
+                        "action_type": "audio_quality_review",
+                        "reason": "One or more rendered beats did not achieve passing QC score",
+                        "items": review_ids,
+                        "available_options": ["accept_beat", "rerender_beat", "cancel_workflow"],
+                        "resume_action": "evaluate",
+                    }
+                    state.suggested_action = f"Review quality for beats: {', '.join(review_ids)}"
+                    self._mark_step(workflow_id, WorkflowStepName.RENDER.value, "failed", error={"code": "REVIEW_REQUIRED"})
+                    self.store.save_workflow(state)
+                    return
 
-            if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
-                raise RuntimeError(f"Rendering did not achieve NARRATION_READY; ended in '{stage_str}'.")
+                if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
+                    raise RuntimeError(f"Rendering did not achieve NARRATION_READY; ended in '{stage_str}'.")
 
-            # Check for cancellation
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # 5. Step: PREPARE_MIX (via OperationManager)
-            self._run_workflow_op(
-                workflow_id,
-                WorkflowStepName.PREPARE_MIX.value,
-                "prepare_mix",
-                service.prepare_for_mix,
-                project_id,
-                mastering_profile=state.policy.mastering_profile,
-                output_formats=state.policy.output_formats,
-            )
+            if not _is_step_completed(state, WorkflowStepName.PREPARE_MIX.value):
+                self._run_workflow_op(
+                    workflow_id,
+                    WorkflowStepName.PREPARE_MIX.value,
+                    "prepare_mix",
+                    service.prepare_for_mix,
+                    project_id,
+                    mastering_profile=state.policy.mastering_profile,
+                    output_formats=state.policy.output_formats,
+                    mix_config={"profile": state.policy.mixing_profile},
+                )
 
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # 6. Step: MIX (via OperationManager)
-            self._run_workflow_op(
-                workflow_id,
-                WorkflowStepName.MIX.value,
-                "mix",
-                service.mix,
-                project_id,
-            )
+            if not _is_step_completed(state, WorkflowStepName.MIX.value):
+                self._run_workflow_op(
+                    workflow_id,
+                    WorkflowStepName.MIX.value,
+                    "mix",
+                    service.mix,
+                    project_id,
+                )
 
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # 7. Step: MASTER (via OperationManager)
-            self._run_workflow_op(
-                workflow_id,
-                WorkflowStepName.MASTER.value,
-                "master",
-                service.master,
-                project_id,
-                profile_name=state.policy.mastering_profile,
-            )
+            if not _is_step_completed(state, WorkflowStepName.MASTER.value):
+                self._run_workflow_op(
+                    workflow_id,
+                    WorkflowStepName.MASTER.value,
+                    "master",
+                    service.master,
+                    project_id,
+                    profile_name=state.policy.mastering_profile,
+                )
 
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+                return
+
+            # Human Gate: Final Director Approval (if policy enabled and not yet approved)
+            master_step = next((s for s in state.steps if s.name == WorkflowStepName.MASTER.value), None)
+            is_approved = master_step and master_step.result_summary.get("approved")
+
+            if state.policy.require_final_approval and not is_approved:
+                proj_dir = self.project_store.get_project_dir(project_id)
+                master_path = str(proj_dir / "master" / "master.wav")
+                state.status = WorkflowStatus.WAITING_FOR_HUMAN
+                state.human_action = {
+                    "action_type": "final_audio_approval",
+                    "reason": "Master audio rendered and awaiting final director approval before export.",
+                    "items": [master_path],
+                    "available_options": ["approve", "rerender", "cancel_workflow"],
+                    "resume_action": "export",
+                }
+                state.suggested_action = f"Listen and approve master audio: {master_path}"
+                self.store.save_workflow(state)
                 return
 
             # 8. Step: EXPORT (via OperationManager)
@@ -435,7 +509,7 @@ class VoiceProjectWorkflowService:
             )
 
             state = self.store.get_workflow(workflow_id)
-            if not state or state.status == WorkflowStatus.CANCELLED:
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # Complete Workflow
@@ -453,7 +527,7 @@ class VoiceProjectWorkflowService:
 
         except Exception as exc:
             fresh_state = self.store.get_workflow(workflow_id)
-            if fresh_state and fresh_state.status == WorkflowStatus.CANCELLED:
+            if fresh_state and fresh_state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 logger.info("Workflow '%s' was cancelled, skipping failure marking.", workflow_id)
                 return
             logger.exception("Workflow '%s' execution failed: %s", workflow_id, exc)
