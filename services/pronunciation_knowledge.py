@@ -39,9 +39,7 @@ def load_pronunciation_knowledge(path: str | Path | None = None) -> Pronunciatio
             data = yaml.safe_load(f) or {}
             return PronunciationKnowledge.from_dict(data)
     except Exception as e:
-        import sys
-        print(f"WARNING: failed to load pronunciation knowledge at {path}: {e}", file=sys.stderr)
-        return PronunciationKnowledge(version=1, terms={})
+        raise ValueError(f"Malformed pronunciation knowledge YAML at {path}: {e}") from e
 
 
 def normalize_term(term: str) -> str:

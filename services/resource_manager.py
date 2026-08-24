@@ -110,9 +110,7 @@ def load_manifest(path: str | Path | None = None) -> ResourceManifest:
             data = yaml.safe_load(f) or {}
             return ResourceManifest.from_dict(data)
     except Exception as e:
-        import sys
-        print(f"WARNING: failed to load manifest at {path}: {e}", file=sys.stderr)
-        return ResourceManifest(version=1, resources=[])
+        raise ValueError(f"Malformed manifest YAML at {path}: {e}") from e
 
 
 def load_substitution_rules(path: str | Path | None = None) -> dict[str, list[str]]:
@@ -130,8 +128,7 @@ def load_substitution_rules(path: str | Path | None = None) -> dict[str, list[st
                 if "substitutions" in data and isinstance(data["substitutions"], dict):
                     rules.update(data["substitutions"])
         except Exception as e:
-            import sys
-            print(f"WARNING: failed to load substitution rules at {path}: {e}", file=sys.stderr)
+            raise ValueError(f"Malformed substitution rules YAML at {path}: {e}") from e
     return rules
 
 
@@ -159,8 +156,7 @@ def load_selection_rules(path: str | Path | None = None) -> dict[str, Any]:
                     if "exact_threshold" in data:
                         rules["exact_threshold"] = data["exact_threshold"]
         except Exception as e:
-            import sys
-            print(f"WARNING: failed to load selection rules at {path}: {e}", file=sys.stderr)
+            raise ValueError(f"Malformed selection rules YAML at {path}: {e}") from e
     return rules
 
 
@@ -190,31 +186,14 @@ def _intensity_str_to_int(val: str | int | None, default: int = 3) -> int:
 
 
 def extract_resource_requirements(plan: VoicePlan) -> list[ResourceRequirement]:
-    """Extract strongly typed ResourceRequirements from a Directed VoicePlan."""
+    """Extract strongly typed ResourceRequirements from a Directed VoicePlan.
+
+    Focuses on Ambience and SFX requirements. Voice provider readiness is handled at render time.
+    """
     requirements: list[ResourceRequirement] = []
     req_counter = 1
 
-    # 1. Voice Requirement (Narrator Voice is REQUIRED)
-    if plan.voice:
-        req_voice = ResourceRequirement(
-            id=f"REQ_VOICE_{req_counter:03d}",
-            type=ResourceCategory.VOICE,
-            intent=plan.voice.profile,
-            priority=RequirementPriority.REQUIRED,
-            beat_id=None,
-            narrative_context=NarrativeContext(
-                role="voice_narrator",
-                text=f"Narrator profile: {plan.voice.profile}, model: {plan.voice.model}",
-            ),
-            desired=DesiredProperties(
-                intensity=3,
-                tags=[plan.voice.provider, plan.voice.model],
-            ),
-        )
-        requirements.append(req_voice)
-        req_counter += 1
-
-    # 2. Beat Ambience & SFX Requirements
+    # Beat Ambience & SFX Requirements
     for beat in plan.beats:
         b_context = NarrativeContext(
             role=beat.role.value if isinstance(beat.role, BeatRole) else str(beat.role),
@@ -623,41 +602,10 @@ def resolve_project_resources(
     total_weight = 0.0
     earned_weight = 0.0
 
-    # 2. Resolve Audio Requirements (Ambience, SFX, Voice)
+    # 2. Resolve Audio Requirements (Ambience, SFX)
     for req in requirements:
         weight_val = w_req if req.priority == RequirementPriority.REQUIRED else (w_rec if req.priority == RequirementPriority.RECOMMENDED else w_opt)
         total_weight += weight_val
-
-        if req.type == ResourceCategory.VOICE:
-            # Check voice profile
-            if plan.voice and plan.voice.profile:
-                res_voice = ResourceResolution(
-                    beat_id=None,
-                    type=ResourceCategory.VOICE,
-                    requested_intent=req.intent,
-                    status=ResolutionStatus.EXACT,
-                    selected=None,
-                    score=1.0,
-                    match_type="exact",
-                    recommendation={"voice_profile": plan.voice.profile},
-                    acquisition_priority=RequirementPriority.REQUIRED,
-                )
-                resolved_list.append(res_voice)
-                earned_weight += weight_val
-            else:
-                gap_voice = ResourceGap(
-                    id=f"RG_VOICE",
-                    type=ResourceCategory.VOICE,
-                    intent=req.intent,
-                    priority=RequirementPriority.REQUIRED,
-                    used_at=[],
-                    wanted={"need": "voice_profile"},
-                    suggested_search=[],
-                    reason="missing_voice_profile",
-                    risk="cannot_render_tts_without_voice",
-                )
-                missing_list.append(gap_voice)
-            continue
 
         # Ambience and SFX
         outcome = resolve_requirement(
@@ -679,12 +627,13 @@ def resolve_project_resources(
             missing_list.append(outcome)
 
     # 3. Pronunciation Knowledge Check (Phase 5)
+    verified_overrides: dict[str, str] = {}
     if knowledge is not None:
         full_script = plan.project.source_script if plan.project else ""
         if not full_script and plan.beats:
             full_script = "\n".join(b.script.text for b in plan.beats if b.script and b.script.text)
 
-        # Gather any explicit pronunciations in beats
+        # Gather any explicit pronunciations declared across beats
         explicit_dict: dict[str, str] = {}
         for b in plan.beats:
             if b.voice and b.voice.pronunciation:
@@ -696,14 +645,31 @@ def resolve_project_resources(
             explicit_pronunciations=explicit_dict,
         )
 
-        # Apply verified overrides to beats
         verified_overrides = p_result.get("verified_overrides", {})
-        if verified_overrides:
-            for b in plan.beats:
-                if b.voice:
-                    b.voice.pronunciation.update(verified_overrides)
+        verified_terms = p_result.get("verified_terms", [])
 
-        # Add knowledge gaps
+        # Account for verified proper nouns (REQUIRED priority)
+        # Avoid double counting display aliases
+        seen_resolved_terms: set[str] = set()
+        for term in verified_terms:
+            if term not in seen_resolved_terms:
+                seen_resolved_terms.add(term)
+                hint_val = verified_overrides.get(term)
+                res_knowledge = ResourceResolution(
+                    beat_id=None,
+                    type=ResourceCategory.KNOWLEDGE,
+                    requested_intent=term,
+                    status=ResolutionStatus.EXACT,
+                    score=1.0,
+                    match_type="exact",
+                    recommendation={"tts_hint": hint_val} if hint_val else None,
+                    acquisition_priority=RequirementPriority.REQUIRED,
+                )
+                resolved_list.append(res_knowledge)
+                total_weight += w_req
+                earned_weight += w_req
+
+        # Account for missing / unverified knowledge gaps (REQUIRED priority)
         k_gaps = p_result.get("knowledge_gaps", [])
         for kg in k_gaps:
             total_weight += w_req  # Pronunciation gaps are REQUIRED
@@ -744,4 +710,5 @@ def resolve_project_resources(
         resolved=resolved_list,
         substituted=substituted_list,
         missing=missing_list,
+        pronunciation_overrides=verified_overrides,
     )

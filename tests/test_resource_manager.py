@@ -140,12 +140,8 @@ class TestResourceManagerPhase4(unittest.TestCase):
         )
 
         reqs = extract_resource_requirements(plan)
-        # Should extract: 1 voice requirement, 1 ambience requirement, 1 sfx requirement
-        self.assertEqual(len(reqs), 3)
-        
-        voice_req = next(r for r in reqs if r.type == ResourceCategory.VOICE)
-        self.assertEqual(voice_req.priority, RequirementPriority.REQUIRED)
-        self.assertEqual(voice_req.intent, "mythology_female_v1")
+        # Should extract: 1 ambience requirement, 1 sfx requirement (Voice is evaluated at render time)
+        self.assertEqual(len(reqs), 2)
 
         amb_req = next(r for r in reqs if r.type == ResourceCategory.AMBIENCE)
         self.assertEqual(amb_req.priority, RequirementPriority.RECOMMENDED)
@@ -312,6 +308,24 @@ class TestResourceManagerPhase4(unittest.TestCase):
         )
         self.assertTrue(any("supernatural reveal riser" in s for s in searches))
         self.assertTrue(any("riser sound effect" in s for s in searches))
+
+    def test_malformed_yaml_raises_value_error(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tf:
+            tf.write("invalid: yaml: [unbalanced")
+            tf_path = tf.name
+
+        try:
+            with self.assertRaises(ValueError):
+                load_manifest(tf_path)
+            with self.assertRaises(ValueError):
+                load_substitution_rules(tf_path)
+            with self.assertRaises(ValueError):
+                load_selection_rules(tf_path)
+        finally:
+            import os
+            if os.path.exists(tf_path):
+                os.unlink(tf_path)
 
 
 if __name__ == "__main__":

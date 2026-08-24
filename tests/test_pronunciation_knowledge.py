@@ -18,6 +18,7 @@ from services.resource_models import (
     PronunciationKnowledge,
     PronunciationStatus,
     RequirementPriority,
+    ResolutionStatus,
     ResourceCategory,
     ResourceManifest,
 )
@@ -155,9 +156,19 @@ class TestPronunciationKnowledgePhase5(unittest.TestCase):
         # Zhulong is verified in self.knowledge
         report = resolve_project_resources(plan, manifest, knowledge=self.knowledge)
         self.assertFalse(report.readiness.render_blocked)
-        # Pronunciation override applied into beat
-        self.assertIn("Zhulong", plan.beats[0].voice.pronunciation)
-        self.assertEqual(plan.beats[0].voice.pronunciation["Zhulong"], "Joo-long")
+        
+        # 1. Assert input plan was NOT mutated (read-only resolution contract)
+        self.assertEqual(plan.beats[0].voice.pronunciation, {})
+
+        # 2. Assert overrides are populated in ResourceReport
+        self.assertIn("Zhulong", report.pronunciation_overrides)
+        self.assertEqual(report.pronunciation_overrides["Zhulong"], "Joo-long")
+
+        # 3. Assert verified knowledge is present in resolved list
+        resolved_know = next((r for r in report.resolved if r.type == ResourceCategory.KNOWLEDGE), None)
+        self.assertIsNotNone(resolved_know)
+        self.assertEqual(resolved_know.requested_intent, "Zhulong")
+        self.assertEqual(resolved_know.status, ResolutionStatus.EXACT)
 
     def test_unverified_pronunciation_blocks_render(self):
         manifest = ResourceManifest(version=1, resources=[])
@@ -181,6 +192,20 @@ class TestPronunciationKnowledgePhase5(unittest.TestCase):
         self.assertTrue(report.readiness.render_blocked)
         self.assertEqual(report.readiness.required_missing_count, 1)
         self.assertTrue(any("Qiongqi" in reason for reason in report.readiness.block_reasons))
+
+    def test_malformed_pronunciation_yaml_raises_value_error(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tf:
+            tf.write("terms:\n  bad_yaml: [unterminated")
+            tf_path = tf.name
+
+        try:
+            with self.assertRaises(ValueError):
+                load_pronunciation_knowledge(tf_path)
+        finally:
+            import os
+            if os.path.exists(tf_path):
+                os.unlink(tf_path)
 
 
 if __name__ == "__main__":

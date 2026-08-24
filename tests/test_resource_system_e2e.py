@@ -233,16 +233,26 @@ class TestResourceSystemE2E(unittest.TestCase):
         self.assertEqual(missing_pron.term, "Qiongqi")
         self.assertEqual(missing_pron.priority, RequirementPriority.REQUIRED)
 
-        # 5. Check Render Blocked Status
+        # 5. Check Render Blocked Status and Structured Readiness Score
         # Blocked strictly because of REQUIRED pronunciation gap Qiongqi
         self.assertTrue(report.readiness.render_blocked)
         self.assertEqual(report.readiness.required_missing_count, 1)
         self.assertTrue(any("Qiongqi" in b for b in report.readiness.block_reasons))
+        # Ambience (2 earned / 2 total) + SFX sub (2 earned / 2 total) + SFX missing (0 earned / 2 total) + Zhulong (5 earned / 5 total) + Qiongqi (0 earned / 5 total) = 9/16 = 56%
+        self.assertEqual(report.readiness.score, 56)
 
-        # 6. Check Verified Pronunciation Applied into Beat without modifying original script text
-        self.assertEqual(directed_voice_plan.beats[0].voice.pronunciation.get("Zhulong"), "Joo-long")
+        # 6. Check that input VoicePlan was NOT mutated (read-only contract)
+        self.assertEqual(directed_voice_plan.beats[0].voice.pronunciation, {})
         self.assertIn("Zhulong", directed_voice_plan.beats[0].script.text)
         self.assertNotIn("Joo-long", directed_voice_plan.beats[0].script.text)
+
+        # 7. Check Verified Pronunciation Overrides in Report
+        self.assertEqual(report.pronunciation_overrides.get("Zhulong"), "Joo-long")
+
+        # 8. Check Resolved list contains both Exact Ambience and Verified Pronunciation
+        resolved_know = next((r for r in report.resolved if r.type == ResourceCategory.KNOWLEDGE), None)
+        self.assertIsNotNone(resolved_know)
+        self.assertEqual(resolved_know.requested_intent, "Zhulong")
 
     def test_default_repo_configs_load_cleanly(self):
         """Verify that default config files in repo (manifest.yaml, pronunciation.yaml, rules) load properly."""

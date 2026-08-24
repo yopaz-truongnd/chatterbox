@@ -229,6 +229,7 @@ class ResourceReport(BaseModel):
     resolved: list[ResourceResolution] = Field(default_factory=list)
     substituted: list[ResourceResolution] = Field(default_factory=list)
     missing: list[ResourceGap] = Field(default_factory=list)
+    pronunciation_overrides: dict[str, str] = Field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
