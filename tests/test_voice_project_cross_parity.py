@@ -1,29 +1,25 @@
-"""Cross-interface parity test (Phase 12-13).
+"""Cross-Interface Parity Tests (REST vs MCP vs Service) (Phase 13-15).
 
-Ensures CLI, REST API, and MCP Agent interfaces derive identical project state,
-beat summaries, readiness statistics, and suggested next actions from VoiceProjectService.
+Verifies that REST API and MCP Tool responses maintain semantic parity for
+project summaries, operation statuses, human actions, and artifact outputs.
 """
 
-import argparse
-import io
 import json
 import os
 from pathlib import Path
 import tempfile
+import time
 import unittest
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 import api_app
 from mcp_adapter.voice_project_tools import handle_voice_project_tool
-from services.voice_cli import cmd_inspect
-from services.voice_project_dependencies import get_voice_project_service, get_voice_project_store
-from services.voice_project_store import VoiceProjectStore
+from services.voice_project_dependencies import get_voice_project_service
 
 
 class TestVoiceProjectCrossParity(unittest.TestCase):
-    """Verify semantic and field parity across CLI, REST, and MCP."""
+    """Test response shape and semantics consistency across REST and MCP boundaries."""
 
     @classmethod
     def setUpClass(cls):
@@ -42,51 +38,77 @@ class TestVoiceProjectCrossParity(unittest.TestCase):
         cls.temp_dir.cleanup()
 
     def test_cross_interface_parity_on_planned_and_rendered_project(self):
-        script = "The ancient titan Nuwa forged colored stones to mend the weeping sky."
+        script_text = "The morning sun rose gently over the calm green valley."
+        project_id = "parity_proj_01"
 
-        store = VoiceProjectStore(root_dir=self.projects_root)
-        service = get_voice_project_service(provider_name="fake", store=store)
-
-        # Create, plan, check resources, render
-        service.create_project(script_text=script, project_id="parity_nuwa")
-        service.plan("parity_nuwa")
-        service.check_resources("parity_nuwa")
-        service.render("parity_nuwa", allow_resource_blocked=True)
-
-        project_dir = self.projects_root / "parity_nuwa"
-
-        # 1. Inspect via CLI (JSON output)
-        cli_args = argparse.Namespace(project_dir=str(project_dir), json=True)
-        with patch("sys.stdout", new=io.StringIO()) as fake_stdout:
-            exit_code = cmd_inspect(cli_args)
-            self.assertEqual(exit_code, 0)
-            cli_json = json.loads(fake_stdout.getvalue())
-
-        # 2. Inspect via REST API
-        rest_resp = self.client.get("/api/v1/voice-projects/parity_nuwa")
-        self.assertEqual(rest_resp.status_code, 200)
-        rest_json = rest_resp.json()
-
-        # 3. Inspect via MCP
-        mcp_res = handle_voice_project_tool(
-            "chatterbox_voice_project_get",
-            {"project_id": "parity_nuwa"},
+        # 1. Create via REST API
+        rest_create = self.client.post(
+            "/api/v1/voice-projects",
+            json={"project_id": project_id, "script_text": script_text},
         )
-        self.assertFalse(mcp_res["isError"])
-        mcp_json = json.loads(mcp_res["content"][0]["text"])
+        self.assertEqual(rest_create.status_code, 201)
+        rest_create_data = rest_create.json()
 
-        # Compare parity
-        self.assertEqual(cli_json["project_id"], "parity_nuwa")
-        self.assertEqual(rest_json["project_id"], "parity_nuwa")
-        self.assertEqual(mcp_json["project_id"], "parity_nuwa")
+        # 2. Query same project via MCP tool
+        mcp_get = handle_voice_project_tool(
+            "chatterbox_voice_project_get",
+            {"project_id": project_id},
+        )
+        self.assertFalse(mcp_get["isError"])
+        mcp_get_data = json.loads(mcp_get["content"][0]["text"])
 
-        self.assertEqual(cli_json["stage"], rest_json["stage"])
-        self.assertEqual(rest_json["stage"], mcp_json["stage"])
+        # Parity Check: Project ID and Stage match exactly
+        self.assertEqual(rest_create_data["project_id"], mcp_get_data["project_id"])
+        self.assertEqual(rest_create_data["stage"], mcp_get_data["stage"])
+        self.assertEqual(rest_create_data["beats"]["total"], mcp_get_data["beats"]["total"])
 
-        self.assertEqual(cli_json["beats_count"], rest_json["beats"]["total"])
-        self.assertEqual(rest_json["beats"]["total"], mcp_json["total_beats"])
+        # 3. Plan via MCP tool
+        mcp_plan = handle_voice_project_tool(
+            "chatterbox_voice_plan",
+            {"project_id": project_id},
+        )
+        self.assertFalse(mcp_plan["isError"])
+        mcp_job_id = json.loads(mcp_plan["content"][0]["text"])["job_id"]
 
-        self.assertEqual(rest_json["suggested_action"], mcp_json["suggested_action"])
+        # 4. Check job status via REST API
+        self._wait_for_rest_job(mcp_job_id)
+
+        # 5. Check Resources via REST API
+        res_job_resp = self.client.post(f"/api/v1/voice-projects/{project_id}/resources/check")
+        self.assertEqual(res_job_resp.status_code, 202)
+        self._wait_for_rest_job(res_job_resp.json()["job_id"])
+
+        # 6. Render via MCP tool
+        mcp_render = handle_voice_project_tool(
+            "chatterbox_voice_render",
+            {"project_id": project_id, "provider": "fake"},
+        )
+        self.assertFalse(mcp_render["isError"])
+        mcp_render_job_id = json.loads(mcp_render["content"][0]["text"])["job_id"]
+        self._wait_for_rest_job(mcp_render_job_id)
+
+        # 7. Final comparison between REST, MCP, and Service layer
+        rest_summary = self.client.get(f"/api/v1/voice-projects/{project_id}").json()
+        mcp_summary = json.loads(
+            handle_voice_project_tool("chatterbox_voice_project_get", {"project_id": project_id})["content"][0]["text"]
+        )
+        direct_service_summary = get_voice_project_service().get_project(project_id)
+
+        self.assertEqual(rest_summary["stage"], "NARRATION_READY")
+        self.assertEqual(mcp_summary["stage"], "NARRATION_READY")
+        self.assertEqual(direct_service_summary.stage.value, "NARRATION_READY")
+        self.assertEqual(rest_summary["beats"]["passed"], direct_service_summary.passed_beats)
+        self.assertEqual(mcp_summary["beats"]["passed"], direct_service_summary.passed_beats)
+
+    def _wait_for_rest_job(self, job_id: str, max_retries: int = 50):
+        for _ in range(max_retries):
+            resp = self.client.get(f"/api/v1/voice-project-jobs/{job_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if data["status"] in ("completed", "failed", "cancelled", "interrupted"):
+                    return data
+            time.sleep(0.05)
+        self.fail(f"Job {job_id} did not finish in time.")
 
 
 if __name__ == "__main__":

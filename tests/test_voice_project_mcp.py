@@ -1,4 +1,4 @@
-"""Unit tests for MCP Voice Project Tools Adapter (Phase 13)."""
+"""Unit tests for MCP Voice Project Tools Adapter (Phase 13-15)."""
 
 import json
 import os
@@ -9,11 +9,6 @@ import unittest
 
 from mcp_adapter.catalog import VOICE_PROJECT_TOOL_SCHEMAS, get_tools_list
 from mcp_adapter.voice_project_tools import handle_voice_project_tool
-from services.voice_project_dependencies import (
-    get_voice_project_operation_manager,
-    get_voice_project_service,
-    get_voice_project_store,
-)
 
 
 class TestVoiceProjectMCP(unittest.TestCase):
@@ -28,7 +23,7 @@ class TestVoiceProjectMCP(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def test_mcp_catalog_contains_voice_project_tools(self):
+    def test_mcp_catalog_contains_all_voice_project_and_workflow_tools(self):
         tools = get_tools_list()
         tool_names = [t["name"] for t in tools]
 
@@ -42,38 +37,49 @@ class TestVoiceProjectMCP(unittest.TestCase):
             "chatterbox_voice_qc",
             "chatterbox_voice_job_status",
             "chatterbox_voice_job_cancel",
+            "chatterbox_voice_prepare_mix",
+            "chatterbox_voice_mix",
+            "chatterbox_voice_master",
+            "chatterbox_voice_export",
+            "chatterbox_voice_finalize",
+            "chatterbox_voice_artifacts",
+            "chatterbox_voice_produce",
+            "chatterbox_voice_workflow_status",
+            "chatterbox_voice_workflow_resume",
+            "chatterbox_voice_workflow_cancel",
         ]
 
         for expected in expected_tools:
             self.assertIn(expected, tool_names)
 
-    def test_mcp_full_agent_workflow(self):
-        script = "When Zhulong opens his eyes, the world illuminates with brilliant light."
+    def test_mcp_full_agent_workflow_including_finalize(self):
+        # Clean script with no missing proper noun gaps
+        script = "The morning sun rose gently over the calm green valley."
 
         # 1. Create Project
         create_res = handle_voice_project_tool(
             "chatterbox_voice_project_create",
-            {"project_id": "mcp_dragon", "script_text": script},
+            {"project_id": "mcp_valley", "script_text": script},
         )
         self.assertFalse(create_res["isError"])
         create_data = json.loads(create_res["content"][0]["text"])
-        self.assertEqual(create_data["project_id"], "mcp_dragon")
+        self.assertEqual(create_data["project_id"], "mcp_valley")
         self.assertEqual(create_data["stage"], "NEW")
 
         # 2. Get Project
         get_res = handle_voice_project_tool(
             "chatterbox_voice_project_get",
-            {"project_id": "mcp_dragon"},
+            {"project_id": "mcp_valley"},
         )
         self.assertFalse(get_res["isError"])
         get_data = json.loads(get_res["content"][0]["text"])
-        self.assertEqual(get_data["project_id"], "mcp_dragon")
+        self.assertEqual(get_data["project_id"], "mcp_valley")
         self.assertIn("suggested_action", get_data)
 
         # 3. Trigger Plan
         plan_res = handle_voice_project_tool(
             "chatterbox_voice_plan",
-            {"project_id": "mcp_dragon"},
+            {"project_id": "mcp_valley"},
         )
         self.assertFalse(plan_res["isError"])
         plan_data = json.loads(plan_res["content"][0]["text"])
@@ -87,7 +93,7 @@ class TestVoiceProjectMCP(unittest.TestCase):
         # 5. Check Resources
         res_check_res = handle_voice_project_tool(
             "chatterbox_voice_check_resources",
-            {"project_id": "mcp_dragon"},
+            {"project_id": "mcp_valley"},
         )
         self.assertFalse(res_check_res["isError"])
         res_job_id = json.loads(res_check_res["content"][0]["text"])["job_id"]
@@ -96,12 +102,32 @@ class TestVoiceProjectMCP(unittest.TestCase):
         # 6. Trigger Render with provider=fake
         render_res = handle_voice_project_tool(
             "chatterbox_voice_render",
-            {"project_id": "mcp_dragon", "provider": "fake", "allow_blocked": True},
+            {"project_id": "mcp_valley", "provider": "fake"},
         )
         self.assertFalse(render_res["isError"])
         render_job_id = json.loads(render_res["content"][0]["text"])["job_id"]
         render_final = self._wait_for_job(render_job_id)
         self.assertEqual(render_final["status"], "completed")
+
+        # 7. Finalize (Phase 14 tool)
+        fin_res = handle_voice_project_tool(
+            "chatterbox_voice_finalize",
+            {"project_id": "mcp_valley"},
+        )
+        self.assertFalse(fin_res["isError"])
+        fin_job_id = json.loads(fin_res["content"][0]["text"])["job_id"]
+        fin_final = self._wait_for_job(fin_job_id)
+        self.assertEqual(fin_final["status"], "completed")
+
+        # 8. List Artifacts
+        art_res = handle_voice_project_tool(
+            "chatterbox_voice_artifacts",
+            {"project_id": "mcp_valley"},
+        )
+        self.assertFalse(art_res["isError"])
+        art_data = json.loads(art_res["content"][0]["text"])
+        self.assertIn("artifacts", art_data)
+        self.assertTrue(any(a["id"] == "final_wav" for a in art_data["artifacts"]))
 
     def test_mcp_validation_error_on_empty_script(self):
         res = handle_voice_project_tool(
@@ -129,15 +155,14 @@ class TestVoiceProjectMCP(unittest.TestCase):
         )
         self.assertIn("content", cancel_res)
 
-        # Wait for the background thread to reach a terminal state before tearDown
-        # removes the temp directory — prevents OSError 66 (Directory not empty).
+        # Wait for the background thread to finish
         for _ in range(60):
             status_res = handle_voice_project_tool(
                 "chatterbox_voice_job_status",
                 {"job_id": job_id},
             )
             data = json.loads(status_res["content"][0]["text"])
-            if data.get("status") in ("completed", "failed", "cancelled"):
+            if data.get("status") in ("completed", "failed", "cancelled", "interrupted"):
                 break
             time.sleep(0.05)
 
@@ -148,7 +173,7 @@ class TestVoiceProjectMCP(unittest.TestCase):
                 {"job_id": job_id},
             )
             data = json.loads(status_res["content"][0]["text"])
-            if data.get("status") in ("completed", "failed", "cancelled"):
+            if data.get("status") in ("completed", "failed", "cancelled", "interrupted"):
                 return data
             time.sleep(0.05)
         self.fail(f"MCP Job {job_id} did not finish in time.")
