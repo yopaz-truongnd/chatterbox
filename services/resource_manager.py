@@ -6,6 +6,7 @@ Sound Director, candidate scoring, substitutions, gaps, and readiness reporting.
 
 from __future__ import annotations
 
+import copy
 import os
 from pathlib import Path
 import re
@@ -120,7 +121,7 @@ def load_substitution_rules(path: str | Path | None = None) -> dict[str, list[st
     else:
         path = Path(path)
 
-    rules = dict(DEFAULT_SUBSTITUTION_RULES)
+    rules = copy.deepcopy(DEFAULT_SUBSTITUTION_RULES)
     if path.exists():
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -139,17 +140,17 @@ def load_selection_rules(path: str | Path | None = None) -> dict[str, Any]:
     else:
         path = Path(path)
 
-    rules = dict(DEFAULT_SELECTION_RULES)
+    rules = copy.deepcopy(DEFAULT_SELECTION_RULES)
     if path.exists():
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
                 if isinstance(data, dict):
-                    if "scoring_weights" in data:
+                    if "scoring_weights" in data and isinstance(data["scoring_weights"], dict):
                         rules["scoring_weights"].update(data["scoring_weights"])
-                    if "anti_repeat" in data:
+                    if "anti_repeat" in data and isinstance(data["anti_repeat"], dict):
                         rules["anti_repeat"].update(data["anti_repeat"])
-                    if "readiness_weights" in data:
+                    if "readiness_weights" in data and isinstance(data["readiness_weights"], dict):
                         rules["readiness_weights"].update(data["readiness_weights"])
                     if "substitute_threshold" in data:
                         rules["substitute_threshold"] = data["substitute_threshold"]

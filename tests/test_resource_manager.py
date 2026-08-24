@@ -327,6 +327,57 @@ class TestResourceManagerPhase4(unittest.TestCase):
             if os.path.exists(tf_path):
                 os.unlink(tf_path)
 
+    def test_load_selection_rules_no_global_default_mutation(self):
+        import copy
+        import tempfile
+        from services.resource_manager import DEFAULT_SELECTION_RULES, DEFAULT_SUBSTITUTION_RULES
+
+        original_selection = copy.deepcopy(DEFAULT_SELECTION_RULES)
+        original_substitution = copy.deepcopy(DEFAULT_SUBSTITUTION_RULES)
+
+        # Create custom YAML that modifies nested dictionary keys
+        custom_yaml = (
+            "version: 2\n"
+            "scoring_weights:\n"
+            "  intent: 0.99\n"
+            "anti_repeat:\n"
+            "  never_used_bonus: 0.88\n"
+            "readiness_weights:\n"
+            "  required: 99\n"
+            "substitutions:\n"
+            "  custom_intent:\n"
+            "    - custom_alt_1\n"
+        )
+
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tf:
+            tf.write(custom_yaml)
+            tf_path = tf.name
+
+        try:
+            # 1. Load custom rules
+            loaded_sel = load_selection_rules(tf_path)
+            loaded_sub = load_substitution_rules(tf_path)
+
+            self.assertEqual(loaded_sel["scoring_weights"]["intent"], 0.99)
+            self.assertEqual(loaded_sel["anti_repeat"]["never_used_bonus"], 0.88)
+            self.assertEqual(loaded_sel["readiness_weights"]["required"], 99)
+            self.assertIn("custom_intent", loaded_sub)
+
+            # 2. Assert global defaults were NOT mutated
+            self.assertEqual(DEFAULT_SELECTION_RULES, original_selection)
+            self.assertEqual(DEFAULT_SELECTION_RULES["scoring_weights"]["intent"], 0.40)
+            self.assertEqual(DEFAULT_SELECTION_RULES["anti_repeat"]["never_used_bonus"], 0.10)
+            self.assertEqual(DEFAULT_SELECTION_RULES["readiness_weights"]["required"], 5)
+            self.assertEqual(DEFAULT_SUBSTITUTION_RULES, original_substitution)
+
+            # 3. Call loader without override and assert pristine defaults are returned
+            pristine_sel = load_selection_rules(path="/non/existent/path/rules.yaml")
+            self.assertEqual(pristine_sel["scoring_weights"]["intent"], 0.40)
+        finally:
+            import os
+            if os.path.exists(tf_path):
+                os.unlink(tf_path)
+
 
 if __name__ == "__main__":
     unittest.main()
