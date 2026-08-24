@@ -44,12 +44,22 @@ class InvalidProjectStateError(VoiceProjectError):
 
 
 class StaleArtifactError(VoiceProjectError):
-    """Raised when an artifact (e.g. VoicePlan) is stale relative to its dependency source."""
+    """Raised when dependent upstream files have changed and invalidate the current state."""
+    pass
+
+
+class MixPlanStaleError(VoiceProjectError):
+    """Raised when VoicePlan, audio renders, or assets have changed since MixPlan was built."""
+    pass
+
+
+class ExportDependencyUnavailableError(VoiceProjectError):
+    """Raised when an external exporter binary (e.g. FFmpeg) is required but missing."""
     pass
 
 
 class BeatNotFoundError(VoiceProjectError):
-    """Raised when a specific beat ID is not found in the project's VoicePlan."""
+    """Raised when a specific beat ID does not exist in the project VoicePlan."""
     pass
 
 

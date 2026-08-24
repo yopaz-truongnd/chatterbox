@@ -49,7 +49,9 @@ from services.voice_project_dependencies import (
 )
 from services.voice_project_models import (
     BeatNotFoundError,
+    ExportDependencyUnavailableError,
     InvalidProjectStateError,
+    MixPlanStaleError,
     ResourceBlockedError,
     StaleArtifactError,
     VoiceProjectAlreadyExists,
@@ -128,12 +130,18 @@ def _handle_domain_error(exc: Exception, project_id: str | None = None) -> JSONR
     elif isinstance(exc, StaleArtifactError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "STALE_ARTIFACT"
+    elif isinstance(exc, MixPlanStaleError):
+        status_code = status.HTTP_409_CONFLICT
+        error_code = "MIX_PLAN_STALE"
     elif isinstance(exc, ResourceBlockedError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "RESOURCE_BLOCKED"
     elif isinstance(exc, OperationAlreadyRunningError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "OPERATION_ALREADY_RUNNING"
+    elif isinstance(exc, ExportDependencyUnavailableError):
+        status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        error_code = "EXPORT_DEPENDENCY_UNAVAILABLE"
     elif isinstance(exc, ProviderUnavailableError):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         error_code = "PROVIDER_UNAVAILABLE"

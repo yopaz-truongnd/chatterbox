@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
@@ -69,14 +70,17 @@ def _execute_rest_request(
         import api_app
 
         client = TestClient(api_app.app)
+        api_key = os.getenv("CHATTERBOX_API_KEY")
+        headers = {"X-API-Key": api_key} if api_key else {}
+
         if method == "GET":
-            resp = client.get(path)
+            resp = client.get(path, headers=headers)
         elif method == "POST":
-            resp = client.post(path, json=data or {})
+            resp = client.post(path, json=data or {}, headers=headers)
         elif method == "PUT":
-            resp = client.put(path, json=data or {})
+            resp = client.put(path, json=data or {}, headers=headers)
         else:
-            resp = client.request(method, path, json=data)
+            resp = client.request(method, path, json=data, headers=headers)
 
         try:
             return resp.json()

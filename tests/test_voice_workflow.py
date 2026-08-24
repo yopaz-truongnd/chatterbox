@@ -24,7 +24,7 @@ class TestVoiceWorkflow(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def test_workflow_happy_path_produces_final_deliverables(self):
+    def test_workflow_happy_path_produces_final_deliverables_and_tracks_operations(self):
         script = "The morning sun rose gently over the calm green valley."
         policy = WorkflowPolicy(provider="fake")
 
@@ -43,6 +43,12 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertIn("artifacts", final_state.result)
         self.assertTrue(any(a["id"] == "final_wav" for a in final_state.result["artifacts"]))
 
+        # Verify operations were tracked on steps
+        plan_step = next((s for s in final_state.steps if s.name == "plan"), None)
+        self.assertIsNotNone(plan_step)
+        self.assertEqual(plan_step.status, "completed")
+        self.assertIsNotNone(plan_step.operation_id)
+
     def test_workflow_pauses_at_required_resource_human_gate(self):
         script = "Long ago the mysterious beast Qiongqi walked Mount Zhong."
         policy = WorkflowPolicy(provider="fake")
@@ -59,7 +65,7 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertEqual(final_state.human_action["action_type"], "resource_required")
         self.assertIn("Qiongqi", final_state.human_action["items"])
 
-    def test_workflow_cancellation(self):
+    def test_workflow_cancellation_propagates(self):
         script = "The morning sun rose gently over the calm green valley."
         policy = WorkflowPolicy(provider="fake")
 
@@ -74,7 +80,20 @@ class TestVoiceWorkflow(unittest.TestCase):
 
         curr = self.service.get_workflow(state.workflow_id)
         self.assertEqual(curr.status, WorkflowStatus.CANCELLED)
-        time.sleep(0.1)
+
+    def test_workflow_fails_safely_on_invalid_provider(self):
+        script = "The morning sun rose gently over the calm green valley."
+        policy = WorkflowPolicy(provider="nonexistent_provider_xyz")
+
+        state = self.service.start_workflow(
+            script_text=script,
+            project_id="wf_bad_prov",
+            policy=policy,
+        )
+
+        final_state = self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.FAILED,))
+        self.assertEqual(final_state.status, WorkflowStatus.FAILED)
+        self.assertIsNotNone(final_state.error)
 
     def _wait_for_workflow(self, wf_id: str, target_statuses=(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED), max_retries=60):
         for _ in range(max_retries):

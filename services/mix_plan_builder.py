@@ -172,10 +172,15 @@ class MixPlanBuilder:
 
             sha256 = compute_file_sha256(audio_path) if audio_path.exists() else ""
 
-            # Check for per-beat custom pause
+            # Check for per-beat custom pause with clear precedence:
+            # 1. explicit silence decision: beat.silence.after.duration
+            # 2. explicit voice pause: beat.voice.pause.after
+            # 3. mixing profile default: pause_between_beats_ms
             beat_pause = pause_between_beats_ms
-            if hasattr(beat, "direction") and getattr(beat.direction, "pause_after", None):
-                beat_pause = float(beat.direction.pause_after) * 1000.0
+            if beat.silence and beat.silence.after and beat.silence.after.duration > 0:
+                beat_pause = float(beat.silence.after.duration) * 1000.0
+            elif beat.voice and beat.voice.pause and beat.voice.pause.after > 0:
+                beat_pause = float(beat.voice.pause.after) * 1000.0
 
             clip = VoiceClip(
                 beat_id=beat.id,
@@ -205,6 +210,7 @@ class MixPlanBuilder:
 
         # 2. Place Ambience Clips
         ambience_clips: list[AmbienceClip] = []
+        resolutions = []
         if resource_report:
             resolutions = getattr(resource_report, "resolved", []) + getattr(resource_report, "substituted", [])
             for res in resolutions:
@@ -221,7 +227,7 @@ class MixPlanBuilder:
                             ambience_clips.append(
                                 AmbienceClip(
                                     resource_id=getattr(entry, "id", "ambience"),
-                                    source_path=str(asset_path),
+                                    source_path=str(asset_path.relative_to(project_root) if asset_path.is_relative_to(project_root) else asset_path),
                                     source_sha256=compute_file_sha256(asset_path),
                                     start_ms=0.0,
                                     end_ms=current_time_ms,
@@ -230,41 +236,78 @@ class MixPlanBuilder:
                                 )
                             )
 
-        # 3. Place SFX Clips
+        # 3. Place SFX Clips from beat.sfx and ResourceReport resolutions
         sfx_clips: list[SFXClip] = []
         offset_rules = def_rules.get("sfx_placement_offsets_ms", {"PRE": -400, "UNDER": 0, "POST": 200, "BRIDGE": 0})
-        # Check sound direction cues from voice_plan
-        for beat in voice_plan.beats:
-            sound_dir = getattr(beat, "sound_direction", None)
-            if sound_dir and hasattr(sound_dir, "sfx_cues") and sound_dir.sfx_cues:
-                for cue in sound_dir.sfx_cues:
-                    # Find matching clip
-                    matching_vclip = next((v for v in voice_clips if v.beat_id == beat.id), None)
-                    if matching_vclip:
-                        placement_str = str(getattr(cue, "placement", "UNDER")).upper()
-                        placement = SFXPlacement.UNDER
-                        try:
-                            placement = SFXPlacement(placement_str)
-                        except ValueError:
-                            placement = SFXPlacement.UNDER
 
-                        offset_ms = float(offset_rules.get(placement.value, 0))
-                        if placement == SFXPlacement.PRE:
-                            start_ms = max(0.0, matching_vclip.start_ms + offset_ms)
-                        elif placement == SFXPlacement.POST:
-                            start_ms = matching_vclip.start_ms + matching_vclip.duration_ms + offset_ms
+        for beat in voice_plan.beats:
+            matching_vclip = next((v for v in voice_clips if v.beat_id == beat.id), None)
+            if not matching_vclip:
+                continue
+
+            for sfx_intent in getattr(beat, "sfx", []):
+                intent_str = getattr(sfx_intent, "intent", "")
+                # Find matching resolution for this beat and intent
+                res_match = next(
+                    (
+                        r for r in resolutions
+                        if (getattr(r, "beat_id", None) == beat.id or not getattr(r, "beat_id", None))
+                        and (getattr(r, "type", "") == "sfx" or getattr(getattr(r, "type", ""), "value", "") == "sfx")
+                        and (r.requested_intent == intent_str or (r.selected and r.selected.intent == intent_str))
+                    ),
+                    None,
+                )
+                if not res_match and resolutions:
+                    res_match = next(
+                        (
+                            r for r in resolutions
+                            if (getattr(r, "type", "") == "sfx" or getattr(getattr(r, "type", ""), "value", "") == "sfx")
+                            and (r.requested_intent == intent_str or (r.selected and r.selected.intent == intent_str))
+                        ),
+                        None,
+                    )
+
+                if res_match and res_match.selected and res_match.selected.file and res_match.selected.file.path:
+                    sfx_path = Path(res_match.selected.file.path)
+                    if not sfx_path.is_absolute():
+                        sfx_path = project_root / sfx_path
+                    if sfx_path.exists():
+                        sfx_duration = get_wav_duration_ms(sfx_path)
+                        sfx_sha = compute_file_sha256(sfx_path)
+
+                        placement_val = getattr(sfx_intent, "placement", "UNDER")
+                        placement_raw = placement_val.value if hasattr(placement_val, "value") else str(placement_val)
+                        placement_str = str(placement_raw).upper()
+                        try:
+                            placement_enum = SFXPlacement(placement_str)
+                        except ValueError:
+                            placement_enum = SFXPlacement.UNDER
+
+                        intent_offset_ms = float(getattr(sfx_intent, "offset", 0.0) or 0.0) * 1000.0
+                        preset_offset_ms = float(offset_rules.get(placement_enum.value, 0.0))
+                        effective_offset = intent_offset_ms if intent_offset_ms != 0 else preset_offset_ms
+
+                        if placement_enum == SFXPlacement.PRE:
+                            start_ms = max(0.0, matching_vclip.start_ms + effective_offset)
+                        elif placement_enum == SFXPlacement.POST:
+                            start_ms = matching_vclip.start_ms + matching_vclip.duration_ms + effective_offset
                         else:  # UNDER / BRIDGE
-                            start_ms = matching_vclip.start_ms
+                            start_ms = matching_vclip.start_ms + effective_offset
+
+                        vol_db = getattr(sfx_intent, "max_volume_db", None)
+                        if vol_db is None:
+                            vol_db = sfx_gain_db
 
                         sfx_clips.append(
                             SFXClip(
-                                resource_id=getattr(cue, "cue_id", "sfx_cue"),
-                                source_path=getattr(cue, "source_path", ""),
+                                resource_id=res_match.selected.id,
+                                source_path=str(sfx_path.relative_to(project_root) if sfx_path.is_relative_to(project_root) else sfx_path),
+                                source_sha256=sfx_sha,
                                 beat_id=beat.id,
-                                placement=placement,
+                                placement=placement_enum,
                                 start_ms=start_ms,
-                                duration_ms=float(getattr(cue, "duration_ms", 1500.0)),
-                                gain_db=sfx_gain_db,
+                                duration_ms=sfx_duration,
+                                gain_db=float(vol_db),
                             )
                         )
 

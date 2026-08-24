@@ -7,7 +7,7 @@ import tempfile
 import unittest
 import wave
 
-from services.audio_mix_models import MixPlan, VoiceClip
+from services.audio_mix_models import AmbienceClip, DuckingRule, MixPlan, SFXClip, VoiceClip
 from services.tts.base import CancellationToken
 from services.wave_audio_mixer import WaveAudioMixer, _read_wav_samples, _write_wav_samples
 
@@ -72,6 +72,57 @@ class TestWaveAudioMixer(unittest.TestCase):
             self.assertEqual(wf.getsampwidth(), 2)
             self.assertEqual(wf.getframerate(), 44100)
             self.assertGreater(wf.getnframes(), 44100)  # > 1.0s
+
+    def test_wave_audio_mixer_mixes_voice_ambience_and_sfx_with_ducking(self):
+        # 1. Voice Tone: 440 Hz from 500ms to 1000ms
+        voice_path = self.proj_dir / "voice_440.wav"
+        _generate_tone_wav(voice_path, freq=440.0, duration_s=0.5)
+
+        # 2. Ambience Tone: 110 Hz spanning entire 2000ms
+        amb_path = self.proj_dir / "amb_110.wav"
+        _generate_tone_wav(amb_path, freq=110.0, duration_s=1.0)
+
+        # 3. SFX Tone: 880 Hz at 1200ms
+        sfx_path = self.proj_dir / "sfx_880.wav"
+        _generate_tone_wav(sfx_path, freq=880.0, duration_s=0.3)
+
+        plan = MixPlan(
+            project_id="test_full_mix",
+            duration_ms=2000.0,
+            sample_rate=44100,
+            voice_clips=[
+                VoiceClip(beat_id="B01", selected_attempt=1, source_path="voice_440.wav", start_ms=500.0, duration_ms=500.0)
+            ],
+            ambience_clips=[
+                AmbienceClip(resource_id="wind", source_path="amb_110.wav", start_ms=0.0, end_ms=2000.0, gain_db=-6.0, loop=True)
+            ],
+            sfx_clips=[
+                SFXClip(resource_id="bell", source_path="sfx_880.wav", beat_id="B01", start_ms=1200.0, duration_ms=300.0, gain_db=-3.0)
+            ],
+            ducking_rules=[
+                DuckingRule(target_track="ambience", duck_gain_db=-18.0, attack_ms=50.0, release_ms=100.0)
+            ],
+        )
+
+        output_path = self.proj_dir / "full_premaster.wav"
+        mixer = WaveAudioMixer()
+        mixer.mix(plan=plan, proj_dir=self.proj_dir, output_path=output_path)
+
+        self.assertTrue(output_path.exists())
+        samples, sr, ch = _read_wav_samples(output_path)
+        self.assertGreater(len(samples), 44100 * 2)
+
+        # Window at 100ms-300ms (only ambience): non-zero energy
+        amb_window = [abs(s) for s in samples[int(0.1 * sr):int(0.3 * sr)]]
+        self.assertGreater(max(amb_window), 0.05)
+
+        # Window at 600ms-900ms (voice + ducked ambience): voice tone dominant
+        voice_window = [abs(s) for s in samples[int(0.6 * sr):int(0.9 * sr)]]
+        self.assertGreater(max(voice_window), 0.1)
+
+        # Window at 1250ms-1400ms (sfx + ambience): sfx active
+        sfx_window = [abs(s) for s in samples[int(1.25 * sr):int(1.4 * sr)]]
+        self.assertGreater(max(sfx_window), 0.05)
 
     def test_wave_mixer_respects_cancellation_token(self):
         clip_path = self.proj_dir / "clip.wav"

@@ -60,6 +60,18 @@ class VoiceProjectWorkflowStore:
         with self._lock:
             self.root_dir.mkdir(parents=True, exist_ok=True)
             target_path = self.root_dir / f"{state.workflow_id}.yaml"
+
+            # Terminal State Protection: never allow non-terminal writes to overwrite terminal states (e.g. CANCELLED)
+            if target_path.exists() and state.status not in (WorkflowStatus.CANCELLED, WorkflowStatus.FAILED, WorkflowStatus.COMPLETED):
+                try:
+                    with open(target_path, "r", encoding="utf-8") as f:
+                        existing_data = yaml.safe_load(f) or {}
+                    existing_status = existing_data.get("status")
+                    if existing_status in (WorkflowStatus.CANCELLED.value, WorkflowStatus.FAILED.value, WorkflowStatus.COMPLETED.value):
+                        return
+                except Exception:
+                    pass
+
             temp_path = target_path.with_suffix(f".tmp_{uuid.uuid4().hex[:6]}.yaml")
             try:
                 with open(temp_path, "w", encoding="utf-8") as f:

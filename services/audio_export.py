@@ -10,13 +10,17 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import subprocess
 from typing import Any
 import uuid
 
 from services.audio_mix_models import ExportManifest, ExportProfile, MixArtifact
 from services.mix_plan_builder import get_wav_duration_ms
 from services.tts.base import CancellationToken, ProgressCallback
-from services.voice_project_models import compute_file_sha256
+from services.voice_project_models import (
+    ExportDependencyUnavailableError,
+    compute_file_sha256,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,16 +82,62 @@ class AudioExportService:
                 )
 
             elif fmt == "mp3":
-                # Check for FFmpeg availability
-                logger.warning(
-                    "MP3 export requested for project '%s', but FFmpeg is not installed on this system. "
-                    "Skipping MP3 generation; canonical master WAV delivered.",
-                    project_id,
+                ffmpeg_bin = shutil.which("ffmpeg")
+                if not ffmpeg_bin:
+                    raise ExportDependencyUnavailableError(
+                        f"Cannot export MP3 for project '{project_id}': FFmpeg is not installed on this system. "
+                        "Install FFmpeg or request output_formats=['wav']."
+                    )
+
+                target_mp3 = out_dir / "FINAL.mp3"
+                temp_mp3 = target_mp3.with_suffix(f".tmp_{uuid.uuid4().hex[:6]}.mp3")
+
+                try:
+                    cmd = [
+                        ffmpeg_bin,
+                        "-y",
+                        "-i", str(src_master),
+                        "-codec:a", "libmp3lame",
+                        "-qscale:a", "2",
+                        str(temp_mp3),
+                    ]
+                    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                except subprocess.CalledProcessError as exc:
+                    if temp_mp3.exists():
+                        temp_mp3.unlink()
+                    raise RuntimeError(f"FFmpeg MP3 encoding failed: {exc.stderr}") from exc
+
+                if not temp_mp3.exists() or temp_mp3.stat().st_size == 0:
+                    if temp_mp3.exists():
+                        temp_mp3.unlink()
+                    raise RuntimeError("FFmpeg generated an empty or invalid MP3 file.")
+
+                temp_mp3.replace(target_mp3)
+                file_size = target_mp3.stat().st_size
+                sha = compute_file_sha256(target_mp3)
+                wav_duration_ms = get_wav_duration_ms(src_master)
+
+                artifacts.append(
+                    MixArtifact(
+                        project_id=project_id,
+                        artifact_id="final_mp3",
+                        artifact_type="final_mp3",
+                        file_path="exports/FINAL.mp3",
+                        sha256=sha,
+                        duration_ms=round(wav_duration_ms, 2),
+                        sample_rate=profile.sample_rate,
+                        channels=profile.channels,
+                        file_size_bytes=file_size,
+                    )
                 )
 
             if progress_callback and total_profiles > 0:
                 pct = (idx / float(total_profiles)) * 100.0
                 progress_callback("exporting_deliverables", pct, {"format": fmt})
+
+        if len(artifacts) != len(export_profiles):
+            missing_fmts = [p.format for p in export_profiles if not any(a.artifact_type == f"final_{p.format.lower()}" for a in artifacts)]
+            raise RuntimeError(f"Export failed to produce requested format(s): {', '.join(missing_fmts)}")
 
         # Save ExportManifest
         manifest = ExportManifest(

@@ -166,6 +166,22 @@ class TestVoiceProjectMCP(unittest.TestCase):
                 break
             time.sleep(0.05)
 
+    def test_mcp_requests_with_api_key_auth(self):
+        os.environ["CHATTERBOX_API_KEY"] = "supersecret_test_key"
+        try:
+            create_res = handle_voice_project_tool(
+                "chatterbox_voice_project_create",
+                {"project_id": "mcp_auth_proj", "script_text": "Script for auth test"},
+            )
+            self.assertFalse(create_res.get("isError", False))
+            get_res = handle_voice_project_tool(
+                "chatterbox_voice_project_get",
+                {"project_id": "mcp_auth_proj"},
+            )
+            self.assertFalse(get_res.get("isError", False))
+        finally:
+            os.environ.pop("CHATTERBOX_API_KEY", None)
+
     def _wait_for_job(self, job_id: str, max_retries: int = 50):
         for _ in range(max_retries):
             status_res = handle_voice_project_tool(

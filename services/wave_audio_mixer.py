@@ -159,7 +159,108 @@ class WaveAudioMixer:
                 pct = (processed_clips / float(total_clips)) * 70.0
                 progress_callback("mixing_voice", pct, {"beat_id": vclip.beat_id})
 
-        # 2. Mix SFX Clips (if any exist)
+        # 2. Mix Ambience Clips with Voice-Priority Ducking
+        for amb in plan.ambience_clips:
+            if cancellation_token and cancellation_token.is_cancelled():
+                return target_path
+
+            amb_path = Path(amb.source_path)
+            if not amb_path.is_absolute():
+                amb_path = project_root / amb_path
+
+            if amb_path.exists():
+                amb_samples, amb_sr, _ = _read_wav_samples(amb_path)
+                if amb_samples:
+                    # Resample if needed
+                    if amb_sr != sample_rate and amb_sr > 0:
+                        ratio = sample_rate / float(amb_sr)
+                        new_len = int(len(amb_samples) * ratio)
+                        resampled = []
+                        for i in range(new_len):
+                            src_idx = i / ratio
+                            idx_low = int(src_idx)
+                            idx_high = min(idx_low + 1, len(amb_samples) - 1)
+                            frac = src_idx - idx_low
+                            resampled.append(amb_samples[idx_low] * (1.0 - frac) + amb_samples[idx_high] * frac)
+                        amb_samples = resampled
+
+                    start_sample = int((amb.start_ms / 1000.0) * sample_rate)
+                    end_sample = int((amb.end_ms / 1000.0) * sample_rate)
+                    total_amb_len = max(0, end_sample - start_sample)
+
+                    if total_amb_len > 0:
+                        # Construct ducking envelope across this ambience timeline
+                        duck_gain_db = -12.0
+                        attack_ms = 50.0
+                        release_ms = 200.0
+                        if plan.ducking_rules:
+                            duck_gain_db = plan.ducking_rules[0].duck_gain_db
+                            attack_ms = plan.ducking_rules[0].attack_ms
+                            release_ms = plan.ducking_rules[0].release_ms
+
+                        duck_min_linear = _db_to_linear(duck_gain_db)
+                        attack_samples = max(1, int((attack_ms / 1000.0) * sample_rate))
+                        release_samples = max(1, int((release_ms / 1000.0) * sample_rate))
+
+                        # Build baseline duck envelope (1.0 = full volume)
+                        duck_envelope = [1.0] * total_amb_len
+
+                        # Apply ducking for every overlapping voice clip
+                        for vclip in plan.voice_clips:
+                            v_start_ms = vclip.start_ms
+                            v_end_ms = vclip.start_ms + vclip.duration_ms
+
+                            v_start_samp = int((v_start_ms / 1000.0) * sample_rate) - start_sample
+                            v_end_samp = int((v_end_ms / 1000.0) * sample_rate) - start_sample
+
+                            # Ducking region with attack and release
+                            duck_start = max(0, v_start_samp - attack_samples)
+                            duck_end = min(total_amb_len, v_end_samp + release_samples)
+
+                            for s_i in range(duck_start, duck_end):
+                                if s_i < v_start_samp:
+                                    # Attack ramp
+                                    frac = (s_i - duck_start) / float(attack_samples)
+                                    cur_duck = 1.0 - (1.0 - duck_min_linear) * frac
+                                elif s_i <= v_end_samp:
+                                    # Full duck
+                                    cur_duck = duck_min_linear
+                                else:
+                                    # Release ramp
+                                    frac = (s_i - v_end_samp) / float(release_samples)
+                                    cur_duck = duck_min_linear + (1.0 - duck_min_linear) * frac
+
+                                duck_envelope[s_i] = min(duck_envelope[s_i], cur_duck)
+
+                        # Base gain & fade
+                        base_gain = _db_to_linear(amb.gain_db)
+                        fade_in_samp = int((amb.fade_in_ms / 1000.0) * sample_rate)
+                        fade_out_samp = int((amb.fade_out_ms / 1000.0) * sample_rate)
+                        orig_len = len(amb_samples)
+
+                        for s_i in range(total_amb_len):
+                            target_idx = start_sample + s_i
+                            if target_idx >= len(master_buffer):
+                                break
+
+                            # Loop or clamp sample
+                            raw_s = amb_samples[s_i % orig_len] if amb.loop else (amb_samples[s_i] if s_i < orig_len else 0.0)
+
+                            # Fade in / out
+                            fade = 1.0
+                            if s_i < fade_in_samp and fade_in_samp > 0:
+                                fade = s_i / float(fade_in_samp)
+                            elif total_amb_len - s_i < fade_out_samp and fade_out_samp > 0:
+                                fade = (total_amb_len - s_i) / float(fade_out_samp)
+
+                            master_buffer[target_idx] += raw_s * base_gain * fade * duck_envelope[s_i]
+
+            processed_clips += 1
+            if progress_callback and total_clips > 0:
+                pct = (processed_clips / float(total_clips)) * 80.0
+                progress_callback("mixing_ambience", pct, {"resource_id": amb.resource_id})
+
+        # 3. Mix SFX Clips (if any exist)
         for sfx in plan.sfx_clips:
             if cancellation_token and cancellation_token.is_cancelled():
                 return target_path
@@ -170,26 +271,42 @@ class WaveAudioMixer:
                     sfx_path = project_root / sfx_path
 
                 if sfx_path.exists():
-                    samples, sfx_sr, _ = _read_wav_samples(sfx_path)
-                    gain = _db_to_linear(sfx.gain_db)
-                    start_sample = int((sfx.start_ms / 1000.0) * sample_rate)
-                    for i, smp in enumerate(samples):
-                        target_idx = start_sample + i
+                    s_samples, s_sr, _ = _read_wav_samples(sfx_path)
+                    s_gain = _db_to_linear(sfx.gain_db)
+
+                    if s_sr != sample_rate and s_sr > 0:
+                        ratio = sample_rate / float(s_sr)
+                        new_len = int(len(s_samples) * ratio)
+                        resampled = []
+                        for i in range(new_len):
+                            src_idx = i / ratio
+                            idx_low = int(src_idx)
+                            idx_high = min(idx_low + 1, len(s_samples) - 1)
+                            frac = src_idx - idx_low
+                            resampled.append(s_samples[idx_low] * (1.0 - frac) + s_samples[idx_high] * frac)
+                        s_samples = resampled
+
+                    s_start_sample = int((sfx.start_ms / 1000.0) * sample_rate)
+                    for i, smp in enumerate(s_samples):
+                        target_idx = s_start_sample + i
                         if target_idx < len(master_buffer):
-                            master_buffer[target_idx] += smp * gain
+                            master_buffer[target_idx] += smp * s_gain
 
             processed_clips += 1
             if progress_callback and total_clips > 0:
-                pct = 70.0 + (processed_clips / float(total_clips)) * 20.0
+                pct = (processed_clips / float(total_clips)) * 90.0
                 progress_callback("mixing_sfx", pct, {"resource_id": sfx.resource_id})
 
-        # 3. Write premaster WAV output
         if cancellation_token and cancellation_token.is_cancelled():
             return target_path
+
+        # 4. Write mixed master buffer to premaster WAV
+        if progress_callback:
+            progress_callback("mixing_writing", 95.0, {"path": str(target_path)})
 
         _write_wav_samples(target_path, master_buffer, sample_rate=sample_rate)
 
         if progress_callback:
-            progress_callback("mixing_complete", 100.0, {"output_path": str(target_path)})
+            progress_callback("mixing_completed", 100.0, {"duration_ms": plan.duration_ms})
 
         return target_path

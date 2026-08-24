@@ -66,6 +66,8 @@ class WorkflowStepSchema(BaseModel):
 
     name: str
     status: str
+    operation_id: str | None = None
+    progress_percent: float | None = None
     started_at: str | None = None
     completed_at: str | None = None
     result_summary: dict[str, Any] = Field(default_factory=dict)

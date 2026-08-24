@@ -10,6 +10,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 import api_app
+from services.voice_project_dependencies import get_voice_project_store
 
 
 class TestVoiceProjectsAPI(unittest.TestCase):
@@ -227,6 +228,38 @@ class TestVoiceProjectsAPI(unittest.TestCase):
 
         cancel_resp = self.client.post(f"/api/v1/voice-project-jobs/{job_id}/cancel")
         self.assertIn(cancel_resp.status_code, (200, 400))
+
+    def test_mix_plan_stale_detection(self):
+        script = "The morning sun rose gently over the calm green valley."
+        self.client.post("/api/v1/voice-projects", json={"project_id": "stale_mix_proj", "script_text": script})
+        p_res = self.client.post("/api/v1/voice-projects/stale_mix_proj/plan")
+        self._wait_for_op(p_res.json()["job_id"])
+
+        c_res = self.client.post("/api/v1/voice-projects/stale_mix_proj/resources/check")
+        self._wait_for_op(c_res.json()["job_id"])
+
+        r_res = self.client.post("/api/v1/voice-projects/stale_mix_proj/render", json={"provider": "fake"})
+        self._wait_for_op(r_res.json()["job_id"])
+
+        prep_res = self.client.post("/api/v1/voice-projects/stale_mix_proj/mix/prepare")
+        self._wait_for_op(prep_res.json()["job_id"])
+
+        # Mutate an underlying audio render attempt file
+        store = get_voice_project_store()
+        proj_dir = store.get_project_dir("stale_mix_proj")
+        manifest = store.load_manifest("stale_mix_proj")
+        first_beat = next(iter(manifest.beats.values()))
+        audio_file = proj_dir / first_beat.attempts[0].audio_path
+        if audio_file.exists():
+            with open(audio_file, "ab") as f:
+                f.write(b"\x00\x00\x00\x00")  # Corrupt hash
+
+        # Mix must fail with 409 MIX_PLAN_STALE
+        mix_res = self.client.post("/api/v1/voice-projects/stale_mix_proj/mix")
+        job_id = mix_res.json()["job_id"]
+        op_data = self._wait_for_op(job_id)
+        self.assertEqual(op_data["status"], "failed")
+        self.assertIn("stale", op_data["error"]["message"].lower())
 
     def _wait_for_op(self, job_id: str, max_retries: int = 50):
         for _ in range(max_retries):

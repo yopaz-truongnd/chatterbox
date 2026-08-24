@@ -55,6 +55,10 @@ def make_api_request(
     log(f"API Request: {method} {url}")
 
     req_headers = {"Accept": "application/json"}
+    api_key = os.getenv("CHATTERBOX_API_KEY")
+    if api_key:
+        req_headers["X-API-Key"] = api_key
+
     if headers:
         req_headers.update(headers)
 

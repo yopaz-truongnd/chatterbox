@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 
 from services.audio_export import AudioExportService
-from services.audio_mastering import AudioMasteringService
+from services.audio_mastering import AudioMasteringService, load_mastering_profile
 from services.audio_mix_models import (
     ExportManifest,
     ExportProfile,
@@ -51,9 +51,11 @@ from services.tts.provider_factory import create_tts_provider
 from services.voice_plan import VoicePlan, build_voice_plan
 from services.voice_project_models import (
     BeatNotFoundError,
+    ExportDependencyUnavailableError,
     HumanActionRequired,
     HumanActionType,
     InvalidProjectStateError,
+    MixPlanStaleError,
     ResourceCheckResult,
     StaleArtifactError,
     VoicePlanningResult,
@@ -665,7 +667,7 @@ class VoiceProjectService:
                     raise InvalidProjectStateError("VoicePlan or RenderManifest missing.")
 
                 builder = MixPlanBuilder()
-                m_profile = MasteringProfile(name=mastering_profile)
+                m_profile = load_mastering_profile(mastering_profile)
                 e_profiles = [ExportProfile(format=fmt) for fmt in (output_formats or ["wav"])]
 
                 mix_plan = builder.build(
@@ -716,6 +718,42 @@ class VoiceProjectService:
 
         with open(mix_plan_path, "r", encoding="utf-8") as f:
             mix_plan = MixPlan.from_yaml(f.read())
+
+        # Validate MixPlan Stale State
+        plan = self.store.load_voice_plan(project_id)
+        manifest = self.store.load_manifest(project_id)
+        report = self.store.load_resource_report(project_id)
+
+        if not plan or not manifest:
+            raise InvalidProjectStateError("Cannot mix: VoicePlan or RenderManifest missing.")
+
+        # 1. Check upstream artifact hashes
+        if mix_plan.dependency_hashes:
+            plan_path = proj_dir / "voice-plan.yaml"
+            manifest_path = proj_dir / "render-manifest.yaml"
+            report_path = proj_dir / "resource-report.yaml"
+
+            if plan_path.exists() and compute_file_sha256(plan_path) != mix_plan.dependency_hashes.get("voice_plan_sha256"):
+                raise MixPlanStaleError(f"MixPlan for project '{project_id}' is stale: voice-plan.yaml has changed since MixPlan was generated. Run prepare_for_mix() again.")
+            if manifest_path.exists() and compute_file_sha256(manifest_path) != mix_plan.dependency_hashes.get("render_manifest_sha256"):
+                raise MixPlanStaleError(f"MixPlan for project '{project_id}' is stale: render-manifest.yaml has changed since MixPlan was generated. Run prepare_for_mix() again.")
+            if report_path.exists() and compute_file_sha256(report_path) != mix_plan.dependency_hashes.get("resource_report_sha256"):
+                raise MixPlanStaleError(f"MixPlan for project '{project_id}' is stale: resource-report.yaml has changed since MixPlan was generated. Run prepare_for_mix() again.")
+
+        # 2. Check each voice clip selected attempt & source file hash
+        for vclip in mix_plan.voice_clips:
+            b_manifest = manifest.beats.get(vclip.beat_id)
+            if not b_manifest:
+                raise MixPlanStaleError(f"MixPlan is stale: beat '{vclip.beat_id}' no longer in render manifest.")
+            if b_manifest.selected_attempt != vclip.selected_attempt:
+                raise MixPlanStaleError(f"MixPlan is stale: selected attempt for beat '{vclip.beat_id}' changed from {vclip.selected_attempt} to {b_manifest.selected_attempt}.")
+            clip_file = Path(vclip.source_path)
+            if not clip_file.is_absolute():
+                clip_file = proj_dir / clip_file
+            if not clip_file.exists():
+                raise MixPlanStaleError(f"MixPlan audio file missing: '{clip_file}'.")
+            if vclip.source_sha256 and compute_file_sha256(clip_file) != vclip.source_sha256:
+                raise MixPlanStaleError(f"MixPlan is stale: audio file content changed for beat '{vclip.beat_id}'. Run prepare_for_mix().")
 
         with self.store.get_project_lock(project_id):
             state.stage = ProjectStatus.MIXING
@@ -780,7 +818,7 @@ class VoiceProjectService:
             try:
                 master_path = proj_dir / "mix" / "master.wav"
                 service = AudioMasteringService()
-                prof = MasteringProfile(name=profile_name)
+                prof = load_mastering_profile(profile_name)
 
                 result = service.master(
                     input_wav_path=premaster_path,

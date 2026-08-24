@@ -1,12 +1,14 @@
 """Unit tests for Audio Export Service (Phase 14)."""
 
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
-import wave
+from unittest.mock import patch
 
 from services.audio_export import AudioExportService
 from services.audio_mix_models import ExportProfile
+from services.voice_project_models import ExportDependencyUnavailableError
 from services.wave_audio_mixer import _write_wav_samples
 
 
@@ -41,6 +43,22 @@ class TestAudioExport(unittest.TestCase):
         self.assertEqual(len(manifest.artifacts), 1)
         self.assertEqual(manifest.artifacts[0].artifact_id, "final_wav")
         self.assertGreater(len(manifest.source_master_sha256), 0)
+
+    @patch("shutil.which", return_value=None)
+    def test_mp3_export_raises_dependency_unavailable_when_ffmpeg_missing(self, mock_which):
+        master_wav = self.dir / "master.wav"
+        _write_wav_samples(master_wav, [0.1] * 44100, sample_rate=44100)
+
+        out_dir = self.dir / "exports"
+        service = AudioExportService()
+
+        with self.assertRaises(ExportDependencyUnavailableError):
+            service.export(
+                project_id="test_mp3_fail",
+                master_wav_path=master_wav,
+                export_profiles=[ExportProfile(format="mp3")],
+                output_dir=out_dir,
+            )
 
 
 if __name__ == "__main__":
