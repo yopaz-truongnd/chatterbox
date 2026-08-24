@@ -10,14 +10,16 @@ import struct
 import tempfile
 import unittest
 import wave
+from unittest import mock
 
-from services.render_models import ProjectStatus, RenderStatus
+from services.render_models import BeatRenderState, ProjectStatus, RenderManifest, RenderStatus
 from services.resource_models import RequirementPriority, ResourceGap
 from services.tts.fake import FakeTTSProvider
 from services.voice_project_models import (
     BeatNotFoundError,
     HumanActionType,
     ResourceBlockedError,
+    InvalidProjectStateError,
     StaleArtifactError,
 )
 from services.voice_project_service import VoiceProjectService
@@ -127,6 +129,22 @@ class TestVoiceProjectServicePhase11(unittest.TestCase):
         with self.assertRaises(StaleArtifactError):
             self.service.render("stale_proj")
 
+    def test_render_requires_resource_check(self):
+        self.service.create_project(self.script_content, "unready_proj")
+        self.service.plan("unready_proj")
+
+        with self.assertRaises(InvalidProjectStateError):
+            self.service.render("unready_proj")
+
+    def test_plan_rejects_transient_state(self):
+        self.service.create_project(self.script_content, "busy_proj")
+        state = self.store.get_project_state("busy_proj")
+        state.stage = ProjectStatus.RENDERING
+        self.store.save_project_state(state)
+
+        with self.assertRaises(InvalidProjectStateError):
+            self.service.plan("busy_proj")
+
     def test_render_beat_selective_and_invalid_beat_id(self):
         self.service.create_project(self.script_content, "beat_proj")
         self.service.plan("beat_proj")
@@ -151,6 +169,24 @@ class TestVoiceProjectServicePhase11(unittest.TestCase):
         eval_res = self.service.evaluate("qc_proj")
         self.assertEqual(eval_res.stage, ProjectStatus.NARRATION_READY)
         self.assertEqual(eval_res.passed_beats, eval_res.total_beats)
+
+    def test_qc_failed_beat_fails_project(self):
+        self.service.create_project(self.script_content, "qc_failed_proj")
+        self.service.plan("qc_failed_proj")
+        self.service.check_resources("qc_failed_proj")
+        manifest = RenderManifest(
+            project_id="qc_failed_proj",
+            beats={"B01": BeatRenderState(beat_id="B01", status=RenderStatus.QC_FAILED)},
+        )
+
+        with mock.patch(
+            "services.voice_project_service.render_project_narration",
+            return_value=(manifest, {}),
+        ):
+            result = self.service.render("qc_failed_proj")
+
+        self.assertEqual(result.stage, ProjectStatus.FAILED)
+        self.assertEqual(result.failed_beats, 1)
 
 
 if __name__ == "__main__":

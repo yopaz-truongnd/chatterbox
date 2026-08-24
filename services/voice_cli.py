@@ -512,12 +512,16 @@ def cmd_render(args: argparse.Namespace) -> int:
     )
 
     try:
+        # Preserve the legacy one-command render UX while keeping the service
+        # lifecycle strict: PLANNED projects pass through resource checking.
+        if store.get_project_state(project_dir.name).stage == ProjectStatus.PLANNED:
+            service.check_resources(project_dir.name)
         render_res = service.render(
             project_id=project_dir.name,
             beats=args.beats,
             auto_qc=args.qc,
             force_rerender=getattr(args, "force_rerender", False) or getattr(args, "force", False),
-            allow_resource_blocked=getattr(args, "allow_blocked", False),
+            allow_resource_blocked=getattr(args, "force", False),
         )
     except ResourceBlockedError as exc:
         if args.json:

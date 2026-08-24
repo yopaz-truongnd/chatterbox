@@ -33,6 +33,11 @@ class VoiceProjectNotFound(VoiceProjectError):
     pass
 
 
+class VoiceProjectAlreadyExists(VoiceProjectError):
+    """Raised when project creation would overwrite an existing workspace."""
+    pass
+
+
 class InvalidProjectStateError(VoiceProjectError):
     """Raised when an operation is invalid for the project's current lifecycle stage."""
     pass

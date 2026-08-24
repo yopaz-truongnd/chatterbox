@@ -19,7 +19,10 @@ from services.voice_plan import (
     VoiceMetadata,
     VoicePlan,
 )
-from services.voice_project_models import VoiceProjectNotFound
+from services.voice_project_models import (
+    VoiceProjectAlreadyExists,
+    VoiceProjectNotFound,
+)
 from services.voice_project_store import VoiceProjectStore
 
 
@@ -74,6 +77,14 @@ class TestVoiceProjectStorePhase11(unittest.TestCase):
         with self.assertRaises(VoiceProjectNotFound):
             self.store.get_project_state("non_existent_project")
 
+    def test_create_workspace_refuses_to_overwrite_existing_project(self):
+        self.store.create_workspace("p1", self.sample_script)
+
+        with self.assertRaises(VoiceProjectAlreadyExists):
+            self.store.create_workspace("p1", "replacement text")
+
+        self.assertEqual(self.store.read_source_script("p1"), self.sample_script)
+
     def test_update_script_invalidates_downstream_hashes(self):
         self.store.create_workspace("p1", self.sample_script)
 
@@ -127,6 +138,28 @@ class TestVoiceProjectStorePhase11(unittest.TestCase):
         recovered_state = self.store.recover_transient_state("p1")
         self.assertEqual(recovered_state.stage, ProjectStatus.PLANNED)
         self.assertIsNotNone(recovered_state.error)
+
+    def test_detects_voice_plan_modified_on_disk(self):
+        self.store.create_workspace("p1", self.sample_script)
+        plan = VoicePlan(
+            version=1,
+            project=ProjectMetadata(id="p1", title="P1", source_script=self.sample_script),
+            voice=VoiceMetadata(profile="default", provider="chatterbox-http", model="auto"),
+            global_direction=GlobalDirection(
+                tone="epic",
+                base_pace=1.0,
+                dramatic_level=3,
+                max_energy=5.0,
+                avoid_overacting=True,
+            ),
+            beats=[],
+        )
+        self.store.save_voice_plan("p1", plan)
+        (self.store.get_project_dir("p1") / "voice-plan.yaml").write_text("modified", encoding="utf-8")
+
+        is_stale, reason = self.store.check_staleness("p1")
+        self.assertTrue(is_stale)
+        self.assertIn("modified", reason.lower())
 
 
 if __name__ == "__main__":

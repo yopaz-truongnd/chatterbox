@@ -31,6 +31,7 @@ from services.resource_models import ResourceReport
 from services.voice_plan import VoicePlan
 from services.voice_project_models import (
     StaleArtifactError,
+    VoiceProjectAlreadyExists,
     VoiceProjectNotFound,
     compute_file_sha256,
     compute_string_sha256,
@@ -113,7 +114,9 @@ class VoiceProjectStore:
 
         with self.get_project_lock(project_id):
             proj_dir = self.get_project_dir(project_id)
-            proj_dir.mkdir(parents=True, exist_ok=True)
+            if proj_dir.exists():
+                raise VoiceProjectAlreadyExists(f"Project '{project_id}' already exists at {proj_dir}")
+            proj_dir.mkdir(parents=True)
             (proj_dir / "source").mkdir(parents=True, exist_ok=True)
             (proj_dir / "renders").mkdir(parents=True, exist_ok=True)
             (proj_dir / "qc").mkdir(parents=True, exist_ok=True)
@@ -212,6 +215,7 @@ class VoiceProjectStore:
             state.artifacts.resource_report_sha256 = ""
             state.artifacts.render_manifest_voice_plan_sha256 = ""
             state.artifacts.render_manifest_resource_report_sha256 = ""
+            state.artifacts.render_manifest_sha256 = ""
 
             # Reset lifecycle stage to NEW
             state.stage = ProjectStatus.NEW
@@ -307,11 +311,18 @@ class VoiceProjectStore:
         return load_render_manifest(proj_dir)
 
     def save_manifest(self, project_id: str, manifest: RenderManifest) -> None:
-        """Save render-manifest.yaml to project workspace."""
+        """Atomically save render manifest and record its dependency hashes."""
         self.validate_project_id(project_id)
         with self.get_project_lock(project_id):
             proj_dir = self.get_project_dir(project_id)
-            save_render_manifest(manifest, proj_dir)
+            manifest_path = proj_dir / "render-manifest.yaml"
+            self._atomic_write_text(manifest_path, manifest.to_yaml())
+
+            state = self.get_project_state(project_id)
+            state.artifacts.render_manifest_voice_plan_sha256 = state.artifacts.voice_plan_sha256
+            state.artifacts.render_manifest_resource_report_sha256 = state.artifacts.resource_report_sha256
+            state.artifacts.render_manifest_sha256 = compute_file_sha256(manifest_path)
+            self.save_project_state(state)
 
     # ==========================================
     # Staleness Verification
@@ -336,6 +347,8 @@ class VoiceProjectStore:
         # 2. Check VoicePlan vs Source Script hash
         plan_path = proj_dir / "voice-plan.yaml"
         if plan_path.exists():
+            if state.artifacts.voice_plan_sha256 and compute_file_sha256(plan_path) != state.artifacts.voice_plan_sha256:
+                return True, "VoicePlan has been modified on disk (re-plan required)"
             if state.artifacts.voice_plan_source_sha256 != state.artifacts.source_sha256:
                 return True, "VoicePlan is stale relative to current source script (re-plan required)"
 
@@ -343,7 +356,18 @@ class VoiceProjectStore:
         if for_render:
             report_path = proj_dir / "resource-report.yaml"
             if report_path.exists() and plan_path.exists():
+                if state.artifacts.resource_report_sha256 and compute_file_sha256(report_path) != state.artifacts.resource_report_sha256:
+                    return True, "Resource report has been modified on disk (check-resources required)"
                 if state.artifacts.resource_report_voice_plan_sha256 != state.artifacts.voice_plan_sha256:
                     return True, "Resource report is stale relative to current VoicePlan (check-resources required)"
+
+            manifest_path = proj_dir / "render-manifest.yaml"
+            if manifest_path.exists() and state.artifacts.render_manifest_sha256:
+                if compute_file_sha256(manifest_path) != state.artifacts.render_manifest_sha256:
+                    return True, "Render manifest has been modified on disk"
+                if state.artifacts.render_manifest_voice_plan_sha256 != state.artifacts.voice_plan_sha256:
+                    return True, "Render manifest is stale relative to current VoicePlan"
+                if state.artifacts.render_manifest_resource_report_sha256 != state.artifacts.resource_report_sha256:
+                    return True, "Render manifest is stale relative to current resource report"
 
         return False, None

@@ -191,7 +191,9 @@ class VoiceProjectService:
         # 1. State check
         allowed_from = (ProjectStatus.NEW, ProjectStatus.PLANNED, ProjectStatus.FAILED, ProjectStatus.RESOURCE_BLOCKED)
         if state.stage not in allowed_from:
-            logger.info("Re-planning project '%s' currently in state '%s'", project_id, state.stage)
+            raise InvalidProjectStateError(
+                f"Cannot plan project '{project_id}' from state '{state.stage.value}'"
+            )
 
         with self.store.get_project_lock(project_id):
             state.stage = ProjectStatus.PLANNING
@@ -362,6 +364,20 @@ class VoiceProjectService:
                 f"Missing required resources: {', '.join(missing_terms)}"
             )
 
+        allowed_from = {
+            ProjectStatus.READY_TO_RENDER,
+            ProjectStatus.REVIEW_REQUIRED,
+            ProjectStatus.NARRATION_READY,
+            ProjectStatus.FAILED,
+        }
+        if allow_resource_blocked:
+            allowed_from.add(ProjectStatus.RESOURCE_BLOCKED)
+        if state.stage not in allowed_from:
+            raise InvalidProjectStateError(
+                f"Cannot render project '{project_id}' from state '{state.stage.value}'. "
+                "Run check_resources() first."
+            )
+
         with self.store.get_project_lock(project_id):
             state.stage = ProjectStatus.RENDERING
             self.store.save_project_state(state)
@@ -381,12 +397,14 @@ class VoiceProjectService:
                     allow_resource_blocked=allow_resource_blocked,
                     force_rerender=force_rerender,
                 )
+                self.store.save_manifest(project_id, manifest)
 
                 # Assess final project stage from manifest
                 total_beats = len(plan.beats)
                 passed_beats = sum(1 for b in manifest.beats.values() if b.status == RenderStatus.PASSED)
                 review_beats = sum(1 for b in manifest.beats.values() if b.status == RenderStatus.NEEDS_REVIEW)
-                failed_beats = sum(1 for b in manifest.beats.values() if b.status == RenderStatus.FAILED)
+                failed_statuses = {RenderStatus.FAILED, RenderStatus.QC_FAILED}
+                failed_beats = sum(1 for b in manifest.beats.values() if b.status in failed_statuses)
                 rendered_beats = len([b for b in manifest.beats.values() if b.attempts])
 
                 human_action = None
@@ -498,8 +516,10 @@ class VoiceProjectService:
                             attempt.status = RenderStatus.PASSED
                         elif qc.verdict.value == "needs_review":
                             attempt.status = RenderStatus.NEEDS_REVIEW
-                        else:
+                        elif qc.verdict.value == "retry":
                             attempt.status = RenderStatus.QC_FAILED
+                        else:
+                            attempt.status = RenderStatus.FAILED
 
                 # Re-select best candidate
                 best_attempt = select_best_candidate(b_state.attempts)
@@ -508,6 +528,8 @@ class VoiceProjectService:
                     b_state.status = RenderStatus.PASSED
                 elif any(a.qc_result and a.qc_result.verdict.value == "needs_review" for a in b_state.attempts):
                     b_state.status = RenderStatus.NEEDS_REVIEW
+                elif any(a.status == RenderStatus.FAILED for a in b_state.attempts):
+                    b_state.status = RenderStatus.FAILED
                 else:
                     b_state.status = RenderStatus.QC_FAILED
 
@@ -516,7 +538,8 @@ class VoiceProjectService:
             total_beats = len(plan.beats)
             passed_beats = sum(1 for b in manifest.beats.values() if b.status == RenderStatus.PASSED)
             review_beats = sum(1 for b in manifest.beats.values() if b.status == RenderStatus.NEEDS_REVIEW)
-            failed_beats = sum(1 for b in manifest.beats.values() if b.status == RenderStatus.FAILED)
+            failed_statuses = {RenderStatus.FAILED, RenderStatus.QC_FAILED}
+            failed_beats = sum(1 for b in manifest.beats.values() if b.status in failed_statuses)
             rendered_beats = len([b for b in manifest.beats.values() if b.attempts])
 
             human_action = None
