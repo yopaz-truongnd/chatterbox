@@ -1,0 +1,22 @@
+version: 1
+
+scoring_weights:
+  intent: 0.40
+  intensity: 0.20
+  duration: 0.15
+  tags: 0.15
+  usage: 0.10
+
+substitute_threshold: 0.70
+exact_threshold: 0.60
+
+anti_repeat:
+  same_sound_previous_video_penalty: 0.40
+  used_gt_3_times_last_5_videos_penalty: 0.25
+  never_used_bonus: 0.10
+  usage_frequency_decay: 0.05
+
+readiness_weights:
+  required: 5
+  recommended: 2
+  optional: 1

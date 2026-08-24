@@ -76,12 +76,36 @@ Invariant xử lý segment:
 - Desktop application: `apps/desktop.py`, `ui/`, `utils/`
 - Gradio applications: `apps/gradio/`
 
+## Resource Management & Pronunciation Knowledge (Phases 4-6)
+
+Dùng cho asset manifest, resolution từ narrative intent sang local assets, candidate scoring, intent substitution graph, pronunciation verification cho proper nouns mythology, asset ingest và shopping list.
+
+- Primary Services:
+  - `services/resource_models.py` — Domain models cho Manifest, Requirements, Candidates, Resolutions, Gaps, Pronunciation, Reports.
+  - `services/resource_manager.py` — Extract requirements từ Directed VoicePlan, scoring candidate (intent, intensity, duration, tags, usage), substitution graph, gap report & readiness calculation.
+  - `services/pronunciation_knowledge.py` — Từ điển proper nouns, alias lookup, trạng thái kiểm duyệt (verified / unverified / rejected), phát hiện knowledge gap và tiêm pronunciation override vào VoiceDirection.
+  - `services/asset_ingest.py` — Trích xuất thông tin tệp audio, nạp asset vào manifest, quản lý lịch sử sử dụng (usage tracking) và tổng hợp Resource Shopping List đa dự án.
+  - `services/resource_doctor.py` — Chẩn đoán sức khỏe hệ thống tài nguyên, kiểm tra liên kết file, trùng lặp ID/path/hash và cảnh báo thiếu tag/intent.
+- Configuration & Knowledge:
+  - `assets/manifest.yaml` — Danh mục âm thanh mẫu (Ambience, SFX, Music).
+  - `rules/resource-substitution.yaml` — Đồ thị thay thế ý định âm thanh (Sound Intent Substitution Graph).
+  - `rules/resource-selection.yaml` — Trọng số chấm điểm, ngưỡng thay thế và chính sách chống lặp (Anti-repeat).
+  - `knowledge/pronunciation.yaml` — Cơ sở tri thức phát âm thần thoại (Zhulong, Taotie, Qiongqi, Nuwa, Fuxi,...).
+- Tests:
+  - `tests/test_resource_manager.py`
+  - `tests/test_pronunciation_knowledge.py`
+  - `tests/test_asset_ingest.py`
+  - `tests/test_resource_system_e2e.py`
+
 ## Ownership Rules
 
 - Audio tensors và signal QC thuộc `services/audio.py`.
 - Whisper STT và Speech Content Critic thuộc `services/critic.py`.
 - Narration Plan & Pronunciation Scanner thuộc `services/narration_planner.py`.
 - Kịch bản & phân đoạn ngữ nghĩa thuộc `services/project_script.py`.
+- Resource Manifest & Intent Resolution thuộc `services/resource_manager.py`.
+- Pronunciation Knowledge Base thuộc `services/pronunciation_knowledge.py`.
+- Asset Ingestion & Library Management thuộc `services/asset_ingest.py` và `services/resource_doctor.py`.
 - Batch candidate generation & retry sequencing thuộc `services/batch_runner.py` và `inference_runner.py`.
 - Worker state và technical events thuộc `services/job_manager.py`.
 - Product state và confirmation gates thuộc `services/project_planner.py`.
