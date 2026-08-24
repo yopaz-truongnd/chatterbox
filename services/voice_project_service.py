@@ -732,6 +732,7 @@ class VoiceProjectService:
         with self.store.get_project_lock(project_id):
             state.stage = ProjectStatus.MIXING
             self.store.save_project_state(state)
+            pending_path = proj_dir / "mix" / "premaster.pending.wav"
 
             try:
                 mix_dir = proj_dir / "mix"
@@ -742,18 +743,18 @@ class VoiceProjectService:
                 mixer.mix(
                     plan=mix_plan,
                     proj_dir=proj_dir,
-                    output_path=premaster_path,
+                    output_path=pending_path,
                     progress_callback=progress_callback,
                     cancellation_token=cancellation_token,
                 )
-                (mix_dir / "premaster.lineage").write_text(
-                    compute_file_sha256(mix_plan_path), encoding="utf-8"
-                )
 
-                if cancellation_token and cancellation_token.is_cancelled():
+                if (cancellation_token and cancellation_token.is_cancelled()) or not pending_path.exists():
                     state.stage = state.last_stable_stage
                     self.store.save_project_state(state)
                     return {"status": "cancelled"}
+
+                pending_path.replace(premaster_path)
+                self._write_lineage(mix_dir / "premaster.lineage", mix_plan_path, premaster_path)
 
                 state.stage = ProjectStatus.MIXED
                 state.last_stable_stage = ProjectStatus.MIXED
@@ -771,6 +772,9 @@ class VoiceProjectService:
                 state.error = f"Mixing failed: {str(e)}"
                 self.store.save_project_state(state)
                 raise
+            finally:
+                if pending_path.exists():
+                    pending_path.unlink()
 
     def master(
         self,
@@ -794,6 +798,7 @@ class VoiceProjectService:
         with self.store.get_project_lock(project_id):
             state.stage = ProjectStatus.MASTERING
             self.store.save_project_state(state)
+            pending_path = proj_dir / "mix" / "master.pending.wav"
 
             try:
                 master_path = proj_dir / "mix" / "master.wav"
@@ -802,19 +807,23 @@ class VoiceProjectService:
 
                 result = service.master(
                     input_wav_path=premaster_path,
-                    output_wav_path=master_path,
+                    output_wav_path=pending_path,
                     profile=prof,
                     progress_callback=progress_callback,
                     cancellation_token=cancellation_token,
                 )
-                (proj_dir / "mix" / "master.lineage").write_text(
-                    compute_file_sha256(premaster_path), encoding="utf-8"
-                )
 
-                if cancellation_token and cancellation_token.is_cancelled():
+                if (
+                    result.get("cancelled")
+                    or (cancellation_token and cancellation_token.is_cancelled())
+                    or not pending_path.exists()
+                ):
                     state.stage = state.last_stable_stage
                     self.store.save_project_state(state)
                     return {"status": "cancelled"}
+
+                pending_path.replace(master_path)
+                self._write_lineage(proj_dir / "mix" / "master.lineage", premaster_path, master_path)
 
                 state.stage = ProjectStatus.MASTERED
                 state.last_stable_stage = ProjectStatus.MASTERED
@@ -832,6 +841,9 @@ class VoiceProjectService:
                 state.error = f"Mastering failed: {str(e)}"
                 self.store.save_project_state(state)
                 raise
+            finally:
+                if pending_path.exists():
+                    pending_path.unlink()
 
     def export(
         self,
@@ -1048,12 +1060,28 @@ class VoiceProjectService:
         return mix_plan, manifest, mix_plan_path
 
     @staticmethod
+    def _write_lineage(lineage_path: Path, source: Path, artifact: Path) -> None:
+        data = {
+            "source_sha256": compute_file_sha256(source),
+            "artifact_sha256": compute_file_sha256(artifact),
+        }
+        pending_path = lineage_path.with_suffix(".pending")
+        try:
+            pending_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+            pending_path.replace(lineage_path)
+        finally:
+            if pending_path.exists():
+                pending_path.unlink()
+
+    @staticmethod
     def _verify_lineage(artifact: Path, lineage_path: Path, source: Path, label: str) -> None:
         if not artifact.exists():
             return
-        if (
-            not source.exists()
-            or not lineage_path.exists()
-            or lineage_path.read_text(encoding="utf-8").strip() != compute_file_sha256(source)
-        ):
+        lineage = {}
+        if lineage_path.exists():
+            lineage = yaml.safe_load(lineage_path.read_text(encoding="utf-8")) or {}
+        if not source.exists() or lineage != {
+            "source_sha256": compute_file_sha256(source),
+            "artifact_sha256": compute_file_sha256(artifact),
+        }:
             raise MixPlanStaleError(f"{label} is stale relative to {source.name}; rebuild it before continuing.")

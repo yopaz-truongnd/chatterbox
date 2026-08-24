@@ -7,12 +7,14 @@ import threading
 import time
 import unittest
 from unittest import mock
+import yaml
 
 from services.voice_project_workflow import VoiceProjectWorkflowService
 from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
 from services.voice_project_models import InvalidProjectStateError
 from services.voice_project_models import MixPlanStaleError
 from services.tts.fake import FakeTTSProvider
+from services.tts.base import CancellationToken
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
@@ -226,6 +228,20 @@ class TestVoiceWorkflow(unittest.TestCase):
         second_store.recover_interrupted_workflows()
         self.assertEqual(second_store.get_workflow(running.workflow_id).status, WorkflowStatus.INTERRUPTED)
 
+    def test_store_recovery_completes_interrupted_cancellation(self):
+        cancelling = VoiceWorkflowState(
+            workflow_id="vwf_cancelling_restart",
+            project_id="cancelling_restart",
+            status=WorkflowStatus.CANCELLING,
+        )
+        self.wf_store.save_workflow(cancelling)
+
+        recovered_store = VoiceProjectWorkflowStore(root_dir=self.wf_store.root_dir)
+        recovered_store.recover_interrupted_workflows()
+
+        recovered = recovered_store.get_workflow(cancelling.workflow_id)
+        self.assertEqual(recovered.status, WorkflowStatus.CANCELLED)
+
     def test_rerender_makes_existing_premaster_and_master_stale(self):
         state = self.service.start_workflow(
             script_text="The morning sun rose gently over the calm green valley.",
@@ -247,6 +263,70 @@ class TestVoiceWorkflow(unittest.TestCase):
             project_service.master("wf_stale_downstream")
         with self.assertRaises(MixPlanStaleError):
             project_service.export("wf_stale_downstream")
+
+    def test_cancelled_mix_and_master_do_not_publish_new_lineage(self):
+        state = self.service.start_workflow(
+            script_text="The morning sun rose gently over the calm green valley.",
+            project_id="wf_cancelled_publish",
+            policy=WorkflowPolicy(provider="fake"),
+        )
+        self.assertEqual(self._wait_for_workflow(state.workflow_id).status, WorkflowStatus.COMPLETED)
+
+        project_service = VoiceProjectService(
+            store=self.service.project_store,
+            execution_port=FakeTTSProvider(),
+            provider_name="fake",
+        )
+        project_dir = project_service.store.get_project_dir("wf_cancelled_publish")
+        mix_plan_path = project_dir / "mix-plan.yaml"
+        premaster_path = project_dir / "mix" / "premaster.wav"
+        premaster_lineage = project_dir / "mix" / "premaster.lineage"
+        old_premaster = premaster_path.read_bytes()
+        old_premaster_lineage = premaster_lineage.read_bytes()
+        mix_plan_path.write_text(mix_plan_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+        mix_token = CancellationToken()
+
+        def cancel_mix(**kwargs):
+            Path(kwargs["output_path"]).write_bytes(b"new premaster")
+            mix_token.cancel()
+
+        with mock.patch("services.voice_project_service.WaveAudioMixer.mix", side_effect=cancel_mix):
+            self.assertEqual(project_service.mix("wf_cancelled_publish", cancellation_token=mix_token), {"status": "cancelled"})
+
+        self.assertEqual(premaster_path.read_bytes(), old_premaster)
+        self.assertEqual(premaster_lineage.read_bytes(), old_premaster_lineage)
+        self.assertFalse((project_dir / "mix" / "premaster.pending.wav").exists())
+        with self.assertRaises(MixPlanStaleError):
+            project_service.master("wf_cancelled_publish")
+
+        mix_plan = yaml.safe_load(mix_plan_path.read_text(encoding="utf-8"))
+        mix_plan["voice_clips"][0]["gain_db"] -= 3.0
+        mix_plan_path.write_text(yaml.safe_dump(mix_plan, sort_keys=False), encoding="utf-8")
+        project_service.mix("wf_cancelled_publish")
+
+        master_path = project_dir / "mix" / "master.wav"
+        master_lineage = project_dir / "mix" / "master.lineage"
+        old_master = master_path.read_bytes()
+        old_master_lineage = master_lineage.read_bytes()
+        master_token = CancellationToken()
+
+        def cancel_master(**kwargs):
+            Path(kwargs["output_wav_path"]).write_bytes(b"new master")
+            master_token.cancel()
+            return {"cancelled": True}
+
+        with mock.patch("services.voice_project_service.AudioMasteringService.master", side_effect=cancel_master):
+            self.assertEqual(
+                project_service.master("wf_cancelled_publish", cancellation_token=master_token),
+                {"status": "cancelled"},
+            )
+
+        self.assertEqual(master_path.read_bytes(), old_master)
+        self.assertEqual(master_lineage.read_bytes(), old_master_lineage)
+        self.assertFalse((project_dir / "mix" / "master.pending.wav").exists())
+        with self.assertRaises(MixPlanStaleError):
+            project_service.export("wf_cancelled_publish")
 
     def test_workflow_persistence_failure_is_not_silenced(self):
         state = VoiceWorkflowState(

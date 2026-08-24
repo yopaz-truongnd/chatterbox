@@ -53,7 +53,13 @@ class VoiceProjectWorkflowStore:
                     with open(yaml_file, "r", encoding="utf-8") as f:
                         data = yaml.safe_load(f) or {}
                     wf = VoiceWorkflowState.from_dict(data)
-                    if wf.status in (WorkflowStatus.QUEUED, WorkflowStatus.RUNNING):
+                    if wf.status == WorkflowStatus.CANCELLING:
+                        logger.info("Completing interrupted cancellation for workflow '%s'", wf.workflow_id)
+                        wf.status = WorkflowStatus.CANCELLED
+                        wf.error = None
+                        wf.suggested_action = "Workflow cancellation completed during startup recovery."
+                        self.save_workflow(wf)
+                    elif wf.status in (WorkflowStatus.QUEUED, WorkflowStatus.RUNNING):
                         logger.info("Recovering interrupted workflow '%s'", wf.workflow_id)
                         wf.status = WorkflowStatus.INTERRUPTED
                         wf.error = {
