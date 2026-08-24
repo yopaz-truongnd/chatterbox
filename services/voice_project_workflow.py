@@ -229,6 +229,45 @@ class VoiceProjectWorkflowService:
         ).start()
         return state
 
+    def request_revision_approval(
+        self, workflow_id: str, artifact_sha256: str, revision_ids: list[str]
+    ) -> VoiceWorkflowState:
+        """Reopen a completed workflow at its existing final-audio approval gate."""
+        if not artifact_sha256:
+            raise InvalidProjectStateError("Rebuilt master audio is missing before final approval.")
+
+        def reopen(state: VoiceWorkflowState) -> None:
+            if not state.policy.require_final_approval:
+                raise InvalidProjectStateError("Workflow policy does not require final approval.")
+            for step in state.steps:
+                if step.name == WorkflowStepName.MASTER.value:
+                    step.status = "completed"
+                    step.result_summary.pop("approved", None)
+                    step.result_summary["revision_ids"] = revision_ids
+                elif step.name in (WorkflowStepName.EXPORT.value, WorkflowStepName.COMPLETE.value):
+                    step.status = "pending"
+                    step.completed_at = None
+                    step.result_summary = {}
+            state.status = WorkflowStatus.WAITING_FOR_HUMAN
+            state.current_step = WorkflowStepName.MASTER.value
+            state.human_action = {
+                "action_type": "final_audio_approval",
+                "reason": "Rebuilt master audio requires renewed final approval before export.",
+                "items": [{
+                    "artifact_id": "master_wav",
+                    "sha256": artifact_sha256,
+                    "download_url": f"/api/v1/voice-projects/{state.project_id}/artifacts/master_wav",
+                }],
+                "revision_ids": revision_ids,
+                "available_options": ["approve", "rerender", "cancel_workflow"],
+                "resume_action": "export",
+            }
+            state.result = None
+            state.suggested_action = "Listen to and explicitly approve the rebuilt master audio."
+            state.updated_at = datetime.now(timezone.utc).isoformat()
+
+        return self.store.reopen_for_revision_approval(workflow_id, reopen)
+
     def _mark_step(
         self,
         workflow_id: str,
@@ -585,6 +624,12 @@ class VoiceProjectWorkflowService:
                 project_id,
                 formats=state.policy.output_formats,
             )
+
+            master_step = next((s for s in state.steps if s.name == WorkflowStepName.MASTER.value), None)
+            revision_ids = (master_step.result_summary.get("revision_ids", []) if master_step else [])
+            if revision_ids:
+                from services.director_revision_store import DirectorRevisionStore
+                DirectorRevisionStore(self.project_store).mark_reproduced(project_id, revision_ids)
 
             state = self.store.get_workflow(workflow_id)
             if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):

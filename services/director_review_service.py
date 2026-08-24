@@ -60,6 +60,8 @@ class DirectorReviewService:
         cursor = 0
         beats: list[DirectorBeatReview] = []
         invalidated = set(revision_state.invalidated_artifacts)
+        if "exports" in invalidated:
+            invalidated.update({"final_wav", "final_mp3", "export_manifest"})
         for beat in plan.beats:
             start = source.find(beat.script.text, cursor)
             if start < 0:
@@ -141,6 +143,8 @@ class DirectorReviewService:
             ("premaster_wav", "mix/premaster.wav", f"/api/v1/voice-projects/{project_id}/artifacts/premaster_wav"),
             ("master_wav", "mix/master.wav", f"/api/v1/voice-projects/{project_id}/artifacts/master_wav"),
             ("final_wav", "exports/FINAL.wav", f"/api/v1/voice-projects/{project_id}/artifacts/final_wav"),
+            ("final_mp3", "exports/FINAL.mp3", f"/api/v1/voice-projects/{project_id}/artifacts/final_mp3"),
+            ("export_manifest", "exports/export-manifest.yaml", f"/api/v1/voice-projects/{project_id}/artifacts/export_manifest"),
         ):
             path = project_dir / relative
             artifacts.append(DirectorArtifactStatus(

@@ -11,12 +11,15 @@ from services.director_review_service import DirectorReviewService
 from services.director_resource_service import DirectorResourceService
 from services.director_revision_service import DirectorRevisionService
 from services.director_revision_store import DirectorRevisionStore
-from services.render_models import RenderStatus
+from services.render_models import ProjectStatus, RenderStatus
 from services.tts.fake import FakeTTSProvider
 from services.voice_project_models import InvalidProjectStateError
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_operations import OperationStatus, VoiceProjectOperationManager
+from services.voice_project_workflow import VoiceProjectWorkflowService
+from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus, WorkflowStep, WorkflowStepName
+from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 
 class TestDirectorPhase16(unittest.TestCase):
@@ -216,6 +219,129 @@ class TestDirectorPhase16(unittest.TestCase):
         render.assert_not_called()
         self.assertEqual(current.status, OperationStatus.COMPLETED, current.error)
         self.assertEqual(current.result["executed_steps"], ["prepare_mix", "mix", "master", "export"])
+
+    def test_pronunciation_revision_tracks_every_affected_beat(self):
+        project_id = "multi_pronunciation"
+        self.project_service.create_project(
+            "Zhong crossed the valley at dawn.\n\nAt dusk, Zhong returned to the mountain.",
+            project_id=project_id,
+        )
+        self.project_service.plan(project_id)
+        self.project_service.check_resources(project_id)
+        result = DirectorResourceService(self.project_service).add_pronunciation(
+            project_id, "Zhong", "jong", "tester"
+        )
+        state = DirectorRevisionStore(self.store).get_state(project_id)
+        self.assertEqual(set(state.affected_beats), set(result.affected_beats))
+        self.assertGreaterEqual(len(state.affected_beats), 2)
+
+    def test_selective_reproduction_resolves_only_selected_revision(self):
+        self._rendered_project("selective_revisions")
+        beat_ids = list(self.store.load_manifest("selective_revisions").beats)
+        service = DirectorRevisionService(self.project_service)
+        first = service.update_timing("selective_revisions", beat_ids[0], BeatTimingPatch(pause_after_ms=300), "tester")
+        second = service.update_timing("selective_revisions", beat_ids[-1], BeatTimingPatch(pause_after_ms=600), "tester")
+        with mock.patch.object(self.project_service, "prepare_for_mix"), \
+             mock.patch.object(self.project_service, "mix"), \
+             mock.patch.object(self.project_service, "master"), \
+             mock.patch.object(self.project_service, "export"):
+            service.reproduce_project("selective_revisions", revision_ids=[first.revision_id])
+        state = DirectorRevisionStore(self.store).get_state("selective_revisions")
+        self.assertEqual(state.pending_revision_ids, [second.revision_id])
+        self.assertEqual(state.affected_beats, [beat_ids[-1]])
+
+    def test_resource_block_does_not_restore_narration_ready(self):
+        self._rendered_project("blocked_preserve")
+        state = self.store.get_project_state("blocked_preserve")
+        state.stage = state.last_stable_stage = ProjectStatus.RESOURCE_BLOCKED
+        self.store.save_project_state(state)
+        service = DirectorRevisionService(self.project_service)
+        with mock.patch.object(self.project_service, "check_resources", return_value=mock.Mock(render_blocked=True)):
+            service._preserve_narration("blocked_preserve")
+        self.assertEqual(self.store.get_project_state("blocked_preserve").stage.value, "RESOURCE_BLOCKED")
+
+    def test_reproduction_preserves_authoritative_workflow_profiles(self):
+        self._rendered_project("profile_reproduction")
+        beat_id = next(iter(self.store.load_manifest("profile_reproduction").beats))
+        revision = DirectorRevisionService(self.project_service)
+        revision.update_timing("profile_reproduction", beat_id, BeatTimingPatch(pause_after_ms=420), "tester")
+        workflow_store = VoiceProjectWorkflowStore(Path(self.tmp.name) / "workflows")
+        workflow = VoiceWorkflowState(
+            workflow_id="vwf_profiles", project_id="profile_reproduction", status=WorkflowStatus.COMPLETED,
+            policy=WorkflowPolicy(mixing_profile="dramatic", mastering_profile="podcast", output_formats=["wav", "mp3"]),
+        )
+        workflow_store.save_workflow(workflow)
+        workflow_service = VoiceProjectWorkflowService(store=workflow_store, project_store=self.store)
+        with mock.patch("services.voice_project_dependencies.get_voice_project_workflow_service", return_value=workflow_service), \
+             mock.patch.object(self.project_service, "prepare_for_mix") as prepare, \
+             mock.patch.object(self.project_service, "mix"), \
+             mock.patch.object(self.project_service, "master") as master, \
+             mock.patch.object(self.project_service, "export") as export:
+            revision.reproduce_project("profile_reproduction", policy={"mixing_profile": "storytelling"})
+        prepare.assert_called_once_with(
+            "profile_reproduction", mix_config={"profile": "dramatic"},
+            mastering_profile="podcast", output_formats=["wav", "mp3"],
+        )
+        master.assert_called_once_with("profile_reproduction", profile_name="podcast", cancellation_token=None)
+        export.assert_called_once_with("profile_reproduction", formats=["wav", "mp3"], cancellation_token=None)
+
+    def test_completed_workflow_reopens_with_hashed_revision_approval_gate(self):
+        project_id = "revision_approval"
+        self.project_service.create_project("A quiet valley.", project_id=project_id)
+        master = self.store.get_project_dir(project_id) / "mix" / "master.wav"
+        master.parent.mkdir(parents=True, exist_ok=True)
+        master.write_bytes(b"new-master")
+        workflow_store = VoiceProjectWorkflowStore(Path(self.tmp.name) / "approval-workflows")
+        steps = [WorkflowStep(name=name.value, status="completed") for name in WorkflowStepName]
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_approval", project_id=project_id, status=WorkflowStatus.COMPLETED,
+            policy=WorkflowPolicy(require_final_approval=True), steps=steps,
+        ))
+        service = VoiceProjectWorkflowService(store=workflow_store, project_store=self.store)
+        reopened = service.request_revision_approval("vwf_approval", "abc123", ["rev_one"])
+        self.assertEqual(reopened.status, WorkflowStatus.WAITING_FOR_HUMAN)
+        self.assertEqual(reopened.human_action["items"][0]["artifact_id"], "master_wav")
+        self.assertEqual(reopened.human_action["items"][0]["sha256"], "abc123")
+        self.assertEqual(reopened.human_action["revision_ids"], ["rev_one"])
+
+    def test_client_policy_cannot_disable_workflow_final_approval(self):
+        self._rendered_project("approval_policy")
+        beat_id = next(iter(self.store.load_manifest("approval_policy").beats))
+        revision = DirectorRevisionService(self.project_service)
+        revision.update_timing("approval_policy", beat_id, BeatTimingPatch(pause_after_ms=510), "tester")
+        workflow_store = VoiceProjectWorkflowStore(Path(self.tmp.name) / "policy-workflows")
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_policy", project_id="approval_policy", status=WorkflowStatus.COMPLETED,
+            policy=WorkflowPolicy(require_final_approval=True),
+        ))
+        workflow_service = VoiceProjectWorkflowService(store=workflow_store, project_store=self.store)
+        master_path = self.store.get_project_dir("approval_policy") / "mix" / "master.wav"
+        master_path.parent.mkdir(parents=True, exist_ok=True)
+        master_path.write_bytes(b"rebuilt")
+        with mock.patch("services.voice_project_dependencies.get_voice_project_workflow_service", return_value=workflow_service), \
+             mock.patch.object(self.project_service, "prepare_for_mix"), \
+             mock.patch.object(self.project_service, "mix"), \
+             mock.patch.object(self.project_service, "master"), \
+             mock.patch.object(self.project_service, "export") as export, \
+             mock.patch.object(workflow_service, "request_revision_approval") as gate:
+            result = revision.reproduce_project("approval_policy", policy={"require_final_approval": False})
+        self.assertEqual(result.status, "waiting_for_human")
+        gate.assert_called_once()
+        export.assert_not_called()
+
+    def test_export_family_is_stale_after_downstream_invalidation(self):
+        self._rendered_project("stale_exports")
+        project_dir = self.store.get_project_dir("stale_exports")
+        (project_dir / "exports").mkdir(exist_ok=True)
+        (project_dir / "exports" / "FINAL.wav").write_bytes(b"old-final")
+        beat_id = next(iter(self.store.load_manifest("stale_exports").beats))
+        DirectorRevisionService(self.project_service).update_timing(
+            "stale_exports", beat_id, BeatTimingPatch(pause_after_ms=333), "tester"
+        )
+        review = DirectorReviewService(self.store).get_review("stale_exports")
+        final = next(item for item in review.artifact_status if item.artifact_id == "final_wav")
+        self.assertTrue(final.exists)
+        self.assertFalse(final.fresh)
 
 
 if __name__ == "__main__":
