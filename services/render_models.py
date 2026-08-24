@@ -92,6 +92,18 @@ class ProjectState(BaseModel):
 # 2. TTS Provider Contracts (Phase 8)
 # ==========================================
 
+class ProviderErrorType(str, Enum):
+    AUTH_ERROR = "AUTH_ERROR"
+    RATE_LIMIT = "RATE_LIMIT"
+    TIMEOUT = "TIMEOUT"
+    SERVER_ERROR = "SERVER_ERROR"
+    BAD_REQUEST = "BAD_REQUEST"
+    MODEL_NOT_FOUND = "MODEL_NOT_FOUND"
+    INVALID_AUDIO_RESPONSE = "INVALID_AUDIO_RESPONSE"
+    NETWORK_ERROR = "NETWORK_ERROR"
+    UNKNOWN = "UNKNOWN"
+
+
 class ProviderCapabilities(BaseModel):
     supports_emotion: bool = True
     supports_pace: bool = True
@@ -103,6 +115,8 @@ class ProviderCapabilities(BaseModel):
 
 class ProviderHealth(BaseModel):
     available: bool = True
+    configured: bool = True
+    connectivity_checked: bool = False
     provider_name: str = "fake"
     message: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
@@ -139,7 +153,9 @@ class TTSRenderResult(BaseModel):
     provider_request_id: str | None = None
     raw_metadata: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
+    error_type: ProviderErrorType | None = None
     retryable: bool = False
+    retry_after_seconds: float | None = None
 
 
 # ==========================================
@@ -213,7 +229,9 @@ class RenderAttempt(BaseModel):
     direction_summary: dict[str, Any] = Field(default_factory=dict)
     qc_result: BeatQCResult | None = None
     error: str | None = None
+    error_type: ProviderErrorType | None = None
     retryable: bool = False
+    retry_after_seconds: float | None = None
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 

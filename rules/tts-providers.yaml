@@ -1,0 +1,19 @@
+version: 1
+
+providers:
+  gemini:
+    default_model: "gemini-3.1-flash-tts-preview"
+    default_voice: "Kore"
+    timeout_seconds: 30.0
+    sample_rate: 24000
+    channels: 1
+    sample_width: 2
+    profiles:
+      mythology_narrator_male:
+        voice: "Kore"
+      mythology_narrator_female:
+        voice: "Aoede"
+      mythology_narrator_elder:
+        voice: "Puck"
+      mythology_narrator_deep:
+        voice: "Fenrir"

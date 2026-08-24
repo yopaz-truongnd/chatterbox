@@ -156,6 +156,29 @@ def diagnose_resources(
                 else:
                     seen_aliases[alias_norm] = key
 
+    # 3. Check TTS Provider Configuration (Gemini)
+    try:
+        from services.tts.gemini import GeminiTTSProvider, GeminiTTSConfig
+        provider = GeminiTTSProvider()
+        health = provider.healthcheck()
+        if not health.configured:
+            warnings.append(
+                DoctorIssue(
+                    severity="warning",
+                    component="tts_provider",
+                    message=f"Gemini TTS Provider not fully configured: {health.message}",
+                    details=health.details,
+                )
+            )
+    except Exception as exc:
+        warnings.append(
+            DoctorIssue(
+                severity="warning",
+                component="tts_provider",
+                message=f"Failed to inspect Gemini TTS Provider: {exc}",
+            )
+        )
+
     healthy = len(issues) == 0
 
     return DoctorReport(

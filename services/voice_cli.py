@@ -545,7 +545,12 @@ def cmd_render(args: argparse.Namespace) -> int:
             report = ResourceReport.from_dict(yaml.safe_load(f) or {})
 
     # Provider selection: only use FakeTTSProvider when explicitly requested via --fake
-    provider = FakeTTSProvider() if args.fake else GeminiTTSProvider()
+    if args.fake:
+        provider = FakeTTSProvider()
+    else:
+        model_override = getattr(args, "model", None) or (plan.voice.model if plan.voice and plan.voice.model not in ("flash-tts", "fake-tts-v1") else None)
+        voice_override = getattr(args, "voice", None)
+        provider = GeminiTTSProvider(model_name=model_override, voice_name=voice_override)
 
     try:
         manifest, state = render_project_narration(
@@ -761,6 +766,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_render.add_argument("--qc", action="store_true", default=True, help="Auto-run Voice QC after rendering")
     p_render.add_argument("--beats", nargs="+", help="Render only specific beat IDs")
     p_render.add_argument("--fake", action="store_true", help="Force use of FakeTTSProvider")
+    p_render.add_argument("--model", help="Override TTS model name (e.g., gemini-3.1-flash-tts-preview)")
+    p_render.add_argument("--voice", help="Override TTS voice name (e.g., Kore, Aoede)")
     p_render.add_argument("--force", action="store_true", help="Force render even if resource report is blocked")
     p_render.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
@@ -770,6 +777,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_rerender.add_argument("beat_ids", nargs="+", help="One or more beat IDs to rerender")
     p_rerender.add_argument("--qc", action="store_true", default=True, help="Auto-run Voice QC after rendering")
     p_rerender.add_argument("--fake", action="store_true", help="Force use of FakeTTSProvider")
+    p_rerender.add_argument("--model", help="Override TTS model name (e.g., gemini-3.1-flash-tts-preview)")
+    p_rerender.add_argument("--voice", help="Override TTS voice name (e.g., Kore, Aoede)")
     p_rerender.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     # voice qc
