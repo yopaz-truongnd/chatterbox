@@ -277,6 +277,11 @@ class TestVoiceCLIPhase7(unittest.TestCase):
             self.assertIn("dark_supernatural_impact", entry.intents)
             self.assertIn("magic", entry.tags)
 
+    def test_cli_rejects_chatterbox_job_provider(self):
+        # CLI must not expose in-process provider
+        with self.assertRaises(SystemExit):
+            main(["render", str(self.temp_dir), "--provider", "chatterbox-job"])
+
 
 if __name__ == "__main__":
     unittest.main()

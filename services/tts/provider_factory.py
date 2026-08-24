@@ -42,6 +42,10 @@ def create_tts_provider(
         )
 
     if p_name in ("chatterbox-job", "job", "in-process", "in_process"):
+        if gateway is None:
+            raise ValueError(
+                "chatterbox-job requires an injected JobExecutionGateway and cannot be created without a gateway"
+            )
         return ChatterboxJobProvider(
             gateway=gateway,
             default_model=model or "nano",

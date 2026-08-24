@@ -5,7 +5,7 @@ Provides direct in-memory integration with JobManager when running inside the Fa
 - Avoids HTTP localhost network loopback and avoids duplicate model loading.
 - Normalizes multilingual language tags (language_id) and applies pronunciation dictionary.
 - Cancels orphan jobs upon timeout to prevent resource leak and repeat synthesis.
-- Protects against self-deadlock when invoked in-process.
+- Protects against self-deadlock when invoked on the JobManager worker thread via gateway.execute_sync().
 - Supports progress callbacks and cancellation tokens.
 """
 
@@ -28,7 +28,6 @@ from services.render_models import (
     TTSRenderRequest,
     TTSRenderResult,
 )
-from services.audio import save_audio_wav
 from services.tts.base import CancellationToken, ProgressCallback, TTSProvider
 from services.tts.chatterbox_http import normalize_language_id
 from services.tts.gemini import validate_generated_wave
@@ -52,39 +51,57 @@ class JobExecutionGateway(Protocol):
         """Cancel a pending or running job."""
         ...
 
+    def execute_sync(
+        self,
+        model: str,
+        params: dict[str, Any],
+        output_path: Path | str,
+        progress_callback: ProgressCallback | None = None,
+        cancellation_token: CancellationToken | None = None,
+    ) -> tuple[bool, str | None]:
+        """Execute model inference synchronously within JobManager execution owner."""
+        ...
+
+    def is_worker_thread(self) -> bool:
+        """Check if current thread is the JobManager audio worker thread."""
+        ...
+
 
 class DefaultJobManagerGateway:
-    """Default gateway adapter wrapping api_app.job_manager."""
+    """Gateway adapter delegating execution exclusively to an injected JobManager."""
 
-    def __init__(self, job_manager: Any = None):
+    def __init__(self, job_manager: Any):
+        if job_manager is None:
+            raise ValueError("DefaultJobManagerGateway requires an injected JobManager instance")
         self._jm = job_manager
 
-    def _get_jm(self) -> Any:
-        if self._jm is not None:
-            return self._jm
-        try:
-            import api_app
-            return getattr(api_app, "job_manager", None)
-        except Exception:
-            return None
-
     def submit_job(self, model: str, params: dict[str, Any], input_paths: list[str]) -> Any:
-        jm = self._get_jm()
-        if jm is None:
-            raise RuntimeError("In-process JobManager is not available")
-        return jm.submit_job(model, params, input_paths)
+        return self._jm.submit_job(model, params, input_paths)
 
     def get_job(self, job_id: str) -> Any:
-        jm = self._get_jm()
-        if jm is None:
-            return None
-        return jm.get_job(job_id)
+        return self._jm.get_job(job_id)
 
     def cancel_job(self, job_id: str) -> tuple[bool, str]:
-        jm = self._get_jm()
-        if jm is None:
-            return False, "JobManager is not available"
-        return jm.cancel_job(job_id)
+        return self._jm.cancel_job(job_id)
+
+    def execute_sync(
+        self,
+        model: str,
+        params: dict[str, Any],
+        output_path: Path | str,
+        progress_callback: ProgressCallback | None = None,
+        cancellation_token: CancellationToken | None = None,
+    ) -> tuple[bool, str | None]:
+        if hasattr(self._jm, "execute_sync"):
+            def _cb(phase: str, pct: float, msg: str) -> None:
+                if progress_callback:
+                    progress_callback(phase, pct, {"message": msg})
+            return self._jm.execute_sync(model, params, Path(output_path), _cb)
+        return False, "JobManager does not implement execute_sync"
+
+    def is_worker_thread(self) -> bool:
+        worker_th = getattr(self._jm, "_worker_thread", None)
+        return worker_th is not None and worker_th == threading.current_thread()
 
 
 class ChatterboxJobProvider(TTSProvider):
@@ -92,28 +109,20 @@ class ChatterboxJobProvider(TTSProvider):
 
     def __init__(
         self,
-        gateway: JobExecutionGateway | None = None,
+        gateway: JobExecutionGateway,
         default_model: str = "nano",
         timeout_seconds: float = 300.0,
         poll_interval_seconds: float = 0.1,
     ):
-        self.gateway = gateway or DefaultJobManagerGateway()
+        if gateway is None:
+            raise ValueError("ChatterboxJobProvider requires an injected JobExecutionGateway")
+        self.gateway = gateway
         self.default_model = default_model
         self.timeout_seconds = timeout_seconds
         self.poll_interval_seconds = poll_interval_seconds
 
     def healthcheck(self) -> ProviderHealth:
         try:
-            if hasattr(self.gateway, "_get_jm"):
-                jm = self.gateway._get_jm()
-                if jm is None:
-                    return ProviderHealth(
-                        available=False,
-                        configured=True,
-                        connectivity_checked=True,
-                        provider_name="chatterbox-job",
-                        message="In-process JobManager is not initialized",
-                    )
             return ProviderHealth(
                 available=True,
                 configured=True,
@@ -144,94 +153,95 @@ class ChatterboxJobProvider(TTSProvider):
     def render(
         self,
         request: TTSRenderRequest,
-        output_dir: Path,
+        output_dir: str | Path,
         progress_callback: ProgressCallback | None = None,
         cancellation_token: CancellationToken | None = None,
     ) -> TTSRenderResult:
+        """Render a single StoryBeat using in-process JobManager via JobExecutionGateway."""
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        start_time = time.time()
+
         if cancellation_token and cancellation_token.is_cancelled():
             return TTSRenderResult(
                 success=False,
                 provider="chatterbox-job",
                 model=self.default_model,
                 audio_path=None,
-                error="Render cancelled by cancellation token",
+                error="Render cancelled before submission",
+                error_type=ProviderErrorType.TIMEOUT,
                 retryable=False,
             )
 
-        start_time = time.time()
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        final_wav_path = output_dir / f"attempt_{request.attempt_id:02d}.wav"
-        temp_wav_path = output_dir / f"attempt_{request.attempt_id:02d}.tmp.wav"
-
-        # 1. Format text with pronunciation substitution if present
+        # 1. Prepare parameters
         synth_text = request.text
         if request.pronunciation:
             synth_text = apply_pronunciation_dict(request.text, request.pronunciation)
 
         params: dict[str, Any] = {
             "text": synth_text,
-            "character_id": request.voice_profile if not request.voice_profile.startswith("mythology_") else None,
-            "temperature": round(0.4 + (request.energy / 5.0) * 0.5, 2) if request.energy is not None else 0.65,
-            "top_p": 0.95,
-            "repetition_penalty": 1.2,
+            "project_id": request.project_id,
+            "beat_id": request.beat_id,
         }
+
+        if request.energy is not None:
+            params["temperature"] = round(0.4 + (request.energy / 5.0) * 0.5, 2)
+        if request.voice_profile and not request.voice_profile.startswith("mythology_"):
+            params["character_id"] = request.voice_profile
 
         # If multilingual model, attach language_id
         if self.default_model == "multilingual":
             params["language_id"] = normalize_language_id(request.language)
 
-        # 2. Check for self-deadlock if called on the JobManager worker thread
-        jm_instance = None
-        if hasattr(self.gateway, "_get_jm"):
-            jm_instance = self.gateway._get_jm()
-        elif hasattr(self.gateway, "_worker_thread"):
-            jm_instance = self.gateway
+        temp_wav_path = output_dir / f"attempt_{request.attempt_id:02d}_inproc_tmp.wav"
+        final_wav_path = output_dir / f"attempt_{request.attempt_id:02d}.wav"
 
-        if jm_instance and getattr(jm_instance, "_worker_thread", None) == threading.current_thread():
-            # Running inside the worker thread itself: execute synchronously to prevent deadlock
-            try:
-                from services.inference import execute_model_inference
-                job_type = "tts" if self.default_model == "standard" else self.default_model
-                if job_type == "auto":
-                    import api_app
-                    job_type = getattr(api_app, "RECOMMENDED_MODEL", "nano")
-                wav, sample_rate = execute_model_inference(job_type, params, jm_instance.device)
-                save_audio_wav(temp_wav_path, wav, sample_rate)
-                is_valid, duration, s_rate, channels, val_err = validate_generated_wave(temp_wav_path)
-                if not is_valid:
-                    temp_wav_path.unlink(missing_ok=True)
-                    return TTSRenderResult(
-                        success=False,
-                        provider="chatterbox-job",
-                        model=self.default_model,
-                        audio_path=None,
-                        error=f"Generated audio validation failed: {val_err}",
-                        error_type=ProviderErrorType.INVALID_AUDIO_RESPONSE,
-                        retryable=True,
-                    )
-                temp_wav_path.replace(final_wav_path)
-                return TTSRenderResult(
-                    success=True,
-                    provider="chatterbox-job",
-                    model=self.default_model,
-                    audio_path=str(final_wav_path),
-                    duration=duration,
-                    sample_rate=s_rate,
-                    channels=channels,
-                    provider_request_id="sync_direct",
-                    raw_metadata={"latency_seconds": round(time.time() - start_time, 3), "in_process_sync": True},
-                )
-            except Exception as exc:
+        # 2. Check for self-deadlock if called on the JobManager worker thread
+        if hasattr(self.gateway, "is_worker_thread") and self.gateway.is_worker_thread():
+            ok, err_msg = self.gateway.execute_sync(
+                model=self.default_model,
+                params=params,
+                output_path=temp_wav_path,
+                progress_callback=progress_callback,
+                cancellation_token=cancellation_token,
+            )
+            if not ok or not temp_wav_path.exists():
+                temp_wav_path.unlink(missing_ok=True)
                 return TTSRenderResult(
                     success=False,
                     provider="chatterbox-job",
                     model=self.default_model,
                     audio_path=None,
-                    error=f"Direct sync inference failed: {exc}",
+                    error=f"Gateway synchronous execution failed: {err_msg}",
                     error_type=ProviderErrorType.SERVER_ERROR,
                     retryable=True,
                 )
+
+            is_valid, duration, s_rate, channels, val_err = validate_generated_wave(temp_wav_path)
+            if not is_valid:
+                temp_wav_path.unlink(missing_ok=True)
+                return TTSRenderResult(
+                    success=False,
+                    provider="chatterbox-job",
+                    model=self.default_model,
+                    audio_path=None,
+                    error=f"Generated audio validation failed: {val_err}",
+                    error_type=ProviderErrorType.INVALID_AUDIO_RESPONSE,
+                    retryable=True,
+                )
+
+            temp_wav_path.replace(final_wav_path)
+            return TTSRenderResult(
+                success=True,
+                provider="chatterbox-job",
+                model=self.default_model,
+                audio_path=str(final_wav_path),
+                duration=duration,
+                sample_rate=s_rate,
+                channels=channels,
+                provider_request_id="sync_gateway",
+                raw_metadata={"latency_seconds": round(time.time() - start_time, 3), "in_process_sync": True},
+            )
 
         # 3. Submit Job to Gateway
         try:
@@ -248,8 +258,11 @@ class ChatterboxJobProvider(TTSProvider):
                 retryable=True,
             )
 
-        # 4. Poll in-memory Job
-        while (time.time() - start_time) < self.timeout_seconds:
+        # 4. Poll Job via Gateway
+        poll_start = time.time()
+        completed_job = None
+
+        while (time.time() - poll_start) < self.timeout_seconds:
             if cancellation_token and cancellation_token.is_cancelled():
                 self.gateway.cancel_job(job_id)
                 return TTSRenderResult(
@@ -257,116 +270,102 @@ class ChatterboxJobProvider(TTSProvider):
                     provider="chatterbox-job",
                     model=self.default_model,
                     audio_path=None,
-                    provider_request_id=job_id,
                     error="Render cancelled by caller",
+                    error_type=ProviderErrorType.TIMEOUT,
                     retryable=False,
                 )
 
-            j = self.gateway.get_job(job_id)
-            if not j:
-                return TTSRenderResult(
-                    success=False,
-                    provider="chatterbox-job",
-                    model=self.default_model,
-                    audio_path=None,
-                    provider_request_id=job_id,
-                    error=f"Job {job_id} not found in gateway",
-                    error_type=ProviderErrorType.SERVER_ERROR,
-                    retryable=False,
-                )
+            curr_job = self.gateway.get_job(job_id)
+            if curr_job:
+                status = getattr(curr_job, "status", "unknown")
+                phase = getattr(curr_job, "phase", status)
+                progress = float(getattr(curr_job, "progress_percent", 0.0) or 0.0)
 
-            status = getattr(j, "status", "unknown")
-            phase = getattr(j, "phase", status)
-            progress = float(getattr(j, "progress_percent", 0.0))
+                if progress_callback:
+                    progress_callback(phase, progress, {"job_id": job_id, "status": status})
 
-            if progress_callback:
-                progress_callback(phase, progress, {"job_id": job_id, "status": status})
-
-            if status in ("completed", "succeeded"):
-                output_path_str = getattr(j, "output_path", None)
-                if not output_path_str or not Path(output_path_str).exists():
+                if status in ("completed", "succeeded"):
+                    completed_job = curr_job
+                    break
+                if status in ("failed", "error"):
                     return TTSRenderResult(
                         success=False,
                         provider="chatterbox-job",
                         model=self.default_model,
                         audio_path=None,
-                        provider_request_id=job_id,
-                        error="Job completed but output file is missing",
-                        error_type=ProviderErrorType.INVALID_AUDIO_RESPONSE,
+                        error=getattr(curr_job, "error", "In-process job failed"),
+                        error_type=ProviderErrorType.SERVER_ERROR,
                         retryable=True,
                     )
-
-                # Copy to temp WAV
-                src_wav = Path(output_path_str)
-                shutil.copyfile(src_wav, temp_wav_path)
-
-                # Validate WAV
-                is_valid, duration, s_rate, channels, val_err = validate_generated_wave(temp_wav_path)
-                if not is_valid:
-                    temp_wav_path.unlink(missing_ok=True)
+                if status == "cancelled":
                     return TTSRenderResult(
                         success=False,
                         provider="chatterbox-job",
                         model=self.default_model,
                         audio_path=None,
-                        provider_request_id=job_id,
-                        error=f"Generated audio validation failed: {val_err}",
-                        error_type=ProviderErrorType.INVALID_AUDIO_RESPONSE,
-                        retryable=True,
+                        error="In-process job was cancelled",
+                        error_type=ProviderErrorType.TIMEOUT,
+                        retryable=False,
                     )
-
-                temp_wav_path.replace(final_wav_path)
-                latency = round(time.time() - start_time, 3)
-
-                return TTSRenderResult(
-                    success=True,
-                    provider="chatterbox-job",
-                    model=self.default_model,
-                    audio_path=str(final_wav_path),
-                    duration=duration,
-                    sample_rate=s_rate,
-                    channels=channels,
-                    provider_request_id=job_id,
-                    raw_metadata={"latency_seconds": latency, "in_process": True},
-                )
-
-            if status in ("failed", "error"):
-                err_msg = getattr(j, "error", "Job failed during in-process execution")
-                return TTSRenderResult(
-                    success=False,
-                    provider="chatterbox-job",
-                    model=self.default_model,
-                    audio_path=None,
-                    provider_request_id=job_id,
-                    error=err_msg,
-                    error_type=ProviderErrorType.SERVER_ERROR,
-                    retryable=False,
-                )
-
-            if status == "cancelled":
-                return TTSRenderResult(
-                    success=False,
-                    provider="chatterbox-job",
-                    model=self.default_model,
-                    audio_path=None,
-                    provider_request_id=job_id,
-                    error="Job cancelled",
-                    error_type=ProviderErrorType.BAD_REQUEST,
-                    retryable=False,
-                )
 
             time.sleep(self.poll_interval_seconds)
 
-        # Timeout reached: best-effort cancel orphan job
-        self.gateway.cancel_job(job_id)
+        if not completed_job:
+            # Timeout reached: best-effort cancel orphan job via gateway
+            try:
+                self.gateway.cancel_job(job_id)
+            except Exception:
+                pass
 
+            return TTSRenderResult(
+                success=False,
+                provider="chatterbox-job",
+                model=self.default_model,
+                audio_path=None,
+                error=f"In-process job {job_id} timed out after {self.timeout_seconds}s",
+                error_type=ProviderErrorType.TIMEOUT,
+                retryable=True,
+            )
+
+        # 5. Retrieve audio output path from completed job
+        src_audio_path = getattr(completed_job, "output_path", None)
+        if not src_audio_path or not Path(src_audio_path).exists():
+            return TTSRenderResult(
+                success=False,
+                provider="chatterbox-job",
+                model=self.default_model,
+                audio_path=None,
+                error=f"Job completed but output audio was not found at {src_audio_path}",
+                error_type=ProviderErrorType.INVALID_AUDIO_RESPONSE,
+                retryable=True,
+            )
+
+        # Copy to project attempt destination
+        shutil.copyfile(Path(src_audio_path), final_wav_path)
+
+        # Validate audio wave
+        is_valid, duration, sample_rate, channels, val_err = validate_generated_wave(final_wav_path)
+        if not is_valid:
+            final_wav_path.unlink(missing_ok=True)
+            return TTSRenderResult(
+                success=False,
+                provider="chatterbox-job",
+                model=self.default_model,
+                audio_path=None,
+                error=f"Generated audio validation failed: {val_err}",
+                error_type=ProviderErrorType.INVALID_AUDIO_RESPONSE,
+                retryable=True,
+            )
+
+        latency = round(time.time() - start_time, 3)
         return TTSRenderResult(
-            success=False,
+            success=True,
             provider="chatterbox-job",
             model=self.default_model,
-            audio_path=None,
+            audio_path=str(final_wav_path),
+            duration=duration,
+            sample_rate=sample_rate,
+            channels=channels,
             provider_request_id=job_id,
-            error=f"Job {job_id} timed out after {self.timeout_seconds}s",
-            error_type=ProviderErrorType.TIMEOUT,
-            retryable=True,
+            raw_metadata={"latency_seconds": latency},
         )

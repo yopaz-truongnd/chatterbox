@@ -88,7 +88,7 @@ class ChatterboxHttpProvider(TTSProvider):
     def _get_headers(self) -> dict[str, str]:
         headers = {}
         if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["X-API-Key"] = self.api_key
         return headers
 
     def healthcheck(self) -> ProviderHealth:

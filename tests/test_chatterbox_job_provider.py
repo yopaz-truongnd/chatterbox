@@ -13,15 +13,14 @@ import unittest
 import unittest.mock as mock
 import wave
 
-import torch
-
 from services.render_models import (
     ProviderErrorType,
     TTSRenderRequest,
     TTSRenderResult,
 )
 from services.tts.base import CancellationToken
-from services.tts.chatterbox_job import ChatterboxJobProvider, JobExecutionGateway
+from services.tts.chatterbox_job import ChatterboxJobProvider, DefaultJobManagerGateway, JobExecutionGateway
+from services.tts.provider_factory import create_tts_provider
 
 
 class FakeJob:
@@ -35,11 +34,13 @@ class FakeJob:
 
 
 class FakeGateway:
-    def __init__(self, output_wav_path: str):
+    def __init__(self, output_wav_path: str, is_worker: bool = False):
         self.output_wav_path = output_wav_path
         self.submitted_params: list[dict] = []
         self.jobs: dict[str, FakeJob] = {}
         self.cancelled_jobs: set[str] = set()
+        self._is_worker = is_worker
+        self.sync_executions: list[dict] = []
 
     def submit_job(self, model: str, params: dict, input_paths: list[str]) -> FakeJob:
         self.submitted_params.append(params)
@@ -56,6 +57,23 @@ class FakeGateway:
         if job_id in self.jobs:
             self.jobs[job_id].status = "cancelled"
         return True, "Cancelled"
+
+    def execute_sync(
+        self,
+        model: str,
+        params: dict,
+        output_path: Path | str,
+        progress_callback=None,
+        cancellation_token=None,
+    ) -> tuple[bool, str | None]:
+        self.sync_executions.append({"model": model, "params": params, "output_path": str(output_path)})
+        shutil.copyfile(self.output_wav_path, output_path)
+        if progress_callback:
+            progress_callback("completed", 100.0, {"status": "completed"})
+        return True, None
+
+    def is_worker_thread(self) -> bool:
+        return self._is_worker
 
 
 class SlowFakeGateway(FakeGateway):
@@ -108,6 +126,36 @@ class TestChatterboxJobProviderPhase10A(unittest.TestCase):
         self.assertEqual(result.model, "nano")
         self.assertEqual(result.provider_request_id, "job_inproc_1")
         self.assertTrue(Path(result.audio_path).exists())
+
+    def test_factory_fails_fast_when_chatterbox_job_has_no_gateway(self):
+        with self.assertRaisesRegex(ValueError, "requires an injected JobExecutionGateway"):
+            create_tts_provider("chatterbox-job")
+
+        gateway = FakeGateway(output_wav_path=str(self.sample_wav))
+        provider = create_tts_provider("chatterbox-job", gateway=gateway)
+        self.assertIsInstance(provider, ChatterboxJobProvider)
+
+    def test_default_job_manager_gateway_integration(self):
+        class MockJobManager:
+            def __init__(self, sample_wav):
+                self.sample_wav = sample_wav
+                self.executed = False
+                self._worker_thread = threading.current_thread()
+
+            def execute_sync(self, model, params, output_path, cb):
+                self.executed = True
+                shutil.copyfile(self.sample_wav, output_path)
+                return True, None
+
+        mock_jm = MockJobManager(self.sample_wav)
+        gateway = DefaultJobManagerGateway(mock_jm)
+        self.assertTrue(gateway.is_worker_thread())
+
+        out_dest = self.temp_dir / "sync_test.wav"
+        ok, err = gateway.execute_sync("nano", {"text": "test"}, out_dest)
+        self.assertTrue(ok)
+        self.assertTrue(mock_jm.executed)
+        self.assertTrue(out_dest.exists())
 
     def test_job_provider_multilingual_language_id(self):
         gateway = FakeGateway(output_wav_path=str(self.sample_wav))
@@ -170,28 +218,18 @@ class TestChatterboxJobProviderPhase10A(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertIn("cancelled", result.error.lower())
 
-    def test_job_provider_worker_thread_uses_direct_inference_contract(self):
-        class WorkerJobManager:
-            device = "cpu"
-            _worker_thread = threading.current_thread()
-
-        class WorkerGateway(FakeGateway):
-            def _get_jm(self):
-                return WorkerJobManager()
-
-        gateway = WorkerGateway(output_wav_path=str(self.sample_wav))
+    def test_job_provider_worker_thread_uses_gateway_execute_sync(self):
+        # Gateway reports caller is on worker thread
+        gateway = FakeGateway(output_wav_path=str(self.sample_wav), is_worker=True)
         provider = ChatterboxJobProvider(gateway=gateway, default_model="nano")
-        req = TTSRenderRequest(project_id="p", beat_id="B1", text="Direct render")
-        timeline = torch.linspace(0, 1.0, 24000)
-        wav = (0.35 * torch.sin(2 * math.pi * 440 * timeline)).unsqueeze(0)
+        req = TTSRenderRequest(project_id="p", beat_id="B1", text="Worker thread direct render")
 
-        with mock.patch("services.inference.execute_model_inference", return_value=(wav, 24000)) as execute:
-            result = provider.render(req, self.temp_dir / "direct")
+        result = provider.render(req, self.temp_dir / "worker_render")
 
         self.assertTrue(result.success, result.error)
-        execute.assert_called_once()
-        self.assertEqual(execute.call_args.args[0], "nano")
-        self.assertEqual(execute.call_args.args[2], "cpu")
+        self.assertEqual(len(gateway.sync_executions), 1)
+        self.assertEqual(gateway.sync_executions[0]["model"], "nano")
+        self.assertEqual(len(gateway.submitted_params), 0)  # Did NOT submit child queue job
 
 
 if __name__ == "__main__":

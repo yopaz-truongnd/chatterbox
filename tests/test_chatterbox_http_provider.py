@@ -93,6 +93,42 @@ class TestChatterboxHttpProviderPhase10A(unittest.TestCase):
         self.assertEqual(result.error_type, ProviderErrorType.BAD_REQUEST)
         self.assertFalse(result.retryable)
 
+    def test_http_api_key_header_is_x_api_key(self):
+        provider = ChatterboxHttpProvider(
+            base_url="http://127.0.0.1:8000",
+            api_key="secret-key-12345",
+            poll_interval_seconds=0.01,
+            timeout_seconds=5.0,
+        )
+
+        req = TTSRenderRequest(project_id="p", beat_id="B1", text="Auth test")
+
+        submit_resp = mock.MagicMock()
+        submit_resp.status = 202
+        submit_resp.read.return_value = json.dumps({"id": "job_auth_1", "status": "queued"}).encode("utf-8")
+        submit_resp.__enter__.return_value = submit_resp
+
+        poll_done = mock.MagicMock()
+        poll_done.status = 200
+        poll_done.read.return_value = json.dumps({"status": "completed", "progress_percent": 100.0}).encode("utf-8")
+        poll_done.__enter__.return_value = poll_done
+
+        audio_resp = mock.MagicMock()
+        audio_resp.status = 200
+        audio_resp.read.return_value = self.valid_wav_bytes
+        audio_resp.__enter__.return_value = audio_resp
+
+        with mock.patch("urllib.request.urlopen", side_effect=[submit_resp, poll_done, audio_resp]) as mock_open:
+            result = provider.render(req, self.temp_dir)
+            self.assertTrue(result.success)
+
+            # Check X-API-Key header in all HTTP calls (submit, poll, download)
+            for call_item in mock_open.call_args_list:
+                req_obj = call_item[0][0]
+                self.assertIn("X-api-key", req_obj.headers)
+                self.assertEqual(req_obj.headers["X-api-key"], "secret-key-12345")
+                self.assertNotIn("Authorization", req_obj.headers)
+
     def test_http_healthcheck(self):
         provider = ChatterboxHttpProvider(base_url="http://127.0.0.1:8000")
 

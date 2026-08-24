@@ -767,7 +767,7 @@ def build_parser() -> argparse.ArgumentParser:
     # voice render
     p_render = subparsers.add_parser("render", help="Render narration beats using TTS provider")
     p_render.add_argument("project_dir", help="Path to project directory")
-    p_render.add_argument("--provider", choices=["chatterbox-http", "chatterbox-job", "gemini", "fake"], help="TTS execution provider (default: chatterbox-http)")
+    p_render.add_argument("--provider", choices=["chatterbox-http", "gemini", "fake"], help="TTS execution provider (default: chatterbox-http)")
     p_render.add_argument("--qc", action="store_true", default=True, help="Auto-run Voice QC after rendering")
     p_render.add_argument("--beats", nargs="+", help="Render only specific beat IDs")
     p_render.add_argument("--fake", action="store_true", help="Force use of FakeTTSProvider")
@@ -780,7 +780,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rerender = subparsers.add_parser("rerender", help="Selectively rerender specific story beats")
     p_rerender.add_argument("project_dir", help="Path to project directory")
     p_rerender.add_argument("beat_ids", nargs="+", help="One or more beat IDs to rerender")
-    p_rerender.add_argument("--provider", choices=["chatterbox-http", "chatterbox-job", "gemini", "fake"], help="TTS execution provider (default: chatterbox-http)")
+    p_rerender.add_argument("--provider", choices=["chatterbox-http", "gemini", "fake"], help="TTS execution provider (default: chatterbox-http)")
     p_rerender.add_argument("--qc", action="store_true", default=True, help="Auto-run Voice QC after rendering")
     p_rerender.add_argument("--fake", action="store_true", help="Force use of FakeTTSProvider")
     p_rerender.add_argument("--model", help="Override TTS model name (e.g., nano, turbo, gemini-3.1-flash-tts-preview)")
