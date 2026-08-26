@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 import uuid
 from typing import Any
 
+from pydantic import BaseModel
+
 from services.director_review_models import (
     BeatDirectionPatch,
     BeatResourcePatch,
@@ -174,8 +176,11 @@ class DirectorRevisionService:
         resources = self.project_service.check_resources(project_id)
         manifest = self.store.load_manifest(project_id)
         self.store.save_manifest(project_id, manifest)
+        # P1-3: never advance stage if current stage is RESOURCE_BLOCKED
+        state = self.store.get_project_state(project_id)
+        if state.stage == ProjectStatus.RESOURCE_BLOCKED:
+            return
         if not resources.render_blocked and manifest.beats and all(item.selected_attempt is not None for item in manifest.beats.values()):
-            state = self.store.get_project_state(project_id)
             state.stage = ProjectStatus.NARRATION_READY
             state.last_stable_stage = state.stage
             self.store.save_project_state(state)
@@ -197,10 +202,15 @@ class DirectorRevisionService:
         workflow_service = get_voice_project_workflow_service()
         matches = [item for item in workflow_service.store.list_workflows(limit=200) if item.project_id == project_id]
         workflow = max(matches, key=lambda item: item.created_at, default=None)
-        effective = dict(policy or {})
-        if workflow:
-            effective.update(workflow.policy.model_dump(mode="json"))
-        require_final_approval = bool((workflow and workflow.policy.require_final_approval) or effective.get("require_final_approval"))
+        # P1-1 & P1-6: workflow policy is authoritative — start from workflow fields, then
+        # only fill in keys from the caller's policy that the workflow has NOT already set.
+        effective = workflow.policy.model_dump(mode="json") if workflow else {}
+        if policy:
+            for k, v in policy.items():
+                if k not in effective or effective[k] is None:
+                    effective[k] = v
+        # P1-1: require_final_approval is only honoured when the workflow explicitly sets it.
+        require_final_approval = bool(workflow and workflow.policy.require_final_approval)
         ordered = [step for step in ["check_resources", "render_beat", "evaluate", *MIX_STEPS] if step in steps]
         executed = []
         total = max(1, len(ordered))
@@ -234,8 +244,29 @@ class DirectorRevisionService:
                     if not workflow or not workflow_service:
                         raise InvalidProjectStateError("Final approval is required but no authoritative workflow exists.")
                     master_path = self.store.get_project_dir(project_id) / "mix" / "master.wav"
-                    workflow_service.request_revision_approval(workflow.workflow_id, compute_file_sha256(master_path), selected_ids)
-                    return IncrementalReproductionResult(project_id=project_id, affected_beats=affected_beats, executed_steps=executed, status="waiting_for_human", suggested_action=f"Approve master_wav on workflow {workflow.workflow_id} before export.")
+                    artifact_sha = compute_file_sha256(master_path)
+                    reopened = workflow_service.request_revision_approval(workflow.workflow_id, artifact_sha, selected_ids)
+                    # P1-2: return full artifact info so caller can act without polling.
+                    # Safely extract human_action via explicit type guards (avoids MagicMock leakage).
+                    raw_human_action = getattr(reopened, "human_action", None)
+                    if isinstance(raw_human_action, dict):
+                        human_action_dict: dict | None = raw_human_action
+                    elif isinstance(raw_human_action, BaseModel):
+                        human_action_dict = raw_human_action.model_dump(mode="json")
+                    else:
+                        human_action_dict = None
+                    approval_endpoint = f"/api/v1/voice-projects/{project_id}/workflow/approve"
+                    return IncrementalReproductionResult(
+                        project_id=project_id,
+                        affected_beats=affected_beats,
+                        executed_steps=executed,
+                        status="waiting_for_human",
+                        suggested_action=f"Approve master_wav on workflow {workflow.workflow_id} before export.",
+                        artifact_id="master_wav",
+                        artifact_sha256=artifact_sha,
+                        human_action=human_action_dict,
+                        approval_endpoint=approval_endpoint,
+                    )
                 self.project_service.export(project_id, formats=effective.get("output_formats") or ["wav"], cancellation_token=cancellation_token)
             executed.append(step)
         self.revisions.mark_reproduced(project_id, selected_ids)

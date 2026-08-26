@@ -343,6 +343,141 @@ class TestDirectorPhase16(unittest.TestCase):
         self.assertTrue(final.exists)
         self.assertFalse(final.fresh)
 
+    # ── P1 Regression Tests ────────────────────────────────────────────────────
+
+    def test_workflow_require_final_approval_cannot_be_weakened_by_caller_policy(self):
+        """P1-1: caller policy require_final_approval=False must not override workflow's True."""
+        self._rendered_project("p1_approval_gate")
+        beat_id = next(iter(self.store.load_manifest("p1_approval_gate").beats))
+        revision = DirectorRevisionService(self.project_service)
+        revision.update_timing("p1_approval_gate", beat_id, BeatTimingPatch(pause_after_ms=500), "tester")
+        workflow_store = VoiceProjectWorkflowStore(Path(self.tmp.name) / "p1-wf")
+        from services.voice_project_workflow_models import WorkflowStepName
+        steps = [WorkflowStep(name=name.value, status="completed") for name in WorkflowStepName]
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_p1", project_id="p1_approval_gate", status=WorkflowStatus.COMPLETED,
+            policy=WorkflowPolicy(require_final_approval=True), steps=steps,
+        ))
+        workflow_service = VoiceProjectWorkflowService(store=workflow_store, project_store=self.store)
+        master_path = self.store.get_project_dir("p1_approval_gate") / "mix" / "master.wav"
+        master_path.parent.mkdir(parents=True, exist_ok=True)
+        master_path.write_bytes(b"rebuilt-master")
+        with mock.patch("services.voice_project_dependencies.get_voice_project_workflow_service", return_value=workflow_service), \
+             mock.patch.object(self.project_service, "prepare_for_mix"), \
+             mock.patch.object(self.project_service, "mix"), \
+             mock.patch.object(self.project_service, "master"), \
+             mock.patch.object(self.project_service, "export") as export:
+            # Caller tries to disable require_final_approval — must be ignored
+            result = revision.reproduce_project("p1_approval_gate", policy={"require_final_approval": False})
+        self.assertEqual(result.status, "waiting_for_human")
+        export.assert_not_called()
+
+    def test_incremental_reproduction_waiting_for_human_includes_artifact_info(self):
+        """P1-2: waiting_for_human result must include artifact_id, sha256, human_action, approval_endpoint."""
+        self._rendered_project("p1_artifact_info")
+        beat_id = next(iter(self.store.load_manifest("p1_artifact_info").beats))
+        revision = DirectorRevisionService(self.project_service)
+        revision.update_timing("p1_artifact_info", beat_id, BeatTimingPatch(pause_after_ms=300), "tester")
+        workflow_store = VoiceProjectWorkflowStore(Path(self.tmp.name) / "p1-artifact-wf")
+        from services.voice_project_workflow_models import WorkflowStepName
+        steps = [WorkflowStep(name=name.value, status="completed") for name in WorkflowStepName]
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_artifact", project_id="p1_artifact_info", status=WorkflowStatus.COMPLETED,
+            policy=WorkflowPolicy(require_final_approval=True), steps=steps,
+        ))
+        workflow_service = VoiceProjectWorkflowService(store=workflow_store, project_store=self.store)
+        master_path = self.store.get_project_dir("p1_artifact_info") / "mix" / "master.wav"
+        master_path.parent.mkdir(parents=True, exist_ok=True)
+        master_path.write_bytes(b"some-audio-bytes")
+        with mock.patch("services.voice_project_dependencies.get_voice_project_workflow_service", return_value=workflow_service), \
+             mock.patch.object(self.project_service, "prepare_for_mix"), \
+             mock.patch.object(self.project_service, "mix"), \
+             mock.patch.object(self.project_service, "master"):
+            result = revision.reproduce_project("p1_artifact_info")
+        self.assertEqual(result.status, "waiting_for_human")
+        self.assertEqual(result.artifact_id, "master_wav")
+        self.assertIsNotNone(result.artifact_sha256)
+        self.assertIsNotNone(result.human_action)
+        self.assertIn("final_audio_approval", result.human_action.get("action_type", ""))
+        self.assertIsNotNone(result.approval_endpoint)
+        self.assertIn("p1_artifact_info", result.approval_endpoint)
+
+    def test_preserve_narration_does_not_overwrite_resource_blocked(self):
+        """P1-3: _preserve_narration must not advance stage when stage is RESOURCE_BLOCKED."""
+        self._rendered_project("p1_blocked")
+        state = self.store.get_project_state("p1_blocked")
+        state.stage = state.last_stable_stage = ProjectStatus.RESOURCE_BLOCKED
+        self.store.save_project_state(state)
+        service = DirectorRevisionService(self.project_service)
+        # Even with all beats selected and resources unblocked, stage must stay RESOURCE_BLOCKED
+        with mock.patch.object(self.project_service, "check_resources", return_value=mock.Mock(render_blocked=False)):
+            service._preserve_narration("p1_blocked")
+        self.assertEqual(self.store.get_project_state("p1_blocked").stage, ProjectStatus.RESOURCE_BLOCKED)
+
+    def test_revision_event_affected_beats_persisted_completely(self):
+        """P1-4: each revision event's affected_beats must include at minimum the beat_id."""
+        self._rendered_project("p1_beats_event")
+        manifest = self.store.load_manifest("p1_beats_event")
+        beat_id = next(iter(manifest.beats))
+        service = DirectorRevisionService(self.project_service)
+        from services.director_review_models import BeatDirectionPatch
+        service.update_direction("p1_beats_event", beat_id, BeatDirectionPatch(emotion="sad"), "tester")
+        service.update_timing("p1_beats_event", beat_id, BeatTimingPatch(pause_after_ms=200), "tester")
+        service.update_resources("p1_beats_event", beat_id, BeatResourcePatch(ambience_intent="rain"), "tester")
+        events = DirectorRevisionStore(self.store).list_events("p1_beats_event")
+        for event in events:
+            if event.beat_id:
+                self.assertIn(event.beat_id, event.affected_beats,
+                    f"beat_id '{event.beat_id}' missing from affected_beats on {event.revision_type}")
+
+    def test_reproduce_selected_ids_does_not_mark_unrelated_pending(self):
+        """P1-5: mark_reproduced must only mark the given IDs, leaving other pending events untouched."""
+        self._rendered_project("p1_selective_mark")
+        beat_ids = list(self.store.load_manifest("p1_selective_mark").beats)
+        service = DirectorRevisionService(self.project_service)
+        first = service.update_timing("p1_selective_mark", beat_ids[0], BeatTimingPatch(pause_after_ms=100), "tester")
+        second = service.update_timing("p1_selective_mark", beat_ids[-1], BeatTimingPatch(pause_after_ms=200), "tester")
+        # Directly test mark_reproduced on store — only first should be marked
+        revision_store = DirectorRevisionStore(self.store)
+        revision_store.mark_reproduced("p1_selective_mark", [first.revision_id])
+        events = revision_store.list_events("p1_selective_mark")
+        first_event = next(e for e in events if e.revision_id == first.revision_id)
+        second_event = next(e for e in events if e.revision_id == second.revision_id)
+        self.assertEqual(first_event.status, "reproduced")
+        self.assertEqual(second_event.status, "pending")  # must still be pending
+
+    def test_reproduction_preserves_workflow_provider_and_profiles(self):
+        """P1-6: workflow policy fields must fully override all caller policy keys."""
+        self._rendered_project("p1_profile_override")
+        beat_id = next(iter(self.store.load_manifest("p1_profile_override").beats))
+        revision = DirectorRevisionService(self.project_service)
+        revision.update_timing("p1_profile_override", beat_id, BeatTimingPatch(pause_after_ms=420), "tester")
+        workflow_store = VoiceProjectWorkflowStore(Path(self.tmp.name) / "p1-profile-wf")
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_p1_profile", project_id="p1_profile_override", status=WorkflowStatus.COMPLETED,
+            policy=WorkflowPolicy(mixing_profile="dramatic", mastering_profile="podcast", output_formats=["wav", "mp3"]),
+        ))
+        workflow_service = VoiceProjectWorkflowService(store=workflow_store, project_store=self.store)
+        with mock.patch("services.voice_project_dependencies.get_voice_project_workflow_service", return_value=workflow_service), \
+             mock.patch.object(self.project_service, "prepare_for_mix") as prepare, \
+             mock.patch.object(self.project_service, "mix"), \
+             mock.patch.object(self.project_service, "master") as master, \
+             mock.patch.object(self.project_service, "export") as export:
+            # Caller tries to supply different profiles — workflow must win
+            revision.reproduce_project("p1_profile_override", policy={
+                "mixing_profile": "storytelling",
+                "mastering_profile": "storytelling",
+                "output_formats": ["wav"],
+            })
+        prepare.assert_called_once_with(
+            "p1_profile_override",
+            mix_config={"profile": "dramatic"},
+            mastering_profile="podcast",
+            output_formats=["wav", "mp3"],
+        )
+        master.assert_called_once_with("p1_profile_override", profile_name="podcast", cancellation_token=None)
+        export.assert_called_once_with("p1_profile_override", formats=["wav", "mp3"], cancellation_token=None)
+
 
 if __name__ == "__main__":
     unittest.main()

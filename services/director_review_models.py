@@ -203,6 +203,11 @@ class IncrementalReproductionResult(BaseModel):
     executed_steps: list[str] = Field(default_factory=list)
     status: str
     suggested_action: str
+    # Populated when status == "waiting_for_human" (P1-2)
+    artifact_id: str | None = None
+    artifact_sha256: str | None = None
+    human_action: dict[str, Any] | None = None
+    approval_endpoint: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
