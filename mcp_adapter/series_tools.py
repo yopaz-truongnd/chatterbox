@@ -17,12 +17,12 @@ def _success(data: Any) -> dict:
     }
 
 
-def _error(msg: str, code: str = "ERROR") -> dict:
+def _error(msg: str, code: str = "ERROR", details: dict[str, Any] | None = None) -> dict:
     return {
         "content": [
             {
                 "type": "text",
-                "text": json.dumps({"error": {"code": code, "message": msg}}, indent=2),
+                "text": json.dumps({"error": {"code": code, "message": msg, **(details or {})}}, indent=2),
             }
         ],
         "isError": True,
@@ -99,12 +99,18 @@ def handle_series_produce(args: dict[str, Any], request_fn: Callable | None = No
     if not series_id:
         return _error("series_id is required", code="INVALID_ARGUMENTS")
     try:
-        from services.voice_series_operations import VoiceSeriesOperations
+        from services.voice_series_operations import SeriesPreflightError, VoiceSeriesOperations
         ops = VoiceSeriesOperations()
-        operation = ops.submit_series(
-            series_id=series_id,
-            episode_ids=args.get("episode_ids"),
-        )
+        try:
+            operation = ops.submit_series(
+                series_id=series_id,
+                episode_ids=args.get("episode_ids"),
+            )
+        except SeriesPreflightError as exc:
+            return _error(
+                "Series production preflight failed.", code="VALIDATION_ERROR",
+                details={"issues": [issue.model_dump() for issue in exc.issues]},
+            )
         return _success(operation.to_dict())
     except Exception as exc:
         return _error(f"Failed to produce series: {exc}", code="SERIES_PRODUCE_FAILED")

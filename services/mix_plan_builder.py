@@ -100,6 +100,8 @@ class MixPlanBuilder:
         """Build deterministic MixPlan from validated project narration and sound design."""
         project_root = Path(proj_dir)
         cfg = mix_config or {}
+        ambience_palette = set(cfg.get("ambience_palette") or [])
+        sfx_palette = set(cfg.get("sfx_palette") or [])
 
         # Resolve rules
         def_rules = self.mixing_rules.get("default_profile", {})
@@ -222,6 +224,10 @@ class MixPlanBuilder:
                 type_val = res_type.value if hasattr(res_type, "value") else str(res_type)
                 if type_val == "ambience" and getattr(res, "selected", None):
                     entry = res.selected
+                    if ambience_palette and not ({getattr(entry, "id", ""), getattr(entry, "intent", "")} & ambience_palette):
+                        raise InvalidProjectStateError(
+                            f"Resolved ambience '{getattr(entry, 'id', '')}' is outside the configured series palette."
+                        )
                     f_obj = getattr(entry, "file", None)
                     if f_obj and getattr(f_obj, "path", None):
                         asset_path = resolve_asset_file_path(f_obj.path, project_dir=project_root)
@@ -268,6 +274,12 @@ class MixPlanBuilder:
                         ),
                         None,
                     )
+                if res_match and sfx_palette:
+                    selected = getattr(res_match, "selected", None)
+                    if not selected or not ({getattr(selected, "id", ""), getattr(selected, "intent", "")} & sfx_palette):
+                        raise InvalidProjectStateError(
+                            f"Resolved SFX '{getattr(selected, 'id', '')}' is outside the configured series palette."
+                        )
 
                 if res_match and res_match.selected and res_match.selected.file and res_match.selected.file.path:
                     sfx_path = resolve_asset_file_path(res_match.selected.file.path, project_dir=project_root)

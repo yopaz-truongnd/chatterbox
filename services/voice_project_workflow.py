@@ -134,6 +134,9 @@ class VoiceProjectWorkflowService:
         state.updated_at = datetime.now(timezone.utc).isoformat()
         state.error = {"code": "WORKFLOW_CANCELLED", "message": "Workflow cancellation requested by user."}
         self.store.save_workflow(state)
+        self._emit_production_event(
+            state, "workflow_cancelled", "Workflow cancellation requested.", status=state.status.value
+        )
 
         # Signal cancellation to active child operation if running
         active_job = self.op_manager._project_active_op.get(state.project_id)
@@ -411,7 +414,7 @@ class VoiceProjectWorkflowService:
             service = get_voice_project_service(
                 provider_name=state.policy.provider,
                 model=state.policy.model,
-                voice=state.policy.narrator_character,
+                voice=state.policy.narrator_reference_voice,
             )
             project_id = state.project_id
 
@@ -454,6 +457,23 @@ class VoiceProjectWorkflowService:
                     )
                     if plan_res is None:
                         return
+
+                if state.policy.pronunciation_overrides:
+                    source_text = self.project_store.read_source_script(project_id).casefold()
+                    current_plan = self.project_store.load_voice_plan(project_id)
+                    from services.director_resource_service import DirectorResourceService
+                    resources = DirectorResourceService(service)
+                    for term, phonetic in state.policy.pronunciation_overrides.items():
+                        affected = [
+                            beat for beat in current_plan.beats
+                            if term.casefold() in beat.script.text.casefold()
+                        ] if current_plan else []
+                        if term.casefold() in source_text and any(
+                            beat.voice.pronunciation.get(term) != phonetic for beat in affected
+                        ):
+                            resources.add_pronunciation(
+                                project_id, term, phonetic, actor_id="series_bible"
+                            )
 
             state = self.store.get_workflow(workflow_id)
             if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
@@ -593,7 +613,12 @@ class VoiceProjectWorkflowService:
                     project_id,
                     mastering_profile=state.policy.mastering_profile,
                     output_formats=state.policy.output_formats,
-                    mix_config={"profile": state.policy.mixing_profile},
+                    mix_config={
+                        "profile": state.policy.mixing_profile,
+                        "ambience_palette": state.policy.ambience_palette,
+                        "sfx_palette": state.policy.sfx_palette,
+                    },
+                    target_lufs=state.policy.loudness_target_lufs,
                 )
 
             state = self.store.get_workflow(workflow_id)
@@ -623,6 +648,7 @@ class VoiceProjectWorkflowService:
                     service.master,
                     project_id,
                     profile_name=state.policy.mastering_profile,
+                    target_lufs=state.policy.loudness_target_lufs,
                 )
 
             state = self.store.get_workflow(workflow_id)
@@ -690,6 +716,10 @@ class VoiceProjectWorkflowService:
             }
             state.updated_at = datetime.now(timezone.utc).isoformat()
             self.store.save_workflow(state)
+            self._emit_production_event(
+                state, "export_completed", "Production export completed.",
+                step=WorkflowStepName.EXPORT.value, status=state.status.value,
+            )
 
         except Exception as exc:
             fresh_state = self.store.get_workflow(workflow_id)
@@ -703,6 +733,12 @@ class VoiceProjectWorkflowService:
             state.suggested_action = f"Workflow failed: {str(exc)}"
             state.updated_at = datetime.now(timezone.utc).isoformat()
             self.store.save_workflow(state)
+
+            self._emit_production_event(
+                state, "step_failed", "Production workflow failed.",
+                step=state.current_step, status=state.status.value, error=state.error,
+            )
+
     def _emit_production_event(
         self, state: VoiceWorkflowState, event_type: str, message: str, **details: Any
     ) -> None:

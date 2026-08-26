@@ -179,22 +179,30 @@ class AssetLibraryStore:
     ) -> LibraryAsset | None:
         """Increment usage_count and set last_used_at timestamp. Returns updated asset or None."""
         with self._lock:
-            data = self._load()
-            for i, item in enumerate(data["assets"]):
-                if item.get("asset_id") == asset_id:
-                    data["assets"][i]["usage_count"] = item.get("usage_count", 0) + 1
-                    data["assets"][i]["last_used_at"] = datetime.now(timezone.utc).isoformat()
-                    data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
-                    if project_id:
-                        ref = {"project_id": project_id}
-                        if beat_id:
-                            ref["beat_id"] = beat_id
-                        refs = data["assets"][i].setdefault("usage_references", [])
-                        if ref not in refs:
-                            refs.append(ref)
-                    self._save(data)
-                    return _dict_to_asset(data["assets"][i])
-            return None
+            lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(lock_path, "a", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    data = self._load()
+                    for i, item in enumerate(data["assets"]):
+                        if item.get("asset_id") == asset_id:
+                            now = datetime.now(timezone.utc).isoformat()
+                            data["assets"][i]["usage_count"] = item.get("usage_count", 0) + 1
+                            data["assets"][i]["last_used_at"] = now
+                            data["assets"][i]["updated_at"] = now
+                            if project_id:
+                                ref = {"project_id": project_id}
+                                if beat_id:
+                                    ref["beat_id"] = beat_id
+                                refs = data["assets"][i].setdefault("usage_references", [])
+                                if ref not in refs:
+                                    refs.append(ref)
+                            self._save(data)
+                            return _dict_to_asset(data["assets"][i])
+                    return None
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 # Module-level singleton

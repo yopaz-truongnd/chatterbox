@@ -44,6 +44,12 @@ _active_series_tokens: dict[str, CancellationToken] = {}
 _tokens_lock = threading.Lock()
 
 
+class SeriesPreflightError(InvalidProjectStateError):
+    def __init__(self, issues: list[Any]) -> None:
+        self.issues = issues
+        super().__init__("Series production preflight failed.")
+
+
 class VoiceSeriesOperations:
     """Coordinator for batch production of series episodes."""
 
@@ -76,7 +82,26 @@ class VoiceSeriesOperations:
         return self._operation_manager
 
     def submit_series(self, series_id: str, episode_ids: list[str] | None = None):
-        self.service.get_series(series_id)
+        series = self.service.get_series(series_id)
+        episodes = [
+            episode for episode in self.store.list_episodes(series_id)
+            if episode_ids is None or episode.episode_id in episode_ids
+        ]
+        if not episodes:
+            raise InvalidProjectStateError(f"No matching episodes to produce for series '{series_id}'.")
+        from services.local_runtime_service import LocalRuntimeService
+        runtime = LocalRuntimeService()
+        errors = []
+        for episode in episodes:
+            errors.extend(issue for issue in runtime.run_production_preflight(
+                episode.project_id,
+                provider=series.voice_bible.provider,
+                requested_formats=series.sound_bible.output_formats,
+                selected_model=series.voice_bible.model,
+                reference_voice=series.voice_bible.narrator_reference_voice,
+            ) if issue.severity == "error")
+        if errors:
+            raise SeriesPreflightError(errors)
         return self._operations().submit(
             self._operation_scope(series_id), "produce_series",
             self.produce_series, series_id, episode_ids,
@@ -208,6 +233,7 @@ class VoiceSeriesOperations:
             ambience_palette=series.sound_bible.ambience_palette,
             sfx_palette=series.sound_bible.sfx_palette,
             loudness_target_lufs=series.sound_bible.loudness_target_lufs,
+            pronunciation_overrides=series.pronunciation_bible.overrides,
         )
 
         def produce_single_episode(ep: VoiceSeriesEpisode) -> dict[str, Any]:
@@ -265,16 +291,6 @@ class VoiceSeriesOperations:
                 # Load project source script
                 state = proj_store.get_project_state(ep.project_id)
                 script_text = proj_store.read_source_script(ep.project_id)
-
-                # Apply pronunciation overrides if any
-                if series.pronunciation_bible.overrides:
-                    from services.director_resource_service import DirectorResourceService
-                    dres = DirectorResourceService(proj_service)
-                    for term, pron in series.pronunciation_bible.overrides.items():
-                        try:
-                            dres.override_pronunciation(ep.project_id, term, pron, actor_id="series_bible")
-                        except Exception:
-                            pass
 
                 # Run or resume workflow
                 wf = wf_service.start_workflow(
@@ -390,7 +406,8 @@ class VoiceSeriesOperations:
                 _active_series_tokens.pop(series_id, None)
 
         # Aggregate counts
-        ep_states = self.store.list_episodes(series_id)
+        target_ids = {episode.episode_id for episode in target_episodes}
+        ep_states = [episode for episode in self.store.list_episodes(series_id) if episode.episode_id in target_ids]
         completed_count = sum(1 for e in ep_states if e.status == EpisodeStatus.COMPLETED)
         failed_count = sum(1 for e in ep_states if e.status == EpisodeStatus.FAILED)
         waiting_count = sum(1 for e in ep_states if e.status == EpisodeStatus.WAITING_FOR_HUMAN)
@@ -403,8 +420,9 @@ class VoiceSeriesOperations:
 
         human_actions = self.service.get_review_queue(series_id)
 
-        # Update series status
-        if completed_count == total and total > 0:
+        # The series is complete only when every episode, not merely the requested subset, is complete.
+        all_current_episodes = self.store.list_episodes(series_id)
+        if all_current_episodes and all(e.status == EpisodeStatus.COMPLETED for e in all_current_episodes):
             series.status = SeriesStatus.COMPLETED
         else:
             series.status = SeriesStatus.ACTIVE

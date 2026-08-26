@@ -275,7 +275,11 @@ class TestPhase17to20ReviewFixes(unittest.TestCase):
         self.assertFalse(cancelled_idle)
 
     def test_series_submit_is_persisted_and_rejects_parallel_mutation(self):
-        series = self.series_service.create_series(title="Persisted Series")
+        series = self.series_service.create_series(
+            title="Persisted Series", voice_bible=SeriesVoiceBible(provider="fake")
+        )
+        project = self.proj_service.create_project("A short episode.", project_id="persisted_episode_project")
+        self.series_service.add_episode(series.series_id, project.project_id, "Episode 1")
         started = threading.Event()
         release = threading.Event()
 

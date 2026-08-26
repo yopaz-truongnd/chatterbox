@@ -77,7 +77,11 @@ def resolve_server_tts_provider(
             )
 
         gateway = DefaultJobManagerGateway(jm)
-        return ChatterboxJobProvider(gateway=gateway, default_model=model or "nano")
+        return ChatterboxJobProvider(
+            gateway=gateway,
+            default_model=model or "nano",
+            default_reference_voice=voice,
+        )
 
     if normalized_name == "gemini":
         return GeminiTTSProvider(model_name=model, voice_name=voice)

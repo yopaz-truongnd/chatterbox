@@ -292,8 +292,16 @@ class LocalRuntimeService:
                 ))
 
         if reference_voice:
-            ref_path = Path(reference_voice).expanduser()
-            if not ref_path.exists() or not ref_path.is_file():
+            try:
+                from services.asset_library_service import _make_permitted_roots, _resolve_and_validate_path
+                ref_path = _resolve_and_validate_path(reference_voice, _make_permitted_roots())
+            except (ValueError, PermissionError) as exc:
+                issues.append(PreflightIssue(
+                    severity="error", code="REFERENCE_VOICE_PATH_INVALID",
+                    message=str(exc), field="reference_voice",
+                ))
+                ref_path = None
+            if ref_path is not None and (not ref_path.exists() or not ref_path.is_file()):
                 issues.append(PreflightIssue(
                     severity="error",
                     code="CHARACTER_REFERENCE_MISSING",

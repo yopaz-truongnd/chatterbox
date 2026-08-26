@@ -21,7 +21,7 @@ from services.voice_series_models import (
     VoiceSeries,
     VoiceSeriesEpisode,
 )
-from services.voice_series_operations import VoiceSeriesOperations
+from services.voice_series_operations import SeriesPreflightError, VoiceSeriesOperations
 from services.voice_series_service import VoiceSeriesService
 
 router = APIRouter(prefix="/api/v1/voice-series", tags=["voice-series"])
@@ -100,6 +100,11 @@ def add_episode(series_id: str, body: AddEpisodeRequest) -> VoiceSeriesEpisode:
         )
     except VoiceProjectNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except SeriesPreflightError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "VALIDATION_ERROR", "issues": [issue.model_dump() for issue in exc.issues]},
+        )
     except InvalidProjectStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 

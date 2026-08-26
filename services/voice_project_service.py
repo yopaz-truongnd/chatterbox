@@ -656,6 +656,7 @@ class VoiceProjectService:
         mix_config: dict[str, Any] | None = None,
         mastering_profile: str = "storytelling",
         output_formats: list[str] | None = None,
+        target_lufs: float | None = None,
     ) -> MixPlan:
         """Construct and persist deterministic MixPlan from passed narration renders."""
         state = self.store.get_project_state(project_id)
@@ -688,6 +689,8 @@ class VoiceProjectService:
 
                 builder = MixPlanBuilder()
                 m_profile = load_mastering_profile(mastering_profile)
+                if target_lufs is not None:
+                    m_profile = m_profile.model_copy(update={"target_lufs": target_lufs})
                 e_profiles = [ExportProfile(format=fmt) for fmt in (output_formats or ["wav"])]
 
                 mix_plan = builder.build(
@@ -787,6 +790,7 @@ class VoiceProjectService:
         self,
         project_id: str,
         profile_name: str = "storytelling",
+        target_lufs: float | None = None,
         progress_callback: ProgressCallback | None = None,
         cancellation_token: CancellationToken | None = None,
     ) -> dict[str, Any]:
@@ -811,6 +815,8 @@ class VoiceProjectService:
                 master_path = proj_dir / "mix" / "master.wav"
                 service = AudioMasteringService()
                 prof = load_mastering_profile(profile_name)
+                if target_lufs is not None:
+                    prof = prof.model_copy(update={"target_lufs": target_lufs})
 
                 result = service.master(
                     input_wav_path=premaster_path,

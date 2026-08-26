@@ -70,6 +70,7 @@ class WorkflowPolicy(BaseModel):
     ambience_palette: list[str] = Field(default_factory=list)
     sfx_palette: list[str] = Field(default_factory=list)
     loudness_target_lufs: float | None = None
+    pronunciation_overrides: dict[str, str] = Field(default_factory=dict)
 
 
 class VoiceWorkflowState(BaseModel):
