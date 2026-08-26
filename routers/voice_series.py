@@ -125,7 +125,13 @@ def produce_series(series_id: str, body: ProduceSeriesRequest = Body(default_fac
 def cancel_series(series_id: str) -> dict[str, Any]:
     try:
         series = _series_service.get_series(series_id)
-        return {"series_id": series_id, "status": "cancelling", "message": "Series production cancellation requested."}
+        cancelled = _series_ops.cancel_series(series_id)
+        return {
+            "series_id": series_id,
+            "status": "cancelling" if cancelled else "idle",
+            "cancelled": cancelled,
+            "message": "Series production cancellation initiated." if cancelled else "No active batch operation was running for series.",
+        }
     except VoiceProjectNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 

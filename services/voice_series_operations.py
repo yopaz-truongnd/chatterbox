@@ -20,7 +20,7 @@ import uuid
 import yaml
 
 from services.voice_project_models import InvalidProjectStateError
-from services.voice_project_operations import CancellationToken
+from services.voice_project_operations import CancellationToken, OperationStatus
 from services.voice_project_workflow_models import WorkflowPolicy
 from services.voice_series_models import (
     EpisodeStatus,
@@ -33,6 +33,10 @@ from services.voice_series_models import (
 )
 from services.voice_series_service import VoiceSeriesService
 from services.voice_series_store import VoiceSeriesStore, get_voice_series_store
+import threading
+
+_active_series_tokens: dict[str, CancellationToken] = {}
+_tokens_lock = threading.Lock()
 
 
 class VoiceSeriesOperations:
@@ -45,12 +49,23 @@ class VoiceSeriesOperations:
         proj_store: Any | None = None,
         proj_service: Any | None = None,
         wf_service: Any | None = None,
+        event_store: Any | None = None,
     ) -> None:
         self.store = store or get_voice_series_store()
         self.service = service or VoiceSeriesService(store=self.store)
         self._proj_store = proj_store
         self._proj_service = proj_service
         self._wf_service = wf_service
+        self._event_store = event_store
+
+    def cancel_series(self, series_id: str) -> bool:
+        """Cooperatively cancel any running batch production for the series."""
+        with _tokens_lock:
+            token = _active_series_tokens.get(series_id)
+            if token is not None:
+                token.cancel()
+                return True
+        return False
 
     def _package_episode_deliverables(
         self,
@@ -120,6 +135,10 @@ class VoiceSeriesOperations:
         if not target_episodes:
             raise InvalidProjectStateError(f"No matching episodes to produce for series '{series_id}'.")
 
+        token = cancellation_token or CancellationToken()
+        with _tokens_lock:
+            _active_series_tokens[series_id] = token
+
         op_id = f"sop_{uuid.uuid4().hex[:10]}"
         max_workers = min(series.production_policy.max_parallel_episodes, len(target_episodes))
         exp_root = Path(export_root or "exports")
@@ -129,10 +148,22 @@ class VoiceSeriesOperations:
             get_voice_project_store,
             get_voice_project_workflow_service,
         )
+        from services.production_event_models import ProductionEvent, ProductionEventType
+        from services.production_event_store import get_production_event_store
+        from services.local_runtime_service import LocalRuntimeService
+
+        evt_store = self._event_store or get_production_event_store()
+        runtime_svc = LocalRuntimeService()
 
         wf_service = self._wf_service or get_voice_project_workflow_service()
         proj_service = self._proj_service or get_voice_project_service(provider_name=series.voice_bible.provider)
         proj_store = self._proj_store or get_voice_project_store()
+
+        evt_store.append_series_event(ProductionEvent(
+            series_id=series_id,
+            event_type=ProductionEventType.WORKFLOW_STARTED,
+            message=f"Batch production initiated for series '{series.title}' ({len(target_episodes)} episodes).",
+        ))
 
         # Build policy from series bibles
         policy = WorkflowPolicy(
@@ -144,17 +175,51 @@ class VoiceSeriesOperations:
         )
 
         def produce_single_episode(ep: VoiceSeriesEpisode) -> dict[str, Any]:
-            if cancellation_token and cancellation_token.is_cancelled():
+            if token.is_cancelled():
                 ep.status = EpisodeStatus.CANCELLED
                 self.store.save_episode(ep)
+                evt_store.append_project_event(ProductionEvent(
+                    project_id=ep.project_id,
+                    series_id=series_id,
+                    episode_id=ep.episode_id,
+                    event_type=ProductionEventType.WORKFLOW_CANCELLED,
+                    message=f"Episode '{ep.title}' production cancelled.",
+                ))
                 return {"episode_id": ep.episode_id, "status": "cancelled"}
 
             # Check if already completed
             if ep.status == EpisodeStatus.COMPLETED:
                 return {"episode_id": ep.episode_id, "status": "completed", "skipped": True}
 
+            # 1. Mandatory Preflight Gate before scheduling
+            preflight_issues = runtime_svc.run_production_preflight(
+                ep.project_id, provider=series.voice_bible.provider
+            )
+            preflight_errors = [i for i in preflight_issues if i.severity == "error"]
+            if preflight_errors:
+                err_msg = "; ".join(i.message for i in preflight_errors)
+                ep.status = EpisodeStatus.FAILED
+                ep.error = {"message": f"Preflight failed: {err_msg}", "code": "PREFLIGHT_FAILED"}
+                self.store.save_episode(ep)
+                evt_store.append_project_event(ProductionEvent(
+                    project_id=ep.project_id,
+                    series_id=series_id,
+                    episode_id=ep.episode_id,
+                    event_type=ProductionEventType.STEP_FAILED,
+                    message=f"Episode '{ep.title}' preflight check failed: {err_msg}",
+                ))
+                return {"episode_id": ep.episode_id, "status": "failed", "error": ep.error}
+
             ep.status = EpisodeStatus.PRODUCING
             self.store.save_episode(ep)
+
+            evt_store.append_project_event(ProductionEvent(
+                project_id=ep.project_id,
+                series_id=series_id,
+                episode_id=ep.episode_id,
+                event_type=ProductionEventType.WORKFLOW_STARTED,
+                message=f"Episode '{ep.title}' workflow execution started.",
+            ))
 
             try:
                 # Load project source script
@@ -185,10 +250,17 @@ class VoiceSeriesOperations:
 
                 # Wait for workflow completion or human action
                 while True:
-                    if cancellation_token and cancellation_token.is_cancelled():
+                    if token.is_cancelled():
                         wf_service.cancel_workflow(wf.workflow_id)
                         ep.status = EpisodeStatus.CANCELLED
                         self.store.save_episode(ep)
+                        evt_store.append_project_event(ProductionEvent(
+                            project_id=ep.project_id,
+                            series_id=series_id,
+                            episode_id=ep.episode_id,
+                            event_type=ProductionEventType.WORKFLOW_CANCELLED,
+                            message=f"Episode '{ep.title}' workflow cancelled by user request.",
+                        ))
                         return {"episode_id": ep.episode_id, "status": "cancelled"}
 
                     st = wf_service.get_workflow(wf.workflow_id)
@@ -199,6 +271,13 @@ class VoiceSeriesOperations:
                         ep.status = EpisodeStatus.WAITING_FOR_HUMAN
                         ep.review_required = True
                         self.store.save_episode(ep)
+                        evt_store.append_project_event(ProductionEvent(
+                            project_id=ep.project_id,
+                            series_id=series_id,
+                            episode_id=ep.episode_id,
+                            event_type=ProductionEventType.HUMAN_ACTION_REQUIRED,
+                            message=f"Episode '{ep.title}' requires human approval/review.",
+                        ))
                         return {"episode_id": ep.episode_id, "status": "waiting_for_human"}
 
                     if st.status == "completed" or getattr(st.status, "value", str(st.status)) == "completed":
@@ -208,12 +287,26 @@ class VoiceSeriesOperations:
                         copied = self._package_episode_deliverables(series, ep, exp_root)
                         ep.final_artifacts = copied
                         self.store.save_episode(ep)
+                        evt_store.append_project_event(ProductionEvent(
+                            project_id=ep.project_id,
+                            series_id=series_id,
+                            episode_id=ep.episode_id,
+                            event_type=ProductionEventType.EXPORT_COMPLETED,
+                            message=f"Episode '{ep.title}' production and export completed successfully.",
+                        ))
                         return {"episode_id": ep.episode_id, "status": "completed"}
 
                     if st.status in ("failed", "cancelled", "interrupted") or getattr(st.status, "value", str(st.status)) in ("failed", "cancelled", "interrupted"):
                         ep.status = EpisodeStatus.CANCELLED if getattr(st.status, "value", str(st.status)) == "cancelled" else EpisodeStatus.FAILED
                         ep.error = st.error
                         self.store.save_episode(ep)
+                        evt_store.append_project_event(ProductionEvent(
+                            project_id=ep.project_id,
+                            series_id=series_id,
+                            episode_id=ep.episode_id,
+                            event_type=ProductionEventType.STEP_FAILED,
+                            message=f"Episode '{ep.title}' workflow ended with status: {ep.status.value}",
+                        ))
                         return {"episode_id": ep.episode_id, "status": ep.status.value, "error": st.error}
 
                     import time
@@ -227,18 +320,29 @@ class VoiceSeriesOperations:
                 ep.status = EpisodeStatus.FAILED
                 ep.error = {"message": str(exc)}
                 self.store.save_episode(ep)
+                evt_store.append_project_event(ProductionEvent(
+                    project_id=ep.project_id,
+                    series_id=series_id,
+                    episode_id=ep.episode_id,
+                    event_type=ProductionEventType.STEP_FAILED,
+                    message=f"Episode '{ep.title}' error: {exc}",
+                ))
                 return {"episode_id": ep.episode_id, "status": "failed", "error": str(exc)}
 
         results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_ep = {executor.submit(produce_single_episode, ep): ep for ep in target_episodes}
-            for future in concurrent.futures.as_completed(future_to_ep):
-                try:
-                    res = future.result()
-                    results.append(res)
-                except Exception as exc:
-                    ep = future_to_ep[future]
-                    results.append({"episode_id": ep.episode_id, "status": "failed", "error": str(exc)})
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_ep = {executor.submit(produce_single_episode, ep): ep for ep in target_episodes}
+                for future in concurrent.futures.as_completed(future_to_ep):
+                    try:
+                        res = future.result()
+                        results.append(res)
+                    except Exception as exc:
+                        ep = future_to_ep[future]
+                        results.append({"episode_id": ep.episode_id, "status": "failed", "error": str(exc)})
+        finally:
+            with _tokens_lock:
+                _active_series_tokens.pop(series_id, None)
 
         # Aggregate counts
         ep_states = self.store.list_episodes(series_id)

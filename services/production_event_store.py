@@ -13,6 +13,8 @@ import fcntl
 import json
 import logging
 import os
+import re
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,23 @@ logger = logging.getLogger(__name__)
 _MAX_EVENTS = 1000
 _ROTATE_THRESHOLD = 1000
 
+_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{1,128}$')
+_file_locks: dict[str, threading.Lock] = {}
+_file_locks_mutex = threading.Lock()
+
+
+def _validate_id(id_: str, label: str) -> None:
+    if not _ID_RE.match(id_):
+        raise ValueError(f"Invalid {label}: {id_!r}. Only a-z A-Z 0-9 _ - allowed.")
+
+
+def _get_file_lock(path: Path) -> threading.Lock:
+    key = str(path.resolve())
+    with _file_locks_mutex:
+        if key not in _file_locks:
+            _file_locks[key] = threading.Lock()
+        return _file_locks[key]
+
 
 def _default_root() -> Path:
     data_dir = os.getenv("CHATTERBOX_API_DATA_DIR")
@@ -32,10 +51,12 @@ def _default_root() -> Path:
 
 
 def _project_events_path(root: Path, project_id: str) -> Path:
+    _validate_id(project_id, "project_id")
     return root / project_id / "events.jsonl"
 
 
 def _series_events_path(root: Path, series_id: str) -> Path:
+    _validate_id(series_id, "series_id")
     return root / "series" / series_id / "events.jsonl"
 
 
@@ -64,47 +85,40 @@ def _load_events_from_file(path: Path) -> list[dict[str, Any]]:
     return events
 
 
-def _atomic_append(path: Path, record: dict[str, Any]) -> None:
-    """Atomically append one JSON record to the JSONL file using flock."""
+def _atomic_append_and_rotate(path: Path, record: dict[str, Any]) -> None:
+    """Atomically append one JSON record and rotate if needed under a single critical section."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as fh:
-        fcntl.flock(fh, fcntl.LOCK_EX)
-        try:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-            fh.flush()
-            os.fsync(fh.fileno())
-        finally:
-            fcntl.flock(fh, fcntl.LOCK_UN)
-
-
-def _rotate_if_needed(path: Path) -> None:
-    """Rotate the JSONL file when it exceeds _ROTATE_THRESHOLD, keeping latest _MAX_EVENTS."""
-    if not path.exists():
-        return
-    events = _load_events_from_file(path)
-    if len(events) <= _ROTATE_THRESHOLD:
-        return
-    kept = events[-_MAX_EVENTS:]
-    tmp_path = path.with_suffix(f".tmp_rotate")
-    try:
-        with open(tmp_path, "w", encoding="utf-8") as fh:
+    file_lock = _get_file_lock(path)
+    with file_lock:
+        with open(path, "a+", encoding="utf-8") as fh:
             fcntl.flock(fh, fcntl.LOCK_EX)
             try:
-                for evt in kept:
-                    fh.write(json.dumps(evt, ensure_ascii=False) + "\n")
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
                 fh.flush()
                 os.fsync(fh.fileno())
             finally:
                 fcntl.flock(fh, fcntl.LOCK_UN)
-        tmp_path.replace(path)
-        logger.info("Rotated event log %s: kept %d / %d events", path, len(kept), len(events))
-    except OSError as exc:
-        logger.warning("Failed to rotate event log %s: %s", path, exc)
-        if tmp_path.exists():
+
+        # Check rotation under thread lock
+        events = _load_events_from_file(path)
+        if len(events) > _ROTATE_THRESHOLD:
+            kept = events[-_MAX_EVENTS:]
+            tmp_path = path.with_suffix(".tmp_rotate")
             try:
-                tmp_path.unlink()
-            except OSError:
-                pass
+                with open(tmp_path, "w", encoding="utf-8") as fh:
+                    for evt in kept:
+                        fh.write(json.dumps(evt, ensure_ascii=False) + "\n")
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                tmp_path.replace(path)
+                logger.info("Rotated event log %s: kept %d / %d events", path, len(kept), len(events))
+            except OSError as exc:
+                logger.warning("Failed to rotate event log %s: %s", path, exc)
+                if tmp_path.exists():
+                    try:
+                        tmp_path.unlink()
+                    except OSError:
+                        pass
 
 
 # ==========================================
@@ -125,8 +139,7 @@ class ProductionEventStore:
         if not event.project_id:
             raise ValueError("ProductionEvent must have project_id set for project append.")
         path = _project_events_path(self.root_dir, event.project_id)
-        _atomic_append(path, event.to_dict())
-        _rotate_if_needed(path)
+        _atomic_append_and_rotate(path, event.to_dict())
 
     def load_project_events(
         self,
@@ -147,8 +160,7 @@ class ProductionEventStore:
         if not event.series_id:
             raise ValueError("ProductionEvent must have series_id set for series append.")
         path = _series_events_path(self.root_dir, event.series_id)
-        _atomic_append(path, event.to_dict())
-        _rotate_if_needed(path)
+        _atomic_append_and_rotate(path, event.to_dict())
 
     def load_series_events(
         self,

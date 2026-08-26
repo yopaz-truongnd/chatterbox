@@ -67,11 +67,14 @@ def _dict_to_asset(d: dict[str, Any]) -> LibraryAsset:
     return LibraryAsset.model_validate(d)
 
 
+import threading
+
 class AssetLibraryStore:
     """Thread-safe in-process asset library store backed by YAML."""
 
     def __init__(self, index_path: Path | None = None) -> None:
         self._index_path: Path = index_path or _get_index_path()
+        self._lock = threading.RLock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -89,40 +92,44 @@ class AssetLibraryStore:
 
     def get_asset(self, asset_id: str) -> LibraryAsset | None:
         """Return a single asset by ID or None."""
-        data = self._load()
-        for item in data["assets"]:
-            if item.get("asset_id") == asset_id:
-                return _dict_to_asset(item)
-        return None
+        with self._lock:
+            data = self._load()
+            for item in data["assets"]:
+                if item.get("asset_id") == asset_id:
+                    return _dict_to_asset(item)
+            return None
 
     def list_assets(self, category: AssetCategory | None = None) -> list[LibraryAsset]:
         """Return all assets, optionally filtered by category."""
-        data = self._load()
-        assets = [_dict_to_asset(item) for item in data["assets"]]
-        if category is not None:
-            assets = [a for a in assets if a.category == category]
-        return assets
+        with self._lock:
+            data = self._load()
+            assets = [_dict_to_asset(item) for item in data["assets"]]
+            if category is not None:
+                assets = [a for a in assets if a.category == category]
+            return assets
 
     def save_asset(self, asset: LibraryAsset) -> LibraryAsset:
         """Insert or update an asset by asset_id. Returns the saved asset."""
-        data = self._load()
-        assets = data["assets"]
-        for i, item in enumerate(assets):
-            if item.get("asset_id") == asset.asset_id:
-                assets[i] = _asset_to_dict(asset)
-                self._save(data)
-                return asset
-        assets.append(_asset_to_dict(asset))
-        self._save(data)
-        return asset
+        with self._lock:
+            data = self._load()
+            assets = data["assets"]
+            for i, item in enumerate(assets):
+                if item.get("asset_id") == asset.asset_id:
+                    assets[i] = _asset_to_dict(asset)
+                    self._save(data)
+                    return asset
+            assets.append(_asset_to_dict(asset))
+            self._save(data)
+            return asset
 
     def find_by_sha256(self, sha256: str) -> LibraryAsset | None:
         """Return the first asset matching a given SHA-256 hash, or None."""
-        data = self._load()
-        for item in data["assets"]:
-            if item.get("sha256") == sha256:
-                return _dict_to_asset(item)
-        return None
+        with self._lock:
+            data = self._load()
+            for item in data["assets"]:
+                if item.get("sha256") == sha256:
+                    return _dict_to_asset(item)
+            return None
 
     def find_by_category(self, category: AssetCategory) -> list[LibraryAsset]:
         """Return all assets in a given category."""
@@ -130,26 +137,28 @@ class AssetLibraryStore:
 
     def disable_asset(self, asset_id: str) -> LibraryAsset | None:
         """Mark an asset as disabled. Returns the updated asset or None if not found."""
-        data = self._load()
-        for i, item in enumerate(data["assets"]):
-            if item.get("asset_id") == asset_id:
-                data["assets"][i]["enabled"] = False
-                data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
-                self._save(data)
-                return _dict_to_asset(data["assets"][i])
-        return None
+        with self._lock:
+            data = self._load()
+            for i, item in enumerate(data["assets"]):
+                if item.get("asset_id") == asset_id:
+                    data["assets"][i]["enabled"] = False
+                    data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    self._save(data)
+                    return _dict_to_asset(data["assets"][i])
+            return None
 
     def update_usage(self, asset_id: str) -> LibraryAsset | None:
         """Increment usage_count and set last_used_at timestamp. Returns updated asset or None."""
-        data = self._load()
-        for i, item in enumerate(data["assets"]):
-            if item.get("asset_id") == asset_id:
-                data["assets"][i]["usage_count"] = item.get("usage_count", 0) + 1
-                data["assets"][i]["last_used_at"] = datetime.now(timezone.utc).isoformat()
-                data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
-                self._save(data)
-                return _dict_to_asset(data["assets"][i])
-        return None
+        with self._lock:
+            data = self._load()
+            for i, item in enumerate(data["assets"]):
+                if item.get("asset_id") == asset_id:
+                    data["assets"][i]["usage_count"] = item.get("usage_count", 0) + 1
+                    data["assets"][i]["last_used_at"] = datetime.now(timezone.utc).isoformat()
+                    data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    self._save(data)
+                    return _dict_to_asset(data["assets"][i])
+            return None
 
 
 # Module-level singleton

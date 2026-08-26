@@ -29,8 +29,15 @@ from services.voice_series_store import VoiceSeriesStore, get_voice_series_store
 class VoiceSeriesService:
     """Business logic for story series lifecycle."""
 
-    def __init__(self, store: VoiceSeriesStore | None = None) -> None:
+    def __init__(
+        self,
+        store: VoiceSeriesStore | None = None,
+        wf_service: Any | None = None,
+        proj_store: Any | None = None,
+    ) -> None:
         self.store = store or get_voice_series_store()
+        self._wf_service = wf_service
+        self._proj_store = proj_store
 
     def create_series(
         self,
@@ -147,31 +154,35 @@ class VoiceSeriesService:
             get_voice_project_workflow_service,
         )
 
-        wf_service = get_voice_project_workflow_service()
-        proj_store = get_voice_project_store()
+        wf_service = self._wf_service or get_voice_project_workflow_service()
+        proj_store = self._proj_store or get_voice_project_store()
 
         for ep in episodes:
             if ep.workflow_id:
                 try:
                     wf = wf_service.store.get_workflow(ep.workflow_id)
                     if wf and wf.human_action:
-                        # Extract master_wav sha256 if available
-                        master_path = proj_store.get_project_dir(ep.project_id) / "mix" / "master.wav"
-                        sha = None
-                        if master_path.exists():
-                            from services.voice_project_service import compute_file_sha256
-                            sha = compute_file_sha256(master_path)
+                        # Extract authoritative sha256 from human_action items or fallback to disk
+                        items = wf.human_action.get("items") or []
+                        item_sha = items[0].get("sha256") if items else None
+                        item_artifact_id = items[0].get("artifact_id") if items else "master_wav"
+
+                        if not item_sha:
+                            master_path = proj_store.get_project_dir(ep.project_id) / "mix" / "master.wav"
+                            if master_path.exists():
+                                from services.voice_project_service import compute_file_sha256
+                                item_sha = compute_file_sha256(master_path)
 
                         actions.append(
                             SeriesHumanAction(
                                 episode_id=ep.episode_id,
                                 project_id=ep.project_id,
-                                action_type=wf.human_action.get("type", "approval_required"),
+                                action_type=wf.human_action.get("action_type") or wf.human_action.get("type", "approval_required"),
                                 reason=wf.human_action.get("reason", "Final review required"),
-                                items=wf.human_action.get("items", []),
-                                available_options=wf.human_action.get("options", ["approve", "reject"]),
-                                artifact_id="master_wav",
-                                artifact_sha256=sha,
+                                items=items,
+                                available_options=wf.human_action.get("available_options") or wf.human_action.get("options", ["approve", "reject"]),
+                                artifact_id=item_artifact_id or "master_wav",
+                                artifact_sha256=item_sha,
                             )
                         )
                 except Exception:

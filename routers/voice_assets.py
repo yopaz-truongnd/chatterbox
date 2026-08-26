@@ -24,6 +24,7 @@ from services.asset_library_models import (
     LibraryAsset,
 )
 from services.asset_library_service import get_asset_library_service
+from services.asset_library_store import get_asset_library_store
 from services.asset_matching_service import get_asset_matching_service
 
 router = APIRouter(prefix="/api/v1/voice-assets", tags=["voice-assets"])
@@ -118,7 +119,7 @@ def scan_directory(req: ScanRequest):
 def match_assets(req: MatchRequest):
     """Find and rank library assets matching the given semantic request."""
     matching_svc = get_asset_matching_service()
-    return matching_svc.match_assets(
+    results = matching_svc.match_assets(
         request_intents=req.intents,
         category=req.category,
         mood=req.mood,
@@ -128,6 +129,10 @@ def match_assets(req: MatchRequest):
         story_context=req.story_context,
         top_k=req.top_k,
     )
+    store = get_asset_library_store()
+    for r in results:
+        store.update_usage(r.asset_id)
+    return results
 
 
 @router.post("/{asset_id}/disable", response_model=LibraryAsset, summary="Disable an asset")

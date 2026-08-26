@@ -324,7 +324,7 @@ def recover_on_startup(
                 disk_hash = compute_file_sha256(full_path)
                 if disk_hash != stored_hash:
                     logger.warning(
-                        "Project '%s' artifact '%s' hash mismatch — flagging stale.",
+                        "Project '%s' artifact '%s' hash mismatch — flagging stale and persisting error state.",
                         project_id,
                         artifact_key,
                     )
@@ -338,6 +338,12 @@ def recover_on_startup(
                             "reason": "sha256_mismatch",
                         }
                     )
+                    # Persist stale artifact detection into project state
+                    try:
+                        state.error = f"Stale artifact detected: '{artifact_key}' disk hash mismatch. Re-run planning/rendering."
+                        project_store.save_project_state(state)
+                    except Exception as save_exc:
+                        logger.warning("Failed to save project state for '%s': %s", project_id, save_exc)
 
             # 2. Clean orphaned pending audio files
             pending_dir = proj_dir / "audio" / "pending"

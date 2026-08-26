@@ -83,21 +83,18 @@ def _detect_format_from_magic(file_path: Path) -> str | None:
 
 def _read_audio_metadata(file_path: Path, fmt: str) -> tuple[float, int, int]:
     """Return (duration_ms, sample_rate, channels) for the given audio file."""
-    duration_ms = 0.0
-    sample_rate = 44100
-    channels = 2
-
     if fmt == "wav":
         try:
             with wave.open(str(file_path), "rb") as wf:
                 channels = wf.getnchannels()
                 sample_rate = wf.getframerate()
                 frames = wf.getnframes()
-                if sample_rate > 0:
-                    duration_ms = round((frames / float(sample_rate)) * 1000, 2)
+                if sample_rate <= 0:
+                    raise ValueError("Invalid sample rate in WAV file.")
+                duration_ms = round((frames / float(sample_rate)) * 1000, 2)
             return duration_ms, sample_rate, channels
-        except Exception:
-            pass
+        except Exception as exc:
+            raise ValueError(f"WAV file is not readable or corrupted: {file_path}: {exc}") from exc
 
     # Try audioread if available (mp3 / flac / etc.)
     try:
@@ -107,15 +104,11 @@ def _read_audio_metadata(file_path: Path, fmt: str) -> tuple[float, int, int]:
             duration_ms = round(af.duration * 1000, 2)
             sample_rate = af.samplerate
             channels = af.channels
+            if duration_ms <= 0:
+                raise ValueError("Zero or invalid audio duration.")
             return duration_ms, sample_rate, channels
-    except Exception:
-        pass
-
-    # Fallback: estimate from file size assuming 16-bit 44.1 kHz stereo
-    size = file_path.stat().st_size if file_path.exists() else 0
-    if size > 44:
-        duration_ms = round(((size - 44) / (44100 * 2 * 2)) * 1000, 2)
-    return max(500.0, duration_ms), sample_rate, channels
+    except Exception as exc:
+        raise ValueError(f"Audio file is not readable or corrupted ({fmt}): {file_path}: {exc}") from exc
 
 
 def _make_permitted_roots() -> list[Path]:
@@ -285,7 +278,14 @@ class AssetLibraryService:
             )
 
         # -- Extract audio metadata
-        duration_ms, sample_rate, channels = _read_audio_metadata(abs_path, fmt)
+        try:
+            duration_ms, sample_rate, channels = _read_audio_metadata(abs_path, fmt)
+        except Exception as exc:
+            return AssetIngestResult(
+                asset_id="",
+                status="rejected",
+                reason=f"Failed to read audio metadata: {exc}",
+            )
 
         # -- Build asset
         asset_id = metadata.get("asset_id") or _make_asset_id()

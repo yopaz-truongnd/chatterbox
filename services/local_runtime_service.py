@@ -267,7 +267,7 @@ class LocalRuntimeService:
         # 5. Model checkpoint presence
         models_dir = Path(os.environ.get("HF_HUB_CACHE", "models"))
         cached = [m for m in MODEL_REGISTRY if is_model_cached(m, models_dir)]
-        if not cached:
+        if not cached and normalized_provider in ("local", "chatterbox-job", "in-process", "job"):
             issues.append(PreflightIssue(
                 severity="error",
                 code="NO_MODELS_CACHED",
@@ -275,8 +275,33 @@ class LocalRuntimeService:
                     "No model checkpoints found in the local models/ directory. "
                     "Download at least one model (e.g. 'nano') before running production."
                 ),
-                field=None,
+                field="model",
             ))
+
+        # Check character / voice reference files if project state has characters
+        try:
+            state = store.get_project_state(project_id)
+            plan_path = store.get_project_dir(project_id) / state.artifacts.voice_plan
+            if plan_path.exists():
+                import yaml
+                with open(plan_path, "r", encoding="utf-8") as pf:
+                    pdata = yaml.safe_load(pf) or {}
+                # Check character voice reference files
+                for char in pdata.get("characters", []):
+                    ref_audio = char.get("reference_audio")
+                    if ref_audio:
+                        ref_p = Path(ref_audio)
+                        if not ref_p.is_absolute():
+                            ref_p = store.get_project_dir(project_id) / ref_p
+                        if not ref_p.exists():
+                            issues.append(PreflightIssue(
+                                severity="warning",
+                                code="CHARACTER_REFERENCE_MISSING",
+                                message=f"Reference audio for character '{char.get('name')}' not found at {ref_p.name}.",
+                                field="characters",
+                            ))
+        except Exception:
+            pass
 
         # 6. Provider-specific checks
         normalized_provider = (provider or "local").lower().strip()

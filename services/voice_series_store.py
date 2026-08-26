@@ -7,10 +7,18 @@ under projects/series/{series_id}/.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import yaml
 
 from services.voice_series_models import VoiceSeries, VoiceSeriesEpisode
+
+_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{1,128}$')
+
+
+def _validate_id(id_: str, label: str) -> None:
+    if not _ID_RE.match(id_):
+        raise ValueError(f"Invalid {label}: {id_!r}. Only a-z A-Z 0-9 _ - allowed.")
 
 
 class VoiceSeriesStore:
@@ -28,6 +36,7 @@ class VoiceSeriesStore:
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_series_dir(self, series_id: str) -> Path:
+        _validate_id(series_id, "series_id")
         return self.root_dir / series_id
 
     def _get_episodes_dir(self, series_id: str) -> Path:
@@ -67,6 +76,8 @@ class VoiceSeriesStore:
         return results
 
     def save_episode(self, episode: VoiceSeriesEpisode) -> None:
+        _validate_id(episode.series_id, "series_id")
+        _validate_id(episode.episode_id, "episode_id")
         ep_dir = self._get_episodes_dir(episode.series_id)
         ep_dir.mkdir(parents=True, exist_ok=True)
         file_path = ep_dir / f"{episode.episode_id}.yaml"
@@ -77,6 +88,8 @@ class VoiceSeriesStore:
         tmp_path.replace(file_path)
 
     def get_episode(self, series_id: str, episode_id: str) -> VoiceSeriesEpisode | None:
+        _validate_id(series_id, "series_id")
+        _validate_id(episode_id, "episode_id")
         file_path = self._get_episodes_dir(series_id) / f"{episode_id}.yaml"
         if not file_path.exists():
             return None
