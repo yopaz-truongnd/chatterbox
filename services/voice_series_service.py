@@ -122,6 +122,12 @@ class VoiceSeriesService:
             episode_number=num,
             title=title,
             status=EpisodeStatus.PENDING,
+            production_snapshot={
+                "voice_bible": series.voice_bible.model_dump(mode="json"),
+                "pronunciation_bible": series.pronunciation_bible.model_dump(mode="json"),
+                "sound_bible": series.sound_bible.model_dump(mode="json"),
+                "production_policy": series.production_policy.model_dump(mode="json"),
+            },
         )
         self.store.save_episode(episode)
 

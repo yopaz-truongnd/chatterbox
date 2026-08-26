@@ -101,11 +101,11 @@ def handle_series_produce(args: dict[str, Any], request_fn: Callable | None = No
     try:
         from services.voice_series_operations import VoiceSeriesOperations
         ops = VoiceSeriesOperations()
-        summary = ops.produce_series(
+        operation = ops.submit_series(
             series_id=series_id,
             episode_ids=args.get("episode_ids"),
         )
-        return _success(summary.model_dump(mode="json"))
+        return _success(operation.to_dict())
     except Exception as exc:
         return _error(f"Failed to produce series: {exc}", code="SERIES_PRODUCE_FAILED")
 
@@ -132,9 +132,12 @@ def handle_series_cancel(args: dict[str, Any], request_fn: Callable | None = Non
     if not series_id:
         return _error("series_id is required", code="INVALID_ARGUMENTS")
     try:
-        from services.voice_series_service import VoiceSeriesService
-        service = VoiceSeriesService()
-        series = service.get_series(series_id)
-        return _success({"series_id": series_id, "status": "cancelling", "message": "Cancellation requested."})
+        from services.voice_series_operations import VoiceSeriesOperations
+        cancelled = VoiceSeriesOperations().cancel_series(series_id)
+        return _success({
+            "series_id": series_id,
+            "status": "cancelling" if cancelled else "idle",
+            "cancelled": cancelled,
+        })
     except Exception as exc:
         return _error(f"Failed to cancel series: {exc}", code="SERIES_CANCEL_FAILED")

@@ -65,6 +65,7 @@ class SeriesSoundBible(BaseModel):
     ambience_palette: list[str] = Field(default_factory=list)
     sfx_palette: list[str] = Field(default_factory=list)
     mastering_profile: str = "storytelling"
+    mixing_profile: str = "storytelling"
     loudness_target_lufs: float = -23.0
     output_formats: list[str] = Field(default_factory=lambda: ["wav"])
 
@@ -130,6 +131,7 @@ class VoiceSeriesEpisode(BaseModel):
     review_required: bool = False
     published_at: str | None = None
     error: dict[str, Any] | None = None
+    production_snapshot: dict[str, Any] = Field(default_factory=dict)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

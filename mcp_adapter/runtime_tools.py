@@ -58,6 +58,8 @@ def handle_runtime_preflight(args: dict[str, Any], request_fn: Callable | None =
             project_id=project_id,
             provider=provider,
             requested_formats=requested_formats,
+            selected_model=args.get("selected_model"),
+            reference_voice=args.get("reference_voice"),
         )
         has_errors = any(i.severity == "error" for i in issues)
         has_warnings = any(i.severity == "warning" for i in issues)

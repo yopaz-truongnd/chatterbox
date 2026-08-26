@@ -20,7 +20,12 @@ import uuid
 import yaml
 
 from services.voice_project_models import InvalidProjectStateError
-from services.voice_project_operations import CancellationToken, OperationStatus
+from services.voice_project_operations import (
+    CancellationToken,
+    OperationAlreadyRunningError,
+    OperationStatus,
+    VoiceProjectOperationManager,
+)
 from services.voice_project_workflow_models import WorkflowPolicy
 from services.voice_series_models import (
     EpisodeStatus,
@@ -50,6 +55,7 @@ class VoiceSeriesOperations:
         proj_service: Any | None = None,
         wf_service: Any | None = None,
         event_store: Any | None = None,
+        operation_manager: VoiceProjectOperationManager | None = None,
     ) -> None:
         self.store = store or get_voice_series_store()
         self.service = service or VoiceSeriesService(store=self.store)
@@ -57,9 +63,30 @@ class VoiceSeriesOperations:
         self._proj_service = proj_service
         self._wf_service = wf_service
         self._event_store = event_store
+        self._operation_manager = operation_manager
+
+    @staticmethod
+    def _operation_scope(series_id: str) -> str:
+        return f"series_{series_id}"
+
+    def _operations(self) -> VoiceProjectOperationManager:
+        if self._operation_manager is None:
+            from services.voice_project_dependencies import get_voice_project_operation_manager
+            self._operation_manager = get_voice_project_operation_manager()
+        return self._operation_manager
+
+    def submit_series(self, series_id: str, episode_ids: list[str] | None = None):
+        self.service.get_series(series_id)
+        return self._operations().submit(
+            self._operation_scope(series_id), "produce_series",
+            self.produce_series, series_id, episode_ids,
+        )
 
     def cancel_series(self, series_id: str) -> bool:
         """Cooperatively cancel any running batch production for the series."""
+        active = self._operations().list_operations(project_id=self._operation_scope(series_id), limit=1)
+        if active and active[0].status in (OperationStatus.QUEUED, OperationStatus.RUNNING, OperationStatus.CANCELLING):
+            return self._operations().cancel_operation(active[0].id)[0]
         with _tokens_lock:
             token = _active_series_tokens.get(series_id)
             if token is not None:
@@ -137,6 +164,8 @@ class VoiceSeriesOperations:
 
         token = cancellation_token or CancellationToken()
         with _tokens_lock:
+            if series_id in _active_series_tokens:
+                raise OperationAlreadyRunningError(series_id, "direct", "produce_series")
             _active_series_tokens[series_id] = token
 
         op_id = f"sop_{uuid.uuid4().hex[:10]}"
@@ -168,10 +197,17 @@ class VoiceSeriesOperations:
         # Build policy from series bibles
         policy = WorkflowPolicy(
             provider=series.voice_bible.provider,
-            mixing_profile=series.sound_bible.mastering_profile,
+            mixing_profile=series.sound_bible.mixing_profile,
             mastering_profile=series.sound_bible.mastering_profile,
             output_formats=series.sound_bible.output_formats,
             require_final_approval=series.production_policy.require_human_approval,
+            model=series.voice_bible.model,
+            narrator_character=series.voice_bible.narrator_character,
+            narrator_reference_voice=series.voice_bible.narrator_reference_voice,
+            voice_style=series.voice_bible.voice_style,
+            ambience_palette=series.sound_bible.ambience_palette,
+            sfx_palette=series.sound_bible.sfx_palette,
+            loudness_target_lufs=series.sound_bible.loudness_target_lufs,
         )
 
         def produce_single_episode(ep: VoiceSeriesEpisode) -> dict[str, Any]:
@@ -193,7 +229,11 @@ class VoiceSeriesOperations:
 
             # 1. Mandatory Preflight Gate before scheduling
             preflight_issues = runtime_svc.run_production_preflight(
-                ep.project_id, provider=series.voice_bible.provider
+                ep.project_id,
+                provider=series.voice_bible.provider,
+                requested_formats=series.sound_bible.output_formats,
+                selected_model=series.voice_bible.model,
+                reference_voice=series.voice_bible.narrator_reference_voice,
             )
             preflight_errors = [i for i in preflight_issues if i.severity == "error"]
             if preflight_errors:
@@ -224,8 +264,7 @@ class VoiceSeriesOperations:
             try:
                 # Load project source script
                 state = proj_store.get_project_state(ep.project_id)
-                script_path = proj_store.get_project_dir(ep.project_id) / "source-script.txt"
-                script_text = script_path.read_text(encoding="utf-8") if script_path.exists() else ""
+                script_text = proj_store.read_source_script(ep.project_id)
 
                 # Apply pronunciation overrides if any
                 if series.pronunciation_bible.overrides:
@@ -340,6 +379,12 @@ class VoiceSeriesOperations:
                     except Exception as exc:
                         ep = future_to_ep[future]
                         results.append({"episode_id": ep.episode_id, "status": "failed", "error": str(exc)})
+                    if progress_callback:
+                        progress_callback(
+                            "series_production",
+                            len(results) / len(target_episodes) * 100.0,
+                            {"completed_episodes": len(results), "total_episodes": len(target_episodes)},
+                        )
         finally:
             with _tokens_lock:
                 _active_series_tokens.pop(series_id, None)

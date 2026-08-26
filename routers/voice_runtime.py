@@ -22,6 +22,8 @@ _runtime_service = LocalRuntimeService()
 class PreflightRequest(BaseModel):
     provider: str = "local"
     requested_formats: list[str] = Field(default_factory=lambda: ["wav"])
+    selected_model: str | None = None
+    reference_voice: str | None = None
 
 
 class PreflightResponse(BaseModel):
@@ -50,6 +52,8 @@ def run_production_preflight(
         project_id=project_id,
         provider=body.provider,
         requested_formats=body.requested_formats,
+        selected_model=body.selected_model,
+        reference_voice=body.reference_voice,
     )
     has_errors = any(i.severity == "error" for i in issues)
     has_warnings = any(i.severity == "warning" for i in issues)

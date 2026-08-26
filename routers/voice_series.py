@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services.voice_project_models import InvalidProjectStateError, VoiceProjectNotFound
+from services.voice_project_operations import OperationAlreadyRunningError
 from services.voice_series_models import (
     SeriesHumanAction,
     SeriesProductionSummary,
@@ -111,13 +112,16 @@ def list_episodes(series_id: str) -> list[VoiceSeriesEpisode]:
         raise HTTPException(status_code=404, detail=str(exc))
 
 
-@router.post("/{series_id}/produce", response_model=SeriesProductionSummary)
-def produce_series(series_id: str, body: ProduceSeriesRequest = Body(default_factory=ProduceSeriesRequest)) -> SeriesProductionSummary:
+@router.post("/{series_id}/produce", status_code=202)
+def produce_series(series_id: str, body: ProduceSeriesRequest = Body(default_factory=ProduceSeriesRequest)) -> dict[str, Any]:
     try:
-        return _series_ops.produce_series(series_id=series_id, episode_ids=body.episode_ids)
+        op = _series_ops.submit_series(series_id=series_id, episode_ids=body.episode_ids)
+        return op.to_dict()
     except VoiceProjectNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except InvalidProjectStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except OperationAlreadyRunningError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
 

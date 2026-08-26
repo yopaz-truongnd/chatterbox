@@ -90,35 +90,28 @@ def _atomic_append_and_rotate(path: Path, record: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     file_lock = _get_file_lock(path)
     with file_lock:
-        with open(path, "a+", encoding="utf-8") as fh:
-            fcntl.flock(fh, fcntl.LOCK_EX)
+        lock_path = path.with_suffix(path.suffix + ".lock")
+        with open(lock_path, "a", encoding="utf-8") as lock_fh:
+            fcntl.flock(lock_fh, fcntl.LOCK_EX)
             try:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-                fh.flush()
-                os.fsync(fh.fileno())
-            finally:
-                fcntl.flock(fh, fcntl.LOCK_UN)
-
-        # Check rotation under thread lock
-        events = _load_events_from_file(path)
-        if len(events) > _ROTATE_THRESHOLD:
-            kept = events[-_MAX_EVENTS:]
-            tmp_path = path.with_suffix(".tmp_rotate")
-            try:
-                with open(tmp_path, "w", encoding="utf-8") as fh:
-                    for evt in kept:
-                        fh.write(json.dumps(evt, ensure_ascii=False) + "\n")
+                with open(path, "a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(record, ensure_ascii=False) + "\n")
                     fh.flush()
                     os.fsync(fh.fileno())
-                tmp_path.replace(path)
-                logger.info("Rotated event log %s: kept %d / %d events", path, len(kept), len(events))
-            except OSError as exc:
-                logger.warning("Failed to rotate event log %s: %s", path, exc)
-                if tmp_path.exists():
-                    try:
-                        tmp_path.unlink()
-                    except OSError:
-                        pass
+
+                events = _load_events_from_file(path)
+                if len(events) > _ROTATE_THRESHOLD:
+                    kept = events[-_MAX_EVENTS:]
+                    tmp_path = path.with_suffix(".tmp_rotate")
+                    with open(tmp_path, "w", encoding="utf-8") as fh:
+                        for evt in kept:
+                            fh.write(json.dumps(evt, ensure_ascii=False) + "\n")
+                        fh.flush()
+                        os.fsync(fh.fileno())
+                    tmp_path.replace(path)
+                    logger.info("Rotated event log %s: kept %d / %d events", path, len(kept), len(events))
+            finally:
+                fcntl.flock(lock_fh, fcntl.LOCK_UN)
 
 
 # ==========================================

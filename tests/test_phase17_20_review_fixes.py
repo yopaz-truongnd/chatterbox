@@ -4,8 +4,10 @@ import os
 from pathlib import Path
 import tempfile
 import threading
+import time
 import unittest
 import wave
+from unittest import mock
 
 from services.asset_library_models import AssetCategory, LibraryAsset
 from services.asset_library_service import AssetLibraryService
@@ -15,6 +17,7 @@ from services.production_event_store import ProductionEventStore
 from services.production_health_service import recover_on_startup
 from services.voice_project_models import VoiceProjectNotFound
 from services.voice_project_service import VoiceProjectService
+from services.voice_project_operations import VoiceProjectOperationManager, OperationStatus
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_workflow import VoiceProjectWorkflowService
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
@@ -52,6 +55,9 @@ class TestPhase17to20ReviewFixes(unittest.TestCase):
         self.wf_store = VoiceProjectWorkflowStore(root_dir=self.root / "workflows")
         self.asset_store = AssetLibraryStore(index_path=self.root / "assets" / "library-index.yaml")
         self.asset_service = AssetLibraryService(store=self.asset_store, permitted_roots=[self.root])
+        self.operation_manager = VoiceProjectOperationManager(
+            max_workers=2, operations_dir=self.root / "operations"
+        )
 
         self.provider = FakeTTSProvider()
         self.proj_service = VoiceProjectService(
@@ -75,6 +81,7 @@ class TestPhase17to20ReviewFixes(unittest.TestCase):
             proj_service=self.proj_service,
             wf_service=self.wf_service,
             event_store=self.event_store,
+            operation_manager=self.operation_manager,
         )
 
     def tearDown(self):
@@ -126,6 +133,20 @@ class TestPhase17to20ReviewFixes(unittest.TestCase):
 
         assets = self.asset_store.list_assets()
         self.assertEqual(len(assets), 15)
+
+    def test_concurrent_duplicate_content_registers_once(self):
+        wav = self.root / "same.wav"
+        _make_dummy_wav(wav)
+        results = []
+        threads = [threading.Thread(
+            target=lambda: results.append(self.asset_service.ingest_file(wav, AssetCategory.SFX))
+        ) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(len(self.asset_store.list_assets()), 1)
+        self.assertEqual(sum(r.status == "registered" for r in results), 1)
 
     # -------------------------------------------------------------
     # Finding 9: Corrupted Audio with Valid Magic Header Rejection
@@ -188,6 +209,8 @@ class TestPhase17to20ReviewFixes(unittest.TestCase):
         new_state = self.proj_store.get_project_state(pid)
         self.assertIsNotNone(new_state.error)
         self.assertIn("Stale artifact detected", new_state.error)
+        self.assertEqual(new_state.stage.value, "NEW")
+        self.assertEqual(new_state.artifacts.voice_plan_sha256, "")
 
     # -------------------------------------------------------------
     # Finding 6: Review Queue Authoritative SHA & Keys
@@ -250,3 +273,49 @@ class TestPhase17to20ReviewFixes(unittest.TestCase):
         # Cancel when not running returns False
         cancelled_idle = self.series_ops.cancel_series(series.series_id)
         self.assertFalse(cancelled_idle)
+
+    def test_series_submit_is_persisted_and_rejects_parallel_mutation(self):
+        series = self.series_service.create_series(title="Persisted Series")
+        started = threading.Event()
+        release = threading.Event()
+
+        def slow_produce(series_id, episode_ids=None, cancellation_token=None, progress_callback=None):
+            started.set()
+            release.wait(2)
+            return {"series_id": series_id}
+
+        with mock.patch.object(self.series_ops, "produce_series", side_effect=slow_produce):
+            first = self.series_ops.submit_series(series.series_id)
+            self.assertTrue(started.wait(1))
+            with self.assertRaises(Exception):
+                self.series_ops.submit_series(series.series_id)
+            self.assertTrue((self.root / "operations" / f"{first.id}.yaml").exists())
+            release.set()
+            for _ in range(100):
+                current = self.operation_manager.get_operation(first.id)
+                if current and current.status == OperationStatus.COMPLETED:
+                    break
+                time.sleep(0.01)
+        self.assertEqual(current.status, OperationStatus.COMPLETED)
+
+    def test_series_preflight_receives_output_formats(self):
+        series = self.series_service.create_series(
+            title="MP3 preflight",
+            voice_bible=SeriesVoiceBible(provider="fake"),
+        )
+        series.sound_bible.output_formats = ["wav", "mp3"]
+        self.series_store.save_series(series)
+        pid = "proj_mp3_preflight"
+        self.proj_service.create_project("Episode.", project_id=pid)
+        self.series_service.add_episode(series.series_id, pid, "Episode", 1)
+        captured = []
+
+        def preflight(*args, **kwargs):
+            captured.append(kwargs.get("requested_formats"))
+            from services.local_runtime_models import PreflightIssue
+            return [PreflightIssue(severity="error", code="FFMPEG_MISSING", message="missing")]
+
+        with mock.patch("services.local_runtime_service.LocalRuntimeService.run_production_preflight", side_effect=preflight):
+            summary = self.series_ops.produce_series(series.series_id, export_root=self.root / "exports")
+        self.assertEqual(captured, [["wav", "mp3"]])
+        self.assertEqual(summary.failed, 1)

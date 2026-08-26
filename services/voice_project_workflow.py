@@ -100,6 +100,9 @@ class VoiceProjectWorkflowService:
             suggested_action="Executing workflow...",
         )
         self.store.save_workflow(state)
+        self._emit_production_event(
+            state, "workflow_started", "Voice production workflow started.", status=state.status.value
+        )
 
         # Run execution loop asynchronously in background thread
         threading.Thread(
@@ -298,6 +301,20 @@ class VoiceProjectWorkflowService:
                 break
         fresh_state.updated_at = datetime.now(timezone.utc).isoformat()
         self.store.save_workflow(fresh_state)
+        event_type = {
+            "running": "step_started",
+            "completed": "step_completed",
+            "failed": "step_failed",
+        }.get(status)
+        if event_type:
+            self._emit_production_event(
+                fresh_state,
+                event_type,
+                f"Workflow step '{step_name}' {status}.",
+                step=step_name,
+                status=status,
+                error=error,
+            )
 
     def _run_workflow_op(
         self,
@@ -391,7 +408,11 @@ class VoiceProjectWorkflowService:
             return
 
         try:
-            service = get_voice_project_service(provider_name=state.policy.provider)
+            service = get_voice_project_service(
+                provider_name=state.policy.provider,
+                model=state.policy.model,
+                voice=state.policy.narrator_character,
+            )
             project_id = state.project_id
 
             # 1. Step: CREATE_PROJECT
@@ -420,6 +441,16 @@ class VoiceProjectWorkflowService:
                         "plan",
                         service.plan,
                         project_id,
+                        config={
+                            "voice": {
+                                "profile": state.policy.narrator_character or "mythology_narrator_male",
+                                "provider": state.policy.provider,
+                                "model": state.policy.model or "auto",
+                            },
+                            "global_direction": {
+                                "tone": state.policy.voice_style or "mysterious",
+                            },
+                        },
                     )
                     if plan_res is None:
                         return
@@ -466,6 +497,10 @@ class VoiceProjectWorkflowService:
                             step.error = {"code": "RESOURCE_BLOCKED", "message": "Required resources missing"}
                             break
                     self.store.save_workflow(state)
+                    self._emit_production_event(
+                        state, "human_action_required", "Required resources need human action.",
+                        step=WorkflowStepName.CHECK_RESOURCES.value,
+                    )
                     return  # Pause workflow until user/agent resumes
 
                 self._mark_step(
@@ -519,6 +554,10 @@ class VoiceProjectWorkflowService:
                             step.error = {"code": "REVIEW_REQUIRED"}
                             break
                     self.store.save_workflow(state)
+                    self._emit_production_event(
+                        state, "human_action_required", "Narration requires human acceptance.",
+                        step=WorkflowStepName.RENDER.value,
+                    )
                     return
 
                 if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
@@ -613,6 +652,10 @@ class VoiceProjectWorkflowService:
                 }
                 state.suggested_action = "Listen to and explicitly approve the master audio."
                 self.store.save_workflow(state)
+                self._emit_production_event(
+                    state, "approval_required", "Master audio requires final approval.",
+                    step=WorkflowStepName.MASTER.value,
+                )
                 return
 
             # 8. Step: EXPORT (via OperationManager)
@@ -660,3 +703,20 @@ class VoiceProjectWorkflowService:
             state.suggested_action = f"Workflow failed: {str(exc)}"
             state.updated_at = datetime.now(timezone.utc).isoformat()
             self.store.save_workflow(state)
+    def _emit_production_event(
+        self, state: VoiceWorkflowState, event_type: str, message: str, **details: Any
+    ) -> None:
+        try:
+            from services.production_event_models import ProductionEvent, ProductionEventType
+            from services.production_event_store import get_production_event_store
+            get_production_event_store().append_project_event(ProductionEvent(
+                project_id=state.project_id,
+                workflow_id=state.workflow_id,
+                event_type=ProductionEventType(event_type),
+                step=details.pop("step", None),
+                status=details.pop("status", None),
+                message=message,
+                details=details,
+            ))
+        except Exception as exc:
+            logger.warning("Could not persist workflow event '%s': %s", event_type, exc)

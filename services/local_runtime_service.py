@@ -25,6 +25,7 @@ from services.model_registry import (
     MODEL_REGISTRY,
     is_model_cached,
     is_multilingual_cached,
+    resolve_model_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -166,6 +167,8 @@ class LocalRuntimeService:
         project_id: str,
         provider: str = "local",
         requested_formats: list[str] | None = None,
+        selected_model: str | None = None,
+        reference_voice: str | None = None,
     ) -> list[PreflightIssue]:
         """Check all preconditions before starting a production workflow.
 
@@ -184,6 +187,7 @@ class LocalRuntimeService:
         """
         issues: list[PreflightIssue] = []
         requested_formats = [f.lower() for f in (requested_formats or [])]
+        normalized_provider = (provider or "local").lower().strip()
 
         # 1. Project directory existence
         from services.voice_project_dependencies import get_voice_project_store
@@ -277,6 +281,32 @@ class LocalRuntimeService:
                 ),
                 field="model",
             ))
+        if selected_model and normalized_provider in ("local", "chatterbox-job", "in-process", "job"):
+            model_id = resolve_model_id(selected_model)
+            if model_id not in MODEL_REGISTRY or not is_model_cached(model_id, models_dir):
+                issues.append(PreflightIssue(
+                    severity="error",
+                    code="MODEL_UNAVAILABLE",
+                    message=f"Selected local model '{selected_model}' is not cached.",
+                    field="model",
+                ))
+
+        if reference_voice:
+            ref_path = Path(reference_voice).expanduser()
+            if not ref_path.exists() or not ref_path.is_file():
+                issues.append(PreflightIssue(
+                    severity="error",
+                    code="CHARACTER_REFERENCE_MISSING",
+                    message=f"Configured narrator reference voice '{ref_path.name}' is unavailable.",
+                    field="reference_voice",
+                ))
+
+        for asset_root in [Path(p) for p in os.getenv("ASSET_EXTRA_ROOTS", "").split(os.pathsep) if p]:
+            if not asset_root.exists() or not os.access(asset_root, os.R_OK):
+                issues.append(PreflightIssue(
+                    severity="error", code="ASSET_ROOT_UNREADABLE",
+                    message=f"Configured asset root '{asset_root.name}' is not readable.", field="asset_roots",
+                ))
 
         # Check character / voice reference files if project state has characters
         try:
@@ -304,8 +334,6 @@ class LocalRuntimeService:
             pass
 
         # 6. Provider-specific checks
-        normalized_provider = (provider or "local").lower().strip()
-
         if normalized_provider in ("local", "chatterbox-job", "in-process", "job"):
             # 7. JobManager availability
             jm = _get_job_manager()

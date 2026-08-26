@@ -311,8 +311,15 @@ class AssetLibraryService:
             attribution=metadata.get("attribution"),
         )
 
-        self._store.save_asset(asset)
-        return AssetIngestResult(asset_id=asset_id, status="registered")
+        saved, created = self._store.save_if_sha256_absent(asset)
+        if not created:
+            return AssetIngestResult(
+                asset_id=saved.asset_id,
+                status="duplicate",
+                existing_asset_id=saved.asset_id,
+                reason=f"Duplicate of existing asset '{saved.asset_id}'.",
+            )
+        return AssetIngestResult(asset_id=saved.asset_id, status="registered")
 
     def scan_directory(
         self,
@@ -399,7 +406,7 @@ class AssetLibraryService:
         beat_id: str | None = None,
     ) -> LibraryAsset | None:
         """Record that an asset was used in a project/beat. Increments usage_count."""
-        return self._store.update_usage(asset_id)
+        return self._store.update_usage(asset_id, project_id=project_id, beat_id=beat_id)
 
 
 # Module-level singleton

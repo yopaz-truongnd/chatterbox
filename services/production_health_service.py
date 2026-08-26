@@ -295,6 +295,7 @@ def recover_on_startup(
     report["projects_scanned"] = len(all_projects)
 
     from services.voice_project_models import compute_file_sha256
+    from services.render_models import ProjectStatus
 
     for project_id in all_projects:
         try:
@@ -341,6 +342,11 @@ def recover_on_startup(
                     # Persist stale artifact detection into project state
                     try:
                         state.error = f"Stale artifact detected: '{artifact_key}' disk hash mismatch. Re-run planning/rendering."
+                        state.stage = ProjectStatus.NEW
+                        state.last_stable_stage = ProjectStatus.NEW
+                        state.artifacts.voice_plan_sha256 = ""
+                        state.artifacts.resource_report_sha256 = ""
+                        state.artifacts.render_manifest_sha256 = ""
                         project_store.save_project_state(state)
                     except Exception as save_exc:
                         logger.warning("Failed to save project state for '%s': %s", project_id, save_exc)

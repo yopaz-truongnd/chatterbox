@@ -70,3 +70,23 @@ class TestVoiceProductionPreflight(unittest.TestCase):
             self.runtime_service.run_production_preflight(pid, provider="fake")
             mock_url.assert_not_called()
             mock_conn.assert_not_called()
+
+    def test_missing_local_model_returns_structured_error(self):
+        pid = self._create_project("missing_local_model")
+        with mock.patch("services.voice_project_dependencies.get_voice_project_store", return_value=self.store), \
+             mock.patch("services.local_runtime_service.is_model_cached", return_value=False), \
+             mock.patch("services.local_runtime_service._get_job_manager", return_value=mock.Mock(_running=True)):
+            issues = self.runtime_service.run_production_preflight(pid, provider="local")
+        self.assertTrue(any(i.code == "NO_MODELS_CACHED" for i in issues))
+
+    def test_selected_local_model_must_be_cached(self):
+        pid = self._create_project("selected_model_missing")
+        def cached(model_id, _models_dir):
+            return model_id == "nano"
+        with mock.patch("services.voice_project_dependencies.get_voice_project_store", return_value=self.store), \
+             mock.patch("services.local_runtime_service.is_model_cached", side_effect=cached), \
+             mock.patch("services.local_runtime_service._get_job_manager", return_value=mock.Mock(_running=True)):
+            issues = self.runtime_service.run_production_preflight(
+                pid, provider="local", selected_model="turbo"
+            )
+        self.assertTrue(any(i.code == "MODEL_UNAVAILABLE" for i in issues))

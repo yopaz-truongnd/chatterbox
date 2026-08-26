@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
+import fcntl
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -67,14 +69,21 @@ def _dict_to_asset(d: dict[str, Any]) -> LibraryAsset:
     return LibraryAsset.model_validate(d)
 
 
-import threading
+_INDEX_LOCKS: dict[str, threading.RLock] = {}
+_INDEX_LOCKS_GUARD = threading.Lock()
+
+
+def _index_lock(path: Path) -> threading.RLock:
+    key = str(path.resolve())
+    with _INDEX_LOCKS_GUARD:
+        return _INDEX_LOCKS.setdefault(key, threading.RLock())
 
 class AssetLibraryStore:
     """Thread-safe in-process asset library store backed by YAML."""
 
     def __init__(self, index_path: Path | None = None) -> None:
         self._index_path: Path = index_path or _get_index_path()
-        self._lock = threading.RLock()
+        self._lock = _index_lock(self._index_path)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -122,6 +131,24 @@ class AssetLibraryStore:
             self._save(data)
             return asset
 
+    def save_if_sha256_absent(self, asset: LibraryAsset) -> tuple[LibraryAsset, bool]:
+        """Atomically enforce content uniqueness across threads and processes."""
+        with self._lock:
+            lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(lock_path, "a", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    data = self._load()
+                    for item in data["assets"]:
+                        if item.get("sha256") == asset.sha256:
+                            return _dict_to_asset(item), False
+                    data["assets"].append(_asset_to_dict(asset))
+                    self._save(data)
+                    return asset, True
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
     def find_by_sha256(self, sha256: str) -> LibraryAsset | None:
         """Return the first asset matching a given SHA-256 hash, or None."""
         with self._lock:
@@ -147,7 +174,9 @@ class AssetLibraryStore:
                     return _dict_to_asset(data["assets"][i])
             return None
 
-    def update_usage(self, asset_id: str) -> LibraryAsset | None:
+    def update_usage(
+        self, asset_id: str, project_id: str | None = None, beat_id: str | None = None
+    ) -> LibraryAsset | None:
         """Increment usage_count and set last_used_at timestamp. Returns updated asset or None."""
         with self._lock:
             data = self._load()
@@ -156,6 +185,13 @@ class AssetLibraryStore:
                     data["assets"][i]["usage_count"] = item.get("usage_count", 0) + 1
                     data["assets"][i]["last_used_at"] = datetime.now(timezone.utc).isoformat()
                     data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    if project_id:
+                        ref = {"project_id": project_id}
+                        if beat_id:
+                            ref["beat_id"] = beat_id
+                        refs = data["assets"][i].setdefault("usage_references", [])
+                        if ref not in refs:
+                            refs.append(ref)
                     self._save(data)
                     return _dict_to_asset(data["assets"][i])
             return None

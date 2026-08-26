@@ -41,6 +41,7 @@ class LibraryAsset(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     usage_count: int = 0
     last_used_at: str | None = None
+    usage_references: list[dict[str, str]] = Field(default_factory=list)
     enabled: bool = True
 
 
