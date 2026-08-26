@@ -120,16 +120,23 @@ class AssetLibraryStore:
     def save_asset(self, asset: LibraryAsset) -> LibraryAsset:
         """Insert or update an asset by asset_id. Returns the saved asset."""
         with self._lock:
-            data = self._load()
-            assets = data["assets"]
-            for i, item in enumerate(assets):
-                if item.get("asset_id") == asset.asset_id:
-                    assets[i] = _asset_to_dict(asset)
+            lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(lock_path, "a", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    data = self._load()
+                    assets = data["assets"]
+                    for i, item in enumerate(assets):
+                        if item.get("asset_id") == asset.asset_id:
+                            assets[i] = _asset_to_dict(asset)
+                            self._save(data)
+                            return asset
+                    assets.append(_asset_to_dict(asset))
                     self._save(data)
                     return asset
-            assets.append(_asset_to_dict(asset))
-            self._save(data)
-            return asset
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def save_if_sha256_absent(self, asset: LibraryAsset) -> tuple[LibraryAsset, bool]:
         """Atomically enforce content uniqueness across threads and processes."""
@@ -165,14 +172,21 @@ class AssetLibraryStore:
     def disable_asset(self, asset_id: str) -> LibraryAsset | None:
         """Mark an asset as disabled. Returns the updated asset or None if not found."""
         with self._lock:
-            data = self._load()
-            for i, item in enumerate(data["assets"]):
-                if item.get("asset_id") == asset_id:
-                    data["assets"][i]["enabled"] = False
-                    data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
-                    self._save(data)
-                    return _dict_to_asset(data["assets"][i])
-            return None
+            lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(lock_path, "a", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    data = self._load()
+                    for i, item in enumerate(data["assets"]):
+                        if item.get("asset_id") == asset_id:
+                            data["assets"][i]["enabled"] = False
+                            data["assets"][i]["updated_at"] = datetime.now(timezone.utc).isoformat()
+                            self._save(data)
+                            return _dict_to_asset(data["assets"][i])
+                    return None
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def update_usage(
         self, asset_id: str, project_id: str | None = None, beat_id: str | None = None

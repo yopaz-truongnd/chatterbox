@@ -292,6 +292,8 @@ class VoiceProjectService:
         project_id: str,
         manifest_path: Path | str | None = None,
         allow_substitutions: bool = True,
+        ambience_palette: list[str] | None = None,
+        sfx_palette: list[str] | None = None,
     ) -> ResourceCheckResult:
         """Resolve requirements from Directed VoicePlan against Asset Library & Pronunciation Knowledge."""
         state = self.store.get_project_state(project_id)
@@ -322,6 +324,8 @@ class VoiceProjectService:
                     knowledge=pron_knowledge,
                     substitution_rules=sub_rules,
                     selection_rules=sel_rules,
+                    ambience_palette=ambience_palette,
+                    sfx_palette=sfx_palette,
                 )
                 overrides_path = proj_dir / "director-resource-overrides.yaml"
                 if overrides_path.exists():

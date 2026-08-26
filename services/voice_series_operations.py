@@ -30,8 +30,12 @@ from services.voice_project_workflow_models import WorkflowPolicy
 from services.voice_series_models import (
     EpisodeStatus,
     SeriesHumanAction,
+    SeriesPronunciationBible,
+    SeriesProductionPolicy,
     SeriesProductionSummary,
+    SeriesSoundBible,
     SeriesStatus,
+    SeriesVoiceBible,
     VoiceSeries,
     VoiceSeriesEpisode,
     make_safe_slug,
@@ -81,6 +85,20 @@ class VoiceSeriesOperations:
             self._operation_manager = get_voice_project_operation_manager()
         return self._operation_manager
 
+    @staticmethod
+    def _episode_settings(series: VoiceSeries, episode: VoiceSeriesEpisode):
+        snapshot = episode.production_snapshot or {}
+        return (
+            SeriesVoiceBible.model_validate(snapshot.get("voice_bible", series.voice_bible)),
+            SeriesPronunciationBible.model_validate(
+                snapshot.get("pronunciation_bible", series.pronunciation_bible)
+            ),
+            SeriesSoundBible.model_validate(snapshot.get("sound_bible", series.sound_bible)),
+            SeriesProductionPolicy.model_validate(
+                snapshot.get("production_policy", series.production_policy)
+            ),
+        )
+
     def submit_series(self, series_id: str, episode_ids: list[str] | None = None):
         series = self.service.get_series(series_id)
         episodes = [
@@ -93,12 +111,15 @@ class VoiceSeriesOperations:
         runtime = LocalRuntimeService()
         errors = []
         for episode in episodes:
+            if episode.status == EpisodeStatus.COMPLETED:
+                continue
+            voice_bible, _, sound_bible, _ = self._episode_settings(series, episode)
             errors.extend(issue for issue in runtime.run_production_preflight(
                 episode.project_id,
-                provider=series.voice_bible.provider,
-                requested_formats=series.sound_bible.output_formats,
-                selected_model=series.voice_bible.model,
-                reference_voice=series.voice_bible.narrator_reference_voice,
+                provider=voice_bible.provider,
+                requested_formats=sound_bible.output_formats,
+                selected_model=voice_bible.model,
+                reference_voice=voice_bible.narrator_reference_voice,
             ) if issue.severity == "error")
         if errors:
             raise SeriesPreflightError(errors)
@@ -219,23 +240,6 @@ class VoiceSeriesOperations:
             message=f"Batch production initiated for series '{series.title}' ({len(target_episodes)} episodes).",
         ))
 
-        # Build policy from series bibles
-        policy = WorkflowPolicy(
-            provider=series.voice_bible.provider,
-            mixing_profile=series.sound_bible.mixing_profile,
-            mastering_profile=series.sound_bible.mastering_profile,
-            output_formats=series.sound_bible.output_formats,
-            require_final_approval=series.production_policy.require_human_approval,
-            model=series.voice_bible.model,
-            narrator_character=series.voice_bible.narrator_character,
-            narrator_reference_voice=series.voice_bible.narrator_reference_voice,
-            voice_style=series.voice_bible.voice_style,
-            ambience_palette=series.sound_bible.ambience_palette,
-            sfx_palette=series.sound_bible.sfx_palette,
-            loudness_target_lufs=series.sound_bible.loudness_target_lufs,
-            pronunciation_overrides=series.pronunciation_bible.overrides,
-        )
-
         def produce_single_episode(ep: VoiceSeriesEpisode) -> dict[str, Any]:
             if token.is_cancelled():
                 ep.status = EpisodeStatus.CANCELLED
@@ -253,13 +257,30 @@ class VoiceSeriesOperations:
             if ep.status == EpisodeStatus.COMPLETED:
                 return {"episode_id": ep.episode_id, "status": "completed", "skipped": True}
 
+            voice_bible, pronunciation_bible, sound_bible, production_policy = self._episode_settings(series, ep)
+            policy = WorkflowPolicy(
+                provider=voice_bible.provider,
+                mixing_profile=sound_bible.mixing_profile,
+                mastering_profile=sound_bible.mastering_profile,
+                output_formats=sound_bible.output_formats,
+                require_final_approval=production_policy.require_human_approval,
+                model=voice_bible.model,
+                narrator_character=voice_bible.narrator_character,
+                narrator_reference_voice=voice_bible.narrator_reference_voice,
+                voice_style=voice_bible.voice_style,
+                ambience_palette=sound_bible.ambience_palette,
+                sfx_palette=sound_bible.sfx_palette,
+                loudness_target_lufs=sound_bible.loudness_target_lufs,
+                pronunciation_overrides=pronunciation_bible.overrides,
+            )
+
             # 1. Mandatory Preflight Gate before scheduling
             preflight_issues = runtime_svc.run_production_preflight(
                 ep.project_id,
-                provider=series.voice_bible.provider,
-                requested_formats=series.sound_bible.output_formats,
-                selected_model=series.voice_bible.model,
-                reference_voice=series.voice_bible.narrator_reference_voice,
+                provider=voice_bible.provider,
+                requested_formats=sound_bible.output_formats,
+                selected_model=voice_bible.model,
+                reference_voice=voice_bible.narrator_reference_voice,
             )
             preflight_errors = [i for i in preflight_issues if i.severity == "error"]
             if preflight_errors:
@@ -297,7 +318,7 @@ class VoiceSeriesOperations:
                     script_text=script_text,
                     project_id=ep.project_id,
                     title=ep.title,
-                    language=series.language,
+                    language=voice_bible.language or series.language,
                     policy=policy,
                 )
                 ep.workflow_id = wf.workflow_id

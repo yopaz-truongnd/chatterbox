@@ -134,9 +134,6 @@ class VoiceProjectWorkflowService:
         state.updated_at = datetime.now(timezone.utc).isoformat()
         state.error = {"code": "WORKFLOW_CANCELLED", "message": "Workflow cancellation requested by user."}
         self.store.save_workflow(state)
-        self._emit_production_event(
-            state, "workflow_cancelled", "Workflow cancellation requested.", status=state.status.value
-        )
 
         # Signal cancellation to active child operation if running
         active_job = self.op_manager._project_active_op.get(state.project_id)
@@ -148,6 +145,9 @@ class VoiceProjectWorkflowService:
             state.status = WorkflowStatus.CANCELLED
             state.updated_at = datetime.now(timezone.utc).isoformat()
             self.store.save_workflow(state)
+            self._emit_production_event(
+                state, "workflow_cancelled", "Workflow cancelled.", status=state.status.value
+            )
 
         return True, f"Workflow '{workflow_id}' cancelling."
 
@@ -397,6 +397,9 @@ class VoiceProjectWorkflowService:
             fresh_state.status = WorkflowStatus.CANCELLED
             fresh_state.updated_at = datetime.now(timezone.utc).isoformat()
             self.store.save_workflow(fresh_state)
+            self._emit_production_event(
+                fresh_state, "workflow_cancelled", "Workflow cancelled.", status=fresh_state.status.value
+            )
 
     def _execute_workflow_loop(
         self,
@@ -488,6 +491,8 @@ class VoiceProjectWorkflowService:
                     service.check_resources,
                     project_id,
                     allow_substitutions=state.policy.allow_resource_substitute,
+                    ambience_palette=state.policy.ambience_palette,
+                    sfx_palette=state.policy.sfx_palette,
                 )
                 if res_report is None:
                     return

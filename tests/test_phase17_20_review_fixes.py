@@ -20,8 +20,11 @@ from services.voice_project_service import VoiceProjectService
 from services.voice_project_operations import VoiceProjectOperationManager, OperationStatus
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_workflow import VoiceProjectWorkflowService
+from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowStatus
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 from services.voice_series_models import (
+    EpisodeStatus,
+    SeriesSoundBible,
     SeriesVoiceBible,
     VoiceSeries,
     VoiceSeriesEpisode,
@@ -323,3 +326,66 @@ class TestPhase17to20ReviewFixes(unittest.TestCase):
             summary = self.series_ops.produce_series(series.series_id, export_root=self.root / "exports")
         self.assertEqual(captured, [["wav", "mp3"]])
         self.assertEqual(summary.failed, 1)
+
+    def test_episode_uses_creation_snapshot_after_series_defaults_change(self):
+        series = self.series_service.create_series(
+            title="Snapshot Series",
+            voice_bible=SeriesVoiceBible(provider="fake", model="nano"),
+            sound_bible=SeriesSoundBible(output_formats=["wav"]),
+        )
+        self.proj_service.create_project("Episode.", project_id="snapshot_project")
+        episode = self.series_service.add_episode(
+            series.series_id, "snapshot_project", "Episode", 1
+        )
+        series.voice_bible.provider = "local"
+        series.voice_bible.model = "turbo"
+        series.sound_bible.output_formats = ["mp3"]
+
+        voice, _, sound, _ = self.series_ops._episode_settings(series, episode)
+
+        self.assertEqual(voice.provider, "fake")
+        self.assertEqual(voice.model, "nano")
+        self.assertEqual(sound.output_formats, ["wav"])
+
+    def test_completed_episode_is_not_preflighted(self):
+        series = self.series_service.create_series(
+            title="Completed Series", voice_bible=SeriesVoiceBible(provider="fake")
+        )
+        self.proj_service.create_project("Episode.", project_id="completed_project")
+        episode = self.series_service.add_episode(
+            series.series_id, "completed_project", "Episode", 1
+        )
+        episode.status = EpisodeStatus.COMPLETED
+        self.series_store.save_episode(episode)
+
+        with mock.patch(
+            "services.local_runtime_service.LocalRuntimeService.run_production_preflight"
+        ) as preflight, mock.patch.object(
+            self.series_ops, "produce_series", return_value={"status": "completed"}
+        ):
+            operation = self.series_ops.submit_series(series.series_id)
+            for _ in range(100):
+                current = self.operation_manager.get_operation(operation.id)
+                if current and current.status == OperationStatus.COMPLETED:
+                    break
+                time.sleep(0.01)
+
+        preflight.assert_not_called()
+        self.assertEqual(current.status, OperationStatus.COMPLETED)
+
+    def test_workflow_cancel_event_is_emitted_only_after_terminal_state(self):
+        state = VoiceWorkflowState(
+            workflow_id="vwf_terminal_cancel",
+            project_id="cancel_project",
+            status=WorkflowStatus.WAITING_FOR_HUMAN,
+        )
+        self.wf_store.save_workflow(state)
+
+        with mock.patch.object(self.wf_service, "_emit_production_event") as emit:
+            success, _ = self.wf_service.cancel_workflow(state.workflow_id)
+
+        self.assertTrue(success)
+        cancelled = self.wf_store.get_workflow(state.workflow_id)
+        self.assertEqual(cancelled.status, WorkflowStatus.CANCELLED)
+        emit.assert_called_once()
+        self.assertEqual(emit.call_args.args[0].status, WorkflowStatus.CANCELLED)

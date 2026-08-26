@@ -19,13 +19,27 @@ Use one status per item: `TODO`, `IN PROGRESS`, `BLOCKED`, or `DONE`.
 
 | Gate | Status | Notes |
 |---|---|---|
-| Phase 16 fixes verified | TODO | Must be complete before Phase 17 implementation |
-| Phase 17 complete | TODO | Real local runtime and production preflight |
-| Phase 18 complete | TODO | Reusable intelligent asset library |
-| Phase 19 complete | TODO | Story series and batch production |
-| Phase 20 complete | TODO | Events, recovery, health, and diagnostics |
-| Phase 1–20 regression green | TODO | Required before merge |
+| Phase 16 fixes verified | DONE | Revision, approval, invalidation, and reproduction regressions are covered |
+| Phase 17 complete | DONE | In-process runtime capabilities and fail-fast production preflight implemented |
+| Phase 18 complete | DONE | Secure reusable asset catalog, matching, usage, and export attribution implemented |
+| Phase 19 complete | DONE | Persisted series operations, episode snapshots, bounded batch production, and gates implemented |
+| Phase 20 complete | DONE | Structured events, recovery, health, diagnostics, and concurrent persistence implemented |
+| Phase 1–20 regression green | DONE | `417 passed, 1 skipped` on 2026-08-26 |
 | Real local production smoke test passed | TODO | Opt-in when runtime is available |
+
+### Review remediation status
+
+The production-readiness review findings are closed in the current branch:
+
+- [x] Series preflight runs before operation scheduling and returns structured errors.
+- [x] Reference voice, pronunciation, mixing/mastering profiles, output formats, loudness, and series sound palettes reach their authoritative runtime stages.
+- [x] Palette mismatches become resource gaps before render instead of late MixPlan failures.
+- [x] Each episode uses its creation-time production snapshot; later series-default changes do not rewrite pending, retry, or completed episodes.
+- [x] Completed episodes are skipped by production preflight.
+- [x] Series subset totals and progress are aggregated from the selected episodes.
+- [x] All asset-index mutations share process and file locks.
+- [x] Workflow cancellation events are emitted only after terminal `CANCELLED` state.
+- [x] Workflow start, step, approval, failure, cancellation, and export events are persisted.
 
 ## Target production flow
 
@@ -336,4 +350,4 @@ Add dated entries as work proceeds; keep decisions and blockers concise.
 
 | Date (UTC) | Phase | Status | Change / Decision | Verification |
 |---|---|---|---|---|
-| — | — | TODO | Tracking initialized | — |
+| 2026-08-26 | 16–20 | DONE | Closed production runtime, revision, series policy, asset lineage, concurrency, recovery, and observability review findings. Commits: `4a56c7d`, `fd6a175`; final remediation pending this documentation commit. | Targeted regression groups green; full suite `417 passed, 1 skipped`. Real-model smoke remains opt-in. |
