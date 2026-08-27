@@ -36,6 +36,7 @@ from services.render_models import (
     RenderStatus,
 )
 from services.resource_manager import (
+    apply_project_resource_overrides,
     load_manifest,
     load_selection_rules,
     load_substitution_rules,
@@ -322,6 +323,12 @@ class VoiceProjectService:
                     substitution_rules=sub_rules,
                     selection_rules=sel_rules,
                 )
+                overrides_path = proj_dir / "director-resource-overrides.yaml"
+                if overrides_path.exists():
+                    override_data = yaml.safe_load(overrides_path.read_text(encoding="utf-8")) or {}
+                    report = apply_project_resource_overrides(
+                        report, resource_manifest, override_data.get("overrides", {})
+                    )
 
                 self.store.save_resource_report(project_id, report)
 

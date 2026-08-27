@@ -763,3 +763,54 @@ def resolve_project_resources(
         missing=missing_list,
         pronunciation_overrides=verified_overrides,
     )
+
+
+def apply_project_resource_overrides(
+    report: ResourceReport,
+    manifest: ResourceManifest,
+    overrides: dict[str, dict[str, Any]],
+) -> ResourceReport:
+    """Apply persisted director decisions after canonical resolution."""
+    for gap in list(report.missing):
+        decision = overrides.get(gap.id)
+        if not decision:
+            continue
+        action = decision.get("action")
+        if action == "omit" and gap.priority != RequirementPriority.REQUIRED:
+            report.missing.remove(gap)
+            continue
+        if action not in {"bind", "register"}:
+            continue
+        asset = manifest.find_by_id(decision.get("asset_id", ""))
+        if not asset and decision.get("resource"):
+            asset = ResourceEntry.model_validate(decision["resource"])
+        if not asset or asset.category != gap.type:
+            continue
+        substitute = gap.intent not in asset.intents
+        resolution = ResourceResolution(
+            beat_id=(gap.used_at[0] if gap.used_at else None),
+            type=gap.type,
+            requested_intent=gap.intent or gap.term or gap.id,
+            status=ResolutionStatus.SUBSTITUTE if substitute else ResolutionStatus.EXACT,
+            selected=asset,
+            match_type="director_approved" if substitute else "director_bound",
+            acquisition_priority=gap.priority,
+        )
+        (report.substituted if substitute else report.resolved).append(resolution)
+        report.missing.remove(gap)
+
+    required = sum(g.priority == RequirementPriority.REQUIRED for g in report.missing)
+    recommended = sum(g.priority == RequirementPriority.RECOMMENDED for g in report.missing)
+    optional = sum(g.priority == RequirementPriority.OPTIONAL for g in report.missing)
+    report.readiness = ReadinessReport(
+        score=max(0, 100 - required * 5 - recommended * 2 - optional),
+        render_blocked=required > 0,
+        required_missing_count=required,
+        recommended_missing_count=recommended,
+        optional_missing_count=optional,
+        block_reasons=[
+            f"Missing REQUIRED {g.type.value}: '{g.term or g.intent or g.id}'"
+            for g in report.missing if g.priority == RequirementPriority.REQUIRED
+        ],
+    )
+    return report

@@ -121,3 +121,22 @@ def get_voice_project_workflow_service() -> Any:
 
         _GLOBAL_WORKFLOW_SERVICE = VoiceProjectWorkflowService()
     return _GLOBAL_WORKFLOW_SERVICE
+
+
+def get_director_review_service(store: VoiceProjectStore | None = None) -> Any:
+    from services.director_review_service import DirectorReviewService
+    return DirectorReviewService(store or get_voice_project_store())
+
+
+def get_director_revision_service(
+    provider_name: str = "local", store: VoiceProjectStore | None = None,
+) -> Any:
+    from services.director_revision_service import DirectorRevisionService
+    actual_store = store or get_voice_project_store()
+    return DirectorRevisionService(get_voice_project_service(provider_name=provider_name, store=actual_store))
+
+
+def get_director_resource_service(store: VoiceProjectStore | None = None) -> Any:
+    from services.director_resource_service import DirectorResourceService
+    actual_store = store or get_voice_project_store()
+    return DirectorResourceService(get_voice_project_service(store=actual_store))

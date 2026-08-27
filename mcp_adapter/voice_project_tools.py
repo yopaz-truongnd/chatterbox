@@ -280,4 +280,44 @@ def handle_voice_project_tool(
         res = _execute_rest_request(request_fn, "POST", f"/api/v1/voice-workflows/{workflow_id}/cancel")
         return _handle_response(res)
 
+    # 7. Phase 16: Director Review, Resources & Revisions
+    project_id = args.get("project_id", "").strip()
+    if name in {
+        "chatterbox_voice_review", "chatterbox_voice_missing_resources", "chatterbox_voice_review_beat",
+        "chatterbox_voice_revisions", "chatterbox_voice_add_pronunciation", "chatterbox_voice_bind_resource",
+        "chatterbox_voice_select_attempt", "chatterbox_voice_approve_attempt", "chatterbox_voice_reject_attempt",
+        "chatterbox_voice_update_direction", "chatterbox_voice_update_timing",
+        "chatterbox_voice_update_resources", "chatterbox_voice_reproduce",
+    } and not project_id:
+        return _error_content("Field 'project_id' is required.", error_code="VALIDATION_ERROR")
+
+    if name == "chatterbox_voice_review":
+        return _handle_response(_execute_rest_request(request_fn, "GET", f"/api/v1/voice-projects/{project_id}/director-review"), project_id)
+    if name == "chatterbox_voice_missing_resources":
+        return _handle_response(_execute_rest_request(request_fn, "GET", f"/api/v1/voice-projects/{project_id}/resource-shopping-list"), project_id)
+    if name == "chatterbox_voice_add_pronunciation":
+        return _handle_response(_execute_rest_request(request_fn, "POST", f"/api/v1/voice-projects/{project_id}/resources/pronunciations", args), project_id)
+    if name == "chatterbox_voice_bind_resource":
+        return _handle_response(_execute_rest_request(request_fn, "POST", f"/api/v1/voice-projects/{project_id}/resources/bind", args), project_id)
+    if name == "chatterbox_voice_review_beat":
+        beat_id = args.get("beat_id", "").strip()
+        return _handle_response(_execute_rest_request(request_fn, "GET", f"/api/v1/voice-projects/{project_id}/beats/{beat_id}/review"), project_id)
+    if name in {"chatterbox_voice_select_attempt", "chatterbox_voice_approve_attempt", "chatterbox_voice_reject_attempt"}:
+        beat_id = args.get("beat_id", "").strip()
+        attempt_id = args.get("attempt_id")
+        action = {
+            "chatterbox_voice_select_attempt": "select",
+            "chatterbox_voice_approve_attempt": "approve",
+            "chatterbox_voice_reject_attempt": "reject",
+        }[name]
+        return _handle_response(_execute_rest_request(request_fn, "POST", f"/api/v1/voice-projects/{project_id}/beats/{beat_id}/attempts/{attempt_id}/{action}", args), project_id)
+    if name in {"chatterbox_voice_update_direction", "chatterbox_voice_update_timing", "chatterbox_voice_update_resources"}:
+        beat_id = args.get("beat_id", "").strip()
+        target = name.removeprefix("chatterbox_voice_update_")
+        return _handle_response(_execute_rest_request(request_fn, "PATCH", f"/api/v1/voice-projects/{project_id}/beats/{beat_id}/{target}", args), project_id)
+    if name == "chatterbox_voice_revisions":
+        return _handle_response(_execute_rest_request(request_fn, "GET", f"/api/v1/voice-projects/{project_id}/revisions"), project_id)
+    if name == "chatterbox_voice_reproduce":
+        return _handle_response(_execute_rest_request(request_fn, "POST", f"/api/v1/voice-projects/{project_id}/reproduce", args), project_id)
+
     return None

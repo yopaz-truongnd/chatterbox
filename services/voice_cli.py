@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import sys
 from typing import Any
+from urllib import error as urllib_error, request as urllib_request
 import yaml
 
 from services.render_models import (
@@ -66,6 +67,54 @@ EXIT_RESOURCE_BLOCKED = 3
 EXIT_PROVIDER_UNAVAILABLE = 4
 EXIT_RENDER_FAILED = 5
 EXIT_QC_FAILED = 6
+
+
+def _director_api(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Thin Phase 16 REST client; server remains owner of business logic and async execution."""
+    base_url = os.getenv("CHATTERBOX_API_URL", "http://127.0.0.1:8000").rstrip("/")
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    headers = {"Content-Type": "application/json"}
+    api_key = os.getenv("CHATTERBOX_API_KEY")
+    if api_key:
+        headers["X-API-Key"] = api_key
+    req = urllib_request.Request(base_url + path, data=body, headers=headers, method=method)
+    try:
+        with urllib_request.urlopen(req, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8")
+        raise RuntimeError(detail or str(exc)) from exc
+
+
+def cmd_director_api(args: argparse.Namespace) -> int:
+    try:
+        project_id = args.project_id
+        if args.command == "review":
+            result = _director_api("GET", f"/api/v1/voice-projects/{project_id}/director-review")
+        elif args.command == "director_resources_missing":
+            result = _director_api("GET", f"/api/v1/voice-projects/{project_id}/resource-shopping-list")
+        elif args.command == "director_pronunciation":
+            result = _director_api("POST", f"/api/v1/voice-projects/{project_id}/resources/pronunciations", {"term": args.term, "phonetic": args.phonetic, "actor_id": args.actor_id})
+        elif args.command == "director_bind":
+            result = _director_api("POST", f"/api/v1/voice-projects/{project_id}/resources/bind", {"resource_id": args.resource_id, "asset_id": args.asset_id, "actor_id": args.actor_id})
+        elif args.command == "beat_review":
+            result = _director_api("GET", f"/api/v1/voice-projects/{project_id}/beats/{args.beat_id}/review")
+        elif args.command in {"beat_select", "beat_approve"}:
+            action = "select" if args.command == "beat_select" else "approve"
+            result = _director_api("POST", f"/api/v1/voice-projects/{project_id}/beats/{args.beat_id}/attempts/{args.attempt_id}/{action}", {"actor_id": args.actor_id, "explicit_approval": action == "approve"})
+        elif args.command == "direction_update":
+            payload = {key: getattr(args, key) for key in ("emotion", "energy", "pace", "voice_style") if getattr(args, key) is not None}
+            payload["actor_id"] = args.actor_id
+            result = _director_api("PATCH", f"/api/v1/voice-projects/{project_id}/beats/{args.beat_id}/direction", payload)
+        elif args.command == "reproduce":
+            result = _director_api("POST", f"/api/v1/voice-projects/{project_id}/reproduce", {"provider": args.provider})
+        else:
+            raise ValueError(f"Unsupported director command '{args.command}'")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return EXIT_SUCCESS
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_GENERIC_ERROR
 
 
 def _slugify(text: str) -> str:
@@ -757,6 +806,38 @@ def build_parser() -> argparse.ArgumentParser:
     p_qc.add_argument("beat_ids", nargs="*", help="Optional specific beat IDs to evaluate")
     p_qc.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
+    p_review = subparsers.add_parser("review", help="Get complete director review via REST")
+    p_review.add_argument("project_id")
+
+    p_drm = subparsers.add_parser("director_resources_missing", help="Get director resource shopping list")
+    p_drm.add_argument("project_id")
+
+    p_pron = subparsers.add_parser("director_pronunciation", help="Add pronunciation override")
+    p_pron.add_argument("project_id"); p_pron.add_argument("term"); p_pron.add_argument("phonetic")
+    p_pron.add_argument("--actor-id", default="cli")
+
+    p_bind = subparsers.add_parser("director_bind", help="Bind managed asset to resource gap")
+    p_bind.add_argument("project_id"); p_bind.add_argument("resource_id"); p_bind.add_argument("asset_id")
+    p_bind.add_argument("--actor-id", default="cli")
+
+    p_br = subparsers.add_parser("beat_review", help="Review one beat and candidates")
+    p_br.add_argument("project_id"); p_br.add_argument("beat_id")
+
+    for command in ("beat_select", "beat_approve"):
+        p = subparsers.add_parser(command, help=f"{command.replace('_', ' ')}")
+        p.add_argument("project_id"); p.add_argument("beat_id"); p.add_argument("attempt_id", type=int)
+        p.add_argument("--actor-id", default="cli")
+
+    p_direction = subparsers.add_parser("direction_update", help="Patch beat narration direction")
+    p_direction.add_argument("project_id"); p_direction.add_argument("beat_id")
+    p_direction.add_argument("--emotion"); p_direction.add_argument("--energy", type=float)
+    p_direction.add_argument("--pace", type=float); p_direction.add_argument("--voice-style")
+    p_direction.add_argument("--actor-id", default="cli")
+
+    p_reproduce = subparsers.add_parser("reproduce", help="Schedule minimum-safe reproduction")
+    p_reproduce.add_argument("project_id")
+    p_reproduce.add_argument("--provider", default="local", choices=["local", "gemini", "fake"])
+
     return parser
 
 
@@ -772,6 +853,14 @@ def main(args_list: list[str] | None = None) -> int:
     if len(normalized_args) >= 2:
         if normalized_args[0] == "resources" and normalized_args[1] == "missing":
             normalized_args = ["resources_missing"] + normalized_args[2:]
+        elif normalized_args[0] == "resources" and normalized_args[1] == "pronunciation":
+            normalized_args = ["director_pronunciation"] + normalized_args[2:]
+        elif normalized_args[0] == "resources" and normalized_args[1] == "bind":
+            normalized_args = ["director_bind"] + normalized_args[2:]
+        elif normalized_args[0] == "beat" and normalized_args[1] in {"review", "select", "approve"}:
+            normalized_args = [f"beat_{normalized_args[1]}"] + normalized_args[2:]
+        elif normalized_args[0] == "direction" and normalized_args[1] == "update":
+            normalized_args = ["direction_update"] + normalized_args[2:]
         elif normalized_args[0] == "assets" and normalized_args[1] == "ingest":
             normalized_args = ["assets_ingest"] + normalized_args[2:]
 
@@ -801,6 +890,11 @@ def main(args_list: list[str] | None = None) -> int:
         return cmd_rerender(args)
     elif args.command == "qc":
         return cmd_qc(args)
+    elif args.command in {
+        "review", "director_resources_missing", "director_pronunciation", "director_bind",
+        "beat_review", "beat_select", "beat_approve", "direction_update", "reproduce",
+    }:
+        return cmd_director_api(args)
     else:
         parser.print_help()
         return EXIT_GENERIC_ERROR

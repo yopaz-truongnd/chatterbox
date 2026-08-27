@@ -706,6 +706,34 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
 ]
 
 
+def _director_tool(name: str, description: str, properties: dict, required: list[str]) -> dict:
+    return {
+        "name": name,
+        "description": description,
+        "inputSchema": {"type": "object", "properties": properties, "required": required},
+    }
+
+
+_PROJECT = {"project_id": {"type": "string"}}
+_BEAT = {**_PROJECT, "beat_id": {"type": "string"}}
+_ATTEMPT = {**_BEAT, "attempt_id": {"type": "integer"}, "actor_id": {"type": "string"}, "reason": {"type": "string"}}
+VOICE_PROJECT_TOOL_SCHEMAS.extend([
+    _director_tool("chatterbox_voice_review", "Get the complete director-facing production review.", _PROJECT, ["project_id"]),
+    _director_tool("chatterbox_voice_missing_resources", "Get the required and recommended resource shopping list.", _PROJECT, ["project_id"]),
+    _director_tool("chatterbox_voice_add_pronunciation", "Add a provider-independent pronunciation override.", {**_PROJECT, "term": {"type": "string"}, "phonetic": {"type": "string"}, "actor_id": {"type": "string"}}, ["project_id", "term", "phonetic"]),
+    _director_tool("chatterbox_voice_bind_resource", "Bind a managed asset to a resource gap.", {**_PROJECT, "resource_id": {"type": "string"}, "asset_id": {"type": "string"}, "allow_substitution": {"type": "boolean"}}, ["project_id", "resource_id", "asset_id"]),
+    _director_tool("chatterbox_voice_review_beat", "Review one beat and all generated candidates.", _BEAT, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_select_attempt", "Select an existing passing candidate without rerendering.", _ATTEMPT, ["project_id", "beat_id", "attempt_id"]),
+    _director_tool("chatterbox_voice_approve_attempt", "Explicitly approve and select a candidate.", _ATTEMPT, ["project_id", "beat_id", "attempt_id", "actor_id"]),
+    _director_tool("chatterbox_voice_reject_attempt", "Reject an audio candidate with audit metadata.", _ATTEMPT, ["project_id", "beat_id", "attempt_id", "actor_id"]),
+    _director_tool("chatterbox_voice_update_direction", "Patch narration direction for one beat.", {**_BEAT, "emotion": {"type": "string"}, "energy": {"type": "number"}, "pace": {"type": "number"}, "voice_style": {"type": "string"}}, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_update_timing", "Patch pauses without rerendering narration.", {**_BEAT, "pause_before_ms": {"type": "number"}, "pause_after_ms": {"type": "number"}}, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_update_resources", "Patch beat ambience or SFX direction.", {**_BEAT, "ambience_intent": {"type": "string"}, "sfx": {"type": "array", "items": {"type": "object"}}}, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_revisions", "Get persisted revision history and invalidation state.", _PROJECT, ["project_id"]),
+    _director_tool("chatterbox_voice_reproduce", "Schedule minimum-safe incremental reproduction.", {**_PROJECT, "revision_ids": {"type": "array", "items": {"type": "string"}}, "provider": {"type": "string"}, "policy": {"type": "object"}}, ["project_id"]),
+])
+
+
 def get_tools_list() -> list[dict]:
     """Return all tool schemas available on this MCP server."""
     return VOICE_TOOL_SCHEMAS + PROJECT_TOOL_SCHEMAS + VOICE_PROJECT_TOOL_SCHEMAS
