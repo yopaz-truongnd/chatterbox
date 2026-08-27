@@ -100,3 +100,26 @@ class TestVoiceSeriesRecovery(unittest.TestCase):
 
         ep1_state_after = self.series_service.get_episode(series.series_id, ep1.episode_id)
         self.assertEqual(ep1_state_after.published_at, ep1_pub)
+
+    def test_packaging_rejects_checksum_mismatch_without_public_files(self):
+        series = self.series_service.create_series(
+            title="Verified Export",
+            voice_bible=SeriesVoiceBible(provider="fake"),
+        )
+        self.proj_service.create_project("A checksum protects this tale.", project_id="proj_checksum")
+        ep = self.series_service.add_episode(series.series_id, "proj_checksum", "Checksum", 1)
+        source_root = Path(self.tmp.name) / "initial-exports"
+        self.series_ops.produce_series(series.series_id, export_root=source_root)
+
+        project_export = self.proj_store.get_project_dir(ep.project_id) / "exports" / "FINAL.wav"
+        project_export.write_bytes(project_export.read_bytes() + b"tampered")
+        publish_root = Path(self.tmp.name) / "verified-exports"
+
+        with self.assertRaisesRegex(ValueError, "Checksum mismatch"):
+            self.series_ops._package_episode_deliverables(
+                series, ep, publish_root, CancellationToken()
+            )
+
+        series_dir = publish_root / series.slug
+        self.assertFalse((series_dir / "episode-001").exists())
+        self.assertEqual(list(series_dir.glob("*.tmp")), [])

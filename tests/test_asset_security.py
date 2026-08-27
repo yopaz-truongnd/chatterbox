@@ -104,3 +104,24 @@ class TestAssetSecurity(unittest.TestCase):
         res = self.service.ingest_file(fake_wav, category=AssetCategory.SFX)
         self.assertEqual(res.status, "rejected")
         self.assertIn("format", res.reason or "")
+
+    def test_asset_resolution_preserves_root_identity_and_checksum(self):
+        second_root = self.root / "extra-assets"
+        second_root.mkdir()
+        first = self.permitted_root / "ambience" / "wind.wav"
+        second = second_root / "ambience" / "wind.wav"
+        _make_dummy_wav(first, duration_s=0.2)
+        _make_dummy_wav(second, duration_s=0.4)
+        service = AssetLibraryService(
+            store=self.store,
+            permitted_roots=[self.permitted_root, second_root],
+        )
+
+        result = service.ingest_file(second, AssetCategory.AMBIENCE)
+        asset = self.store.get_asset(result.asset_id)
+        self.assertIsNotNone(asset.managed_root_id)
+        self.assertEqual(service.resolve_asset_file(asset), second.resolve())
+
+        second.write_bytes(b"modified")
+        with self.assertRaises(FileNotFoundError):
+            service.resolve_asset_file(asset)

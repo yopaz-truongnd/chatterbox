@@ -9,7 +9,6 @@ from __future__ import annotations
 import io
 import struct
 import wave
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Path as FPath
@@ -162,7 +161,7 @@ def preview_asset(asset_id: str = FPath(..., description="Asset ID")):
     channels = asset.channels or 1
     num_frames = int(sample_rate * 0.2)  # 200 ms
 
-    wav_bytes = _extract_preview_wav(asset, sample_rate, channels, num_frames)
+    wav_bytes = _extract_preview_wav(asset, sample_rate, channels, num_frames, svc)
     return Response(content=wav_bytes, media_type="audio/wav")
 
 
@@ -171,27 +170,24 @@ def _extract_preview_wav(
     sample_rate: int,
     channels: int,
     num_frames: int,
+    asset_service: Any,
 ) -> bytes:
     """Extract first ~200 ms from WAV asset or generate silent WAV preview."""
     if asset.format == "wav":
-        # Locate file — try relative to project assets dir
-        candidate = Path(__file__).resolve().parent.parent / "assets" / asset.file_path
-        if not candidate.exists():
-            candidate = Path(asset.file_path)
-        if candidate.exists():
-            try:
-                with wave.open(str(candidate), "rb") as wf:
-                    actual_frames = min(num_frames, wf.getnframes())
-                    raw = wf.readframes(actual_frames)
-                    buf = io.BytesIO()
-                    with wave.open(buf, "wb") as out:
-                        out.setnchannels(wf.getnchannels())
-                        out.setsampwidth(wf.getsampwidth())
-                        out.setframerate(wf.getframerate())
-                        out.writeframes(raw)
-                    return buf.getvalue()
-            except Exception:
-                pass
+        try:
+            candidate = asset_service.resolve_asset_file(asset)
+            with wave.open(str(candidate), "rb") as wf:
+                actual_frames = min(num_frames, wf.getnframes())
+                raw = wf.readframes(actual_frames)
+                buf = io.BytesIO()
+                with wave.open(buf, "wb") as out:
+                    out.setnchannels(wf.getnchannels())
+                    out.setsampwidth(wf.getsampwidth())
+                    out.setframerate(wf.getframerate())
+                    out.writeframes(raw)
+                return buf.getvalue()
+        except (OSError, ValueError, wave.Error):
+            pass
 
     # Fallback: generate silent WAV
     return _silent_wav(sample_rate=sample_rate, channels=channels, num_frames=num_frames)

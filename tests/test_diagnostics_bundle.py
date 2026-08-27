@@ -41,7 +41,10 @@ class TestDiagnosticsBundle(unittest.TestCase):
             ProductionEvent(
                 project_id=pid,
                 event_type=ProductionEventType.WORKFLOW_STARTED,
-                message="Workflow starting with key secret_token_12345",
+                message=(
+                    f"failed at {self.proj_store.root_dir}/private.wav; "
+                    "token=secret_token_12345; Authorization: Bearer abc.def.ghi"
+                ),
             )
         )
 
@@ -55,6 +58,9 @@ class TestDiagnosticsBundle(unittest.TestCase):
         bundle_str = str(bundle)
         # Verify no private absolute paths like /Users/... leaked
         self.assertNotIn(str(self.proj_store.root_dir), bundle_str)
+        self.assertNotIn("secret_token_12345", bundle_str)
+        self.assertNotIn("abc.def.ghi", bundle_str)
+        self.assertNotIn("/private.wav", bundle_str)
 
     def test_series_diagnostics_bundle(self):
         series = self.series_service.create_series(title="Mythological Saga")

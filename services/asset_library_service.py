@@ -183,6 +183,10 @@ def _relative_path(abs_path: Path, permitted_roots: list[Path]) -> str:
     return str(abs_path)
 
 
+def _root_id(root: Path) -> str:
+    return hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:16]
+
+
 # ---------------------------------------------------------------------------
 # Public service API
 # ---------------------------------------------------------------------------
@@ -295,6 +299,10 @@ class AssetLibraryService:
             asset_id=asset_id,
             category=category,
             file_path=rel_path,
+            managed_root_id=next(
+                _root_id(root) for root in self._permitted_roots
+                if abs_path == root or abs_path.is_relative_to(root)
+            ),
             sha256=sha256,
             format=fmt,
             duration_ms=duration_ms,
@@ -320,6 +328,35 @@ class AssetLibraryService:
                 reason=f"Duplicate of existing asset '{saved.asset_id}'.",
             )
         return AssetIngestResult(asset_id=saved.asset_id, status="registered")
+
+    def resolve_asset_file(self, asset: LibraryAsset | str) -> Path:
+        """Resolve a managed asset and reject moved, ambiguous, or modified files."""
+        if isinstance(asset, str):
+            stored = self._store.get_asset(asset)
+            if stored is None:
+                raise FileNotFoundError(f"Asset '{asset}' not found.")
+            asset = stored
+
+        roots = self._permitted_roots
+        if asset.managed_root_id:
+            roots = [root for root in roots if _root_id(root) == asset.managed_root_id]
+            if not roots:
+                raise FileNotFoundError(f"Managed root for asset '{asset.asset_id}' is unavailable.")
+
+        matches: list[Path] = []
+        for root in roots:
+            candidate = Path(os.path.realpath(str(root / asset.file_path)))
+            try:
+                candidate.relative_to(root)
+            except ValueError:
+                continue
+            if candidate.is_file() and _compute_sha256(candidate) == asset.sha256:
+                matches.append(candidate)
+
+        if len(matches) != 1:
+            reason = "ambiguous" if len(matches) > 1 else "missing or checksum mismatch"
+            raise FileNotFoundError(f"Asset '{asset.asset_id}' is {reason}.")
+        return matches[0]
 
     def scan_directory(
         self,

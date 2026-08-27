@@ -22,7 +22,8 @@ class AssetCategory(str, Enum):
 class LibraryAsset(BaseModel):
     asset_id: str
     category: AssetCategory
-    file_path: str  # relative path from permitted root
+    file_path: str  # relative path from the identified permitted root
+    managed_root_id: str | None = None
     sha256: str
     format: str  # "wav" | "mp3" | "flac"
     duration_ms: float

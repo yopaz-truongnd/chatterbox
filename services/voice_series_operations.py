@@ -19,7 +19,7 @@ from typing import Any, Callable
 import uuid
 import yaml
 
-from services.voice_project_models import InvalidProjectStateError
+from services.voice_project_models import InvalidProjectStateError, compute_file_sha256
 from services.voice_project_operations import (
     CancellationToken,
     OperationAlreadyRunningError,
@@ -52,6 +52,10 @@ class SeriesPreflightError(InvalidProjectStateError):
     def __init__(self, issues: list[Any]) -> None:
         self.issues = issues
         super().__init__("Series production preflight failed.")
+
+
+class SeriesPublishCancelled(Exception):
+    pass
 
 
 class VoiceSeriesOperations:
@@ -145,8 +149,9 @@ class VoiceSeriesOperations:
         series: VoiceSeries,
         episode: VoiceSeriesEpisode,
         export_root: Path,
+        cancellation_token: CancellationToken,
     ) -> dict[str, str]:
-        """Copy completed episode deliverables to exports/series-{slug}/episode-NNN/."""
+        """Verify and atomically publish one episode deliverable directory."""
         from services.voice_project_dependencies import get_voice_project_store
         proj_store = self._proj_store or get_voice_project_store()
         proj_dir = proj_store.get_project_dir(episode.project_id)
@@ -157,18 +162,48 @@ class VoiceSeriesOperations:
         slug = series.slug
         ep_folder = f"episode-{episode.episode_number:03d}"
         dest_dir = export_root / slug / ep_folder
-        dest_dir.mkdir(parents=True, exist_ok=True)
+        series_dir = export_root / slug
+        series_dir.mkdir(parents=True, exist_ok=True)
+        staging_dir = series_dir / f".{ep_folder}.{uuid.uuid4().hex}.tmp"
 
-        copied = {}
-        for fname in ["FINAL.wav", "FINAL.mp3", "export-manifest.yaml"]:
-            src = exp_src_dir / fname
-            if src.exists():
-                dst = dest_dir / fname
+        manifest_src = exp_src_dir / "export-manifest.yaml"
+        manifest = yaml.safe_load(manifest_src.read_text(encoding="utf-8")) or {}
+        if manifest.get("project_id") != episode.project_id:
+            raise ValueError("Export manifest project lineage does not match episode project.")
+        expected = {
+            Path(item["file_path"]).name: item["sha256"]
+            for item in manifest.get("artifacts", [])
+            if item.get("file_path") and item.get("sha256")
+        }
+        if not expected:
+            raise ValueError("Export manifest contains no checksummed artifacts.")
+
+        copied: dict[str, str] = {}
+        try:
+            staging_dir.mkdir()
+            for fname, expected_sha in expected.items():
+                if cancellation_token.is_cancelled():
+                    raise SeriesPublishCancelled()
+                src = exp_src_dir / fname
+                if not src.is_file():
+                    raise FileNotFoundError(f"Manifest artifact is missing: {fname}")
+                dst = staging_dir / fname
                 shutil.copy2(src, dst)
-                copied[fname] = str(dst)
+                actual_sha = compute_file_sha256(dst)
+                if actual_sha != expected_sha:
+                    raise ValueError(f"Checksum mismatch while packaging {fname}.")
+
+            shutil.copy2(manifest_src, staging_dir / manifest_src.name)
+            if cancellation_token.is_cancelled():
+                raise SeriesPublishCancelled()
+            os.replace(staging_dir, dest_dir)
+            copied = {fname: str(dest_dir / fname) for fname in expected}
+            copied[manifest_src.name] = str(dest_dir / manifest_src.name)
+        finally:
+            if staging_dir.exists():
+                shutil.rmtree(staging_dir)
 
         # Write series-level manifests
-        series_dir = export_root / slug
         manifest_path = series_dir / "series-manifest.yaml"
         with open(manifest_path, "w", encoding="utf-8") as fh:
             fh.write(yaml.safe_dump({
@@ -328,16 +363,6 @@ class VoiceSeriesOperations:
                 while True:
                     if token.is_cancelled():
                         wf_service.cancel_workflow(wf.workflow_id)
-                        ep.status = EpisodeStatus.CANCELLED
-                        self.store.save_episode(ep)
-                        evt_store.append_project_event(ProductionEvent(
-                            project_id=ep.project_id,
-                            series_id=series_id,
-                            episode_id=ep.episode_id,
-                            event_type=ProductionEventType.WORKFLOW_CANCELLED,
-                            message=f"Episode '{ep.title}' workflow cancelled by user request.",
-                        ))
-                        return {"episode_id": ep.episode_id, "status": "cancelled"}
 
                     st = wf_service.get_workflow(wf.workflow_id)
                     if not st:
@@ -357,10 +382,18 @@ class VoiceSeriesOperations:
                         return {"episode_id": ep.episode_id, "status": "waiting_for_human"}
 
                     if st.status == "completed" or getattr(st.status, "value", str(st.status)) == "completed":
+                        if token.is_cancelled():
+                            ep.status = EpisodeStatus.CANCELLED
+                            self.store.save_episode(ep)
+                            evt_store.append_project_event(ProductionEvent(
+                                project_id=ep.project_id, series_id=series_id, episode_id=ep.episode_id,
+                                event_type=ProductionEventType.WORKFLOW_CANCELLED,
+                                message=f"Episode '{ep.title}' publish cancelled after workflow completion.",
+                            ))
+                            return {"episode_id": ep.episode_id, "status": "cancelled"}
+                        copied = self._package_episode_deliverables(series, ep, exp_root, token)
                         ep.status = EpisodeStatus.COMPLETED
                         ep.published_at = datetime.now(timezone.utc).isoformat()
-                        # Package deliverables
-                        copied = self._package_episode_deliverables(series, ep, exp_root)
                         ep.final_artifacts = copied
                         self.store.save_episode(ep)
                         evt_store.append_project_event(ProductionEvent(
@@ -373,14 +406,17 @@ class VoiceSeriesOperations:
                         return {"episode_id": ep.episode_id, "status": "completed"}
 
                     if st.status in ("failed", "cancelled", "interrupted") or getattr(st.status, "value", str(st.status)) in ("failed", "cancelled", "interrupted"):
-                        ep.status = EpisodeStatus.CANCELLED if getattr(st.status, "value", str(st.status)) == "cancelled" else EpisodeStatus.FAILED
+                        terminal_status = getattr(st.status, "value", str(st.status))
+                        ep.status = EpisodeStatus.CANCELLED if terminal_status == "cancelled" else EpisodeStatus.FAILED
                         ep.error = st.error
                         self.store.save_episode(ep)
                         evt_store.append_project_event(ProductionEvent(
                             project_id=ep.project_id,
                             series_id=series_id,
                             episode_id=ep.episode_id,
-                            event_type=ProductionEventType.STEP_FAILED,
+                            event_type=(ProductionEventType.WORKFLOW_CANCELLED
+                                        if terminal_status == "cancelled"
+                                        else ProductionEventType.STEP_FAILED),
                             message=f"Episode '{ep.title}' workflow ended with status: {ep.status.value}",
                         ))
                         return {"episode_id": ep.episode_id, "status": ep.status.value, "error": st.error}
@@ -392,6 +428,15 @@ class VoiceSeriesOperations:
                 self.store.save_episode(ep)
                 return {"episode_id": ep.episode_id, "status": "failed", "error": "Workflow ended unexpectedly"}
 
+            except SeriesPublishCancelled:
+                ep.status = EpisodeStatus.CANCELLED
+                self.store.save_episode(ep)
+                evt_store.append_project_event(ProductionEvent(
+                    project_id=ep.project_id, series_id=series_id, episode_id=ep.episode_id,
+                    event_type=ProductionEventType.WORKFLOW_CANCELLED,
+                    message=f"Episode '{ep.title}' publish cancelled after workflow completion.",
+                ))
+                return {"episode_id": ep.episode_id, "status": "cancelled"}
             except Exception as exc:
                 ep.status = EpisodeStatus.FAILED
                 ep.error = {"message": str(exc)}

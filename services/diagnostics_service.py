@@ -36,6 +36,24 @@ def _sanitize_path(path: str | Path | None) -> str | None:
     return Path(p).name
 
 
+_ABSOLUTE_PATH = re.compile(r"(?<![\w.])/(?:[^\s,;:'\"<>]+/)*[^\s,;:'\"<>]*")
+_WINDOWS_PATH = re.compile(r"(?i)\b[A-Z]:\\(?:[^\s,;:'\"<>]+\\)*[^\s,;:'\"<>]*")
+_BEARER_TOKEN = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
+_CREDENTIAL = re.compile(
+    r"(?i)\b(api[_-]?key|access[_-]?token|auth[_-]?token|password|secret|token)"
+    r"\s*[:=]\s*[^\s,;]+"
+)
+_SECRET_TOKEN = re.compile(r"(?i)\b(?:sk-[A-Za-z0-9_-]{8,}|secret[_-]?token[_-]?[A-Za-z0-9_-]+)\b")
+
+
+def _sanitize_string(value: str) -> str:
+    value = _BEARER_TOKEN.sub("Bearer [REDACTED]", value)
+    value = _CREDENTIAL.sub(lambda match: f"{match.group(1)}=[REDACTED]", value)
+    value = _SECRET_TOKEN.sub("[REDACTED]", value)
+    value = _WINDOWS_PATH.sub("[PATH]", value)
+    return _ABSOLUTE_PATH.sub("[PATH]", value)
+
+
 def _sanitize_dict(data: dict[str, Any] | list[Any] | Any) -> Any:
     """Recursively scrub secrets, absolute paths, and private keys from dictionary."""
     if isinstance(data, dict):
@@ -56,6 +74,8 @@ def _sanitize_dict(data: dict[str, Any] | list[Any] | Any) -> Any:
         return sanitized
     elif isinstance(data, list):
         return [_sanitize_dict(item) for item in data]
+    elif isinstance(data, str):
+        return _sanitize_string(data)
     return data
 
 
