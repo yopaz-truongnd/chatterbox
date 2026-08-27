@@ -492,11 +492,11 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(api_app.job_manager.get_job(job_id).status, "completed_partial")
 
     def test_completed_partial_job_ttl_cleanup(self):
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         job_id = "test_expired_partial_job"
         out_wav = api_app.API_DATA_DIR / "outputs" / f"{job_id}.wav"
         out_wav.write_bytes(b"fake wav")
-        old_time = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+        old_time = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
 
         job = AudioJob(
             id=job_id,
@@ -517,6 +517,5 @@ class ApiAppTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
 
 
