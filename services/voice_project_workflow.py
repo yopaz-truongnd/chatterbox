@@ -100,9 +100,6 @@ class VoiceProjectWorkflowService:
             suggested_action="Executing workflow...",
         )
         self.store.save_workflow(state)
-        self._emit_production_event(
-            state, "workflow_started", "Voice production workflow started.", status=state.status.value
-        )
 
         # Run execution loop asynchronously in background thread
         threading.Thread(
@@ -423,7 +420,6 @@ class VoiceProjectWorkflowService:
 
             # 1. Step: CREATE_PROJECT
             if script_text and not _is_step_completed(state, WorkflowStepName.CREATE_PROJECT.value):
-                self._mark_step(workflow_id, WorkflowStepName.CREATE_PROJECT.value, "running")
                 if not self.project_store.project_exists(project_id):
                     service.create_project(
                         script_text=script_text,
@@ -431,6 +427,10 @@ class VoiceProjectWorkflowService:
                         title=title,
                         language=language or "en",
                     )
+                self._emit_production_event(
+                    state, "workflow_started", "Voice production workflow started.", status=state.status.value
+                )
+                self._mark_step(workflow_id, WorkflowStepName.CREATE_PROJECT.value, "running")
                 self._mark_step(workflow_id, WorkflowStepName.CREATE_PROJECT.value, "completed", {"project_id": project_id})
 
             state = self.store.get_workflow(workflow_id)

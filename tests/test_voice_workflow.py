@@ -17,6 +17,7 @@ from services.tts.fake import FakeTTSProvider
 from services.tts.base import CancellationToken
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
+from services.production_event_store import ProductionEventStore
 
 
 class TestVoiceWorkflow(unittest.TestCase):
@@ -56,6 +57,23 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertIsNotNone(plan_step)
         self.assertEqual(plan_step.status, "completed")
         self.assertIsNotNone(plan_step.operation_id)
+
+    def test_auto_project_id_is_created_before_first_production_event(self):
+        event_store = ProductionEventStore(root_dir=Path(self.temp_dir.name) / "projects")
+        with mock.patch(
+            "services.production_event_store.get_production_event_store",
+            return_value=event_store,
+        ):
+            state = self.service.start_workflow(
+                script_text="The morning sun rose over the valley.",
+                policy=WorkflowPolicy(provider="fake"),
+            )
+            final_state = self._wait_for_workflow(state.workflow_id)
+
+        self.assertEqual(final_state.status, WorkflowStatus.COMPLETED)
+        self.assertTrue(self.service.project_store.project_exists(state.project_id))
+        events = event_store.load_project_events(state.project_id)
+        self.assertEqual(events[0]["event_type"], "workflow_started")
 
     def test_workflow_pauses_at_required_resource_human_gate(self):
         script = "Long ago the mysterious beast Qiongqi walked Mount Zhong."
