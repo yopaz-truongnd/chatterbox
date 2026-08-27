@@ -1,4 +1,4 @@
-"""Chatterbox MCP Tool Schema Catalog."""
+"""Chatterbox MCP Tool Schema Catalog (Phase 13-15)."""
 
 from __future__ import annotations
 
@@ -59,21 +59,17 @@ VOICE_TOOL_SCHEMAS: list[dict] = [
     },
     {
         "name": "chatterbox_download_audio",
-        "description": "Safely download the completed audio WAV file from a Chatterbox job with atomic write and overwrite protection.",
+        "description": "Download generated audio output safely to a local path on the user machine.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "job_id": {
                     "type": "string",
-                    "description": "Unique ID of the completed job.",
+                    "description": "The ID of the completed job whose audio output should be downloaded.",
                 },
-                "destination_path": {
+                "destination_dir": {
                     "type": "string",
-                    "description": "Target filename or relative path inside project 'outputs/mcp/' (e.g. 'speech.wav'). Absolute paths outside outputs/mcp/ are rejected for security. Defaults to 'chatterbox_{job_id}.wav'.",
-                },
-                "overwrite": {
-                    "type": "boolean",
-                    "description": "Whether to overwrite existing destination file. Defaults to False.",
+                    "description": "Local folder path where the audio file should be saved. Default is the Chatterbox outputs directory.",
                 },
             },
             "required": ["job_id"],
@@ -81,49 +77,38 @@ VOICE_TOOL_SCHEMAS: list[dict] = [
     },
     {
         "name": "chatterbox_voice_conversion",
-        "description": "Perform voice conversion to transform the voice of a source audio file to match a target character or a custom target voice WAV.",
+        "description": "Convert speech in a source audio file to match the timbre and vocal characteristics of a target voice.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "source_audio_path": {
                     "type": "string",
-                    "description": "Absolute filesystem path to the source audio file.",
+                    "description": "Path to the input voice audio file to convert.",
                 },
-                "character_id": {
+                "target_character_id": {
                     "type": "string",
-                    "description": "The unique ID of the target character voice to copy. Optional.",
-                },
-                "target_audio_path": {
-                    "type": "string",
-                    "description": "Absolute path to a target custom voice WAV file to copy. Optional.",
+                    "description": "Target character ID to clone/mimic voice from.",
                 },
             },
-            "required": ["source_audio_path"],
+            "required": ["source_audio_path", "target_character_id"],
         },
     },
     {
         "name": "chatterbox_evaluate_voice",
-        "description": "Evaluate the quality of a voice reading (loudness, expressiveness, pace, pronunciation) with Voice Critic feedback and structured metrics.",
+        "description": "Analyze and evaluate speech synthesis quality metrics (Signal QC and Speech Critic) for an audio file.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "audio_path": {
                     "type": "string",
-                    "description": "Absolute path to the source audio file to evaluate. Optional (if job_id is provided).",
-                },
-                "job_id": {
-                    "type": "string",
-                    "description": "Unique ID of a completed TTS job to evaluate. Optional (if audio_path is provided).",
+                    "description": "Path to the audio file to evaluate.",
                 },
                 "reference_text": {
                     "type": "string",
-                    "description": "The script text to check pronunciation accuracy against. Optional.",
-                },
-                "coach_character_id": {
-                    "type": "string",
-                    "description": "Character ID of the AI coach to read back the spoken feedback. Optional.",
+                    "description": "Reference script text to verify against omissions or hallucinations.",
                 },
             },
+            "required": ["audio_path"],
         },
     },
 ]
@@ -131,21 +116,21 @@ VOICE_TOOL_SCHEMAS: list[dict] = [
 PROJECT_TOOL_SCHEMAS: list[dict] = [
     {
         "name": "chatterbox_prepare_project",
-        "description": "Initialize a structured audio project from a user topic/idea. Extracts existing parameters, determines missing required/recommended slots, and returns a single-batch list of questions.",
+        "description": "Initialize a structured audio story/podcast project from a user prompt, collecting initial requirements and generating clarifying questions.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "topic": {
                     "type": "string",
-                    "description": "The topic, concept, or description of the audio project (e.g. 'Podcast 5 phút về lịch sử AI cho người mới').",
+                    "description": "The high-level topic or theme of the story, podcast, or voice project.",
                 },
                 "initial_requirements": {
-                    "type": "object",
-                    "description": "Pre-known parameters (format, target_duration_seconds, audience, language, tone, character_id, sfx_level, output_formats). Optional.",
+                    "type": "string",
+                    "description": "Optional user preferences (tone, audience, target length, number of characters, sound style).",
                 },
                 "auto_defaults": {
                     "type": "boolean",
-                    "description": "If True, auto-populates sensible defaults for all non-essential recommended fields without asking. Defaults to False.",
+                    "description": "If true, automatically fill reasonable defaults for unanswered requirements.",
                 },
             },
             "required": ["topic"],
@@ -153,7 +138,7 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
     },
     {
         "name": "chatterbox_answer_project_questions",
-        "description": "Submit answers (structured dict or natural language string) to fill missing project requirements, advancing the project to final confirmation review.",
+        "description": "Submit answers to requirements questions for an in-progress audio project.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -162,11 +147,12 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "description": "The unique ID of the project.",
                 },
                 "answers": {
-                    "description": "Answers to the missing questions (can be a dictionary mapping field IDs, or a natural language text response).",
+                    "type": "object",
+                    "description": "Key-value mapping of question IDs or question text to user answers.",
                 },
                 "auto_defaults": {
                     "type": "boolean",
-                    "description": "If True, automatically fills any remaining non-critical fields with standard defaults. Defaults to False.",
+                    "description": "If true, fill any remaining unanswered questions with reasonable defaults.",
                 },
             },
             "required": ["project_id", "answers"],
@@ -174,7 +160,7 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
     },
     {
         "name": "chatterbox_confirm_requirements",
-        "description": "Gate 1 Confirmation: Explicitly approve project requirements and automatically generate the initial English scene outline and script.",
+        "description": "Confirm and finalize the project requirements matrix, locking the story brief for script writing.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -184,15 +170,15 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
                 },
                 "confirmed": {
                     "type": "boolean",
-                    "description": "Set to True to confirm requirements and proceed to script generation, or False to cancel. Defaults to True.",
+                    "description": "Whether the user/agent confirms the requirements (must be true to proceed).",
                 },
             },
-            "required": ["project_id"],
+            "required": ["project_id", "confirmed"],
         },
     },
     {
         "name": "chatterbox_generate_script",
-        "description": "Generate or re-generate the English scene outline and full narration script based on confirmed requirements.",
+        "description": "Generate a full narrative voice script with pacing, emotional beats, and sound cues based on confirmed requirements.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -200,13 +186,9 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "type": "string",
                     "description": "The unique ID of the project.",
                 },
-                "custom_prompt": {
+                "custom_instructions": {
                     "type": "string",
-                    "description": "Optional custom prompt or instructions to tailor the generated script.",
-                },
-                "num_scenes": {
-                    "type": "integer",
-                    "description": "Optional target number of scenes (default: auto based on target duration).",
+                    "description": "Optional extra instructions for script generation.",
                 },
             },
             "required": ["project_id"],
@@ -214,7 +196,7 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
     },
     {
         "name": "chatterbox_confirm_script",
-        "description": "Gate 2 Confirmation: Review and approve the English script and scene outline. Approval transitions the project to 'approved', enabling high-level rendering.",
+        "description": "Confirm or adjust generated voice script before character allocation and timeline planning.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -224,68 +206,15 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
                 },
                 "confirmed": {
                     "type": "boolean",
-                    "description": "Set to True to approve the script, or False to request revision. Defaults to True.",
-                },
-                "script_text": {
-                    "type": "string",
-                    "description": "Optional updated script text edited by user.",
-                },
-                "pronunciation_dict": {
-                    "type": "object",
-                    "description": "Optional dictionary of custom word pronunciations (e.g. {'NASA': 'N.A.S.A.'}).",
+                    "description": "Whether the user/agent confirms the script.",
                 },
             },
-            "required": ["project_id"],
-        },
-    },
-    {
-        "name": "chatterbox_confirm_project",
-        "description": "Unified Confirmation dispatcher: Confirms whichever gate is currently pending (Gate 1 requirements or Gate 2 script).",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "project_id": {
-                    "type": "string",
-                    "description": "The unique ID of the project to approve.",
-                },
-                "confirmed": {
-                    "type": "boolean",
-                    "description": "Set to True to approve, or False to cancel/revise. Defaults to True.",
-                },
-            },
-            "required": ["project_id"],
-        },
-    },
-    {
-        "name": "chatterbox_render_project",
-        "description": "High-level Orchestration: Segment the approved script, synthesize segments with signal quality checks, and merge the final master audio. Strictly rejects unapproved projects.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "project_id": {
-                    "type": "string",
-                    "description": "The unique ID of the approved project.",
-                },
-                "script_text": {
-                    "type": "string",
-                    "description": "Custom narration script text override. Optional.",
-                },
-                "character_id": {
-                    "type": "string",
-                    "description": "Character ID override. Optional.",
-                },
-                "quality_preset": {
-                    "type": "string",
-                    "enum": ["fast", "balanced", "expressive"],
-                    "description": "Quality preset override. Optional.",
-                },
-            },
-            "required": ["project_id"],
+            "required": ["project_id", "confirmed"],
         },
     },
     {
         "name": "chatterbox_get_project",
-        "description": "Retrieve the current state, requirements, outline, script, segments, and structured summary for a project.",
+        "description": "Retrieve current project details, stage, script, voice timeline, and render status.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -299,36 +228,512 @@ PROJECT_TOOL_SCHEMAS: list[dict] = [
     },
     {
         "name": "chatterbox_list_projects",
-        "description": "List all existing audio projects with their status and metadata.",
+        "description": "List all active and completed audio projects.",
         "inputSchema": {
             "type": "object",
             "properties": {},
         },
     },
     {
-        "name": "chatterbox_get_events",
-        "description": "Long-polling event stream for real-time project & rendering status updates. Returns immediately when new events occur or waits up to wait_seconds with zero CPU idle usage.",
+        "name": "chatterbox_confirm_project",
+        "description": "Confirm the finalized script, voice casting, and timeline before audio rendering starts.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "after_event_id": {
-                    "type": "integer",
-                    "description": "Retrieve events with ID strictly greater than this ID (default: 0).",
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique ID of the project.",
+                },
+                "confirmed": {
+                    "type": "boolean",
+                    "description": "Whether the user confirms the script and voice allocation (must be true to start render).",
+                },
+            },
+            "required": ["project_id", "confirmed"],
+        },
+    },
+    {
+        "name": "chatterbox_render_project",
+        "description": "Trigger multi-segment voice synthesis and timeline assembly for a confirmed project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique ID of the project to render.",
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["normal", "high"],
+                    "description": "Execution priority (default: 'normal').",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_get_events",
+        "description": "Stream or poll project execution events, timeline updates, and progress logs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique ID of the project.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+]
+
+VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
+    # ---------------------------------------------------------
+    # Core Lifecycle Tools (Phase 13)
+    # ---------------------------------------------------------
+    {
+        "name": "chatterbox_voice_project_create",
+        "description": "Create a new Voice Narration project with source script and configuration.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "script_text": {
+                    "type": "string",
+                    "description": "The raw story script text to narrate.",
                 },
                 "project_id": {
                     "type": "string",
-                    "description": "Optional project ID filter.",
+                    "description": "Unique project identifier slug (e.g. 'torch_dragon'). Optional.",
                 },
-                "wait_seconds": {
-                    "type": "integer",
-                    "description": "Max seconds to wait for new events (default: 0, max: 30).",
+                "title": {
+                    "type": "string",
+                    "description": "Human-readable project title. Optional.",
+                },
+                "language": {
+                    "type": "string",
+                    "description": "Source text language code (default: 'en').",
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Optional voice configuration (e.g. voice profile).",
                 },
             },
+            "required": ["script_text"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_project_get",
+        "description": "Get comprehensive agent-friendly project summary including current stage, beat counts, resource readiness, and suggested next action.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_plan",
+        "description": "Trigger automated story beat analysis, narration planning, sound direction, and director critique for a voice project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Optional planning settings override.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_check_resources",
+        "description": "Check and resolve audio requirements (SFX, Ambience) and pronunciation knowledge for a directed voice plan.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "manifest_path": {
+                    "type": "string",
+                    "description": "Custom asset manifest path. Optional.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_render",
+        "description": "Trigger asynchronous narration audio synthesis and automated Voice QC verification for a project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "TTS Provider: 'local' (default), 'gemini', or 'fake' (testing).",
+                },
+                "beats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional subset of beat IDs to render.",
+                },
+                "auto_qc": {
+                    "type": "boolean",
+                    "description": "Whether to perform automatic Voice QC (default: true).",
+                },
+                "force_rerender": {
+                    "type": "boolean",
+                    "description": "Whether to force rerender of passed beats (default: false).",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_render_beat",
+        "description": "Selectively synthesize or rerender a single specific narration beat.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "beat_id": {
+                    "type": "string",
+                    "description": "Beat ID to render (e.g. 'B01').",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "TTS Provider: 'local', 'gemini', or 'fake'.",
+                },
+            },
+            "required": ["project_id", "beat_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_qc",
+        "description": "Re-evaluate Signal QC and Speech Critic on existing audio renders without re-synthesizing.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "beats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional subset of beat IDs to re-evaluate.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_job_status",
+        "description": "Check status, progress, active stage, and current beat of an asynchronous Voice Project operation job.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The operation job ID (e.g. 'vp_op_xxx').",
+                },
+            },
+            "required": ["job_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_job_cancel",
+        "description": "Cancel a running or queued Voice Project operation job.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The operation job ID to cancel.",
+                },
+            },
+            "required": ["job_id"],
+        },
+    },
+    # ---------------------------------------------------------
+    # Phase 14: Mixing, Mastering & Deliverables Tools
+    # ---------------------------------------------------------
+    {
+        "name": "chatterbox_voice_prepare_mix",
+        "description": "Prepare multi-track audio MixPlan for a project in NARRATION_READY stage.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "mastering_profile": {
+                    "type": "string",
+                    "description": "Mastering profile name ('storytelling', 'podcast'). Default: 'storytelling'.",
+                },
+                "output_formats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Target export formats (e.g. ['wav']).",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_mix",
+        "description": "Render multi-track timeline audio mix to generate mix/premaster.wav.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_master",
+        "description": "Apply loudness normalization and dynamics limiter to create mix/master.wav.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "profile": {
+                    "type": "string",
+                    "description": "Mastering profile name (default: 'storytelling').",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_export",
+        "description": "Package master audio into deliverable files (FINAL.wav) with cryptographic export manifest.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "formats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of export formats (default: ['wav']).",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_finalize",
+        "description": "Execute end-to-end post-production pipeline (prepare_mix -> mix -> master -> export) in a single operation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+                "mastering_profile": {
+                    "type": "string",
+                    "description": "Mastering profile (default: 'storytelling').",
+                },
+                "output_formats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Target export formats (default: ['wav']).",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_artifacts",
+        "description": "List all generated deliverable audio and plan artifacts for a voice project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The unique project identifier.",
+                },
+            },
+            "required": ["project_id"],
+        },
+    },
+    # ---------------------------------------------------------
+    # Phase 15: Autonomous Workflow Tools
+    # ---------------------------------------------------------
+    {
+        "name": "chatterbox_voice_produce",
+        "description": "Launch autonomous end-to-end voice story production from script to final deliverable audio. Automatically plans, verifies resources, renders, QCs, mixes, masters, and exports. Pauses at human gates if required pronunciations or audio reviews are needed.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "script_text": {
+                    "type": "string",
+                    "description": "The complete story script text to produce.",
+                },
+                "project_id": {
+                    "type": "string",
+                    "description": "Optional custom project identifier.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional story title.",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "TTS provider ('local', 'gemini', 'fake'). Default: 'local'.",
+                },
+                "retry_budget": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Maximum TTS/QC attempts per beat.",
+                },
+                "auto_accept_qc_pass": {
+                    "type": "boolean",
+                    "description": "Whether QC-passed narration is accepted without a human gate.",
+                },
+                "allow_resource_substitute": {
+                    "type": "boolean",
+                    "description": "Allow semantic substitution for missing audio resources.",
+                },
+                "mixing_profile": {
+                    "type": "string",
+                    "description": "Mixing profile (for example, storytelling or dramatic).",
+                },
+                "mastering_profile": {
+                    "type": "string",
+                    "description": "Mastering dynamics profile (default: 'storytelling').",
+                },
+                "output_formats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "require_final_approval": {
+                    "type": "boolean",
+                    "description": "Pause after mastering for explicit final approval.",
+                },
+            },
+            "required": ["script_text"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_workflow_status",
+        "description": "Check status, current step, human action gates, and results of an autonomous production workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {
+                    "type": "string",
+                    "description": "The workflow ID (e.g. 'vwf_xxx').",
+                },
+            },
+            "required": ["workflow_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_workflow_resume",
+        "description": "Resume execution of an autonomous workflow after resolving a human gate (e.g. after adding required pronunciation).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {
+                    "type": "string",
+                    "description": "The workflow ID to resume.",
+                },
+            },
+            "required": ["workflow_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_workflow_cancel",
+        "description": "Cancel an in-flight autonomous production workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {
+                    "type": "string",
+                    "description": "The workflow ID to cancel.",
+                },
+            },
+            "required": ["workflow_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_workflow_approve",
+        "description": "Submit an explicit approval decision for narration or final master audio.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string"},
+                "action": {
+                    "type": "string",
+                    "enum": ["approve_narration", "approve_final_audio"],
+                },
+                "approved": {"type": "boolean"},
+                "artifact_id": {"type": "string"},
+                "artifact_sha256": {"type": "string"},
+            },
+            "required": ["workflow_id", "action", "approved"],
         },
     },
 ]
 
 
+def _director_tool(name: str, description: str, properties: dict, required: list[str]) -> dict:
+    return {
+        "name": name,
+        "description": description,
+        "inputSchema": {"type": "object", "properties": properties, "required": required},
+    }
+
+
+_PROJECT = {"project_id": {"type": "string"}}
+_BEAT = {**_PROJECT, "beat_id": {"type": "string"}}
+_ATTEMPT = {**_BEAT, "attempt_id": {"type": "integer"}, "actor_id": {"type": "string"}, "reason": {"type": "string"}}
+VOICE_PROJECT_TOOL_SCHEMAS.extend([
+    _director_tool("chatterbox_voice_review", "Get the complete director-facing production review.", _PROJECT, ["project_id"]),
+    _director_tool("chatterbox_voice_missing_resources", "Get the required and recommended resource shopping list.", _PROJECT, ["project_id"]),
+    _director_tool("chatterbox_voice_add_pronunciation", "Add a provider-independent pronunciation override.", {**_PROJECT, "term": {"type": "string"}, "phonetic": {"type": "string"}, "actor_id": {"type": "string"}}, ["project_id", "term", "phonetic"]),
+    _director_tool("chatterbox_voice_bind_resource", "Bind a managed asset to a resource gap.", {**_PROJECT, "resource_id": {"type": "string"}, "asset_id": {"type": "string"}, "allow_substitution": {"type": "boolean"}}, ["project_id", "resource_id", "asset_id"]),
+    _director_tool("chatterbox_voice_review_beat", "Review one beat and all generated candidates.", _BEAT, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_select_attempt", "Select an existing passing candidate without rerendering.", _ATTEMPT, ["project_id", "beat_id", "attempt_id"]),
+    _director_tool("chatterbox_voice_approve_attempt", "Explicitly approve and select a candidate.", _ATTEMPT, ["project_id", "beat_id", "attempt_id", "actor_id"]),
+    _director_tool("chatterbox_voice_reject_attempt", "Reject an audio candidate with audit metadata.", _ATTEMPT, ["project_id", "beat_id", "attempt_id", "actor_id"]),
+    _director_tool("chatterbox_voice_update_direction", "Patch narration direction for one beat.", {**_BEAT, "emotion": {"type": "string"}, "energy": {"type": "number"}, "pace": {"type": "number"}, "voice_style": {"type": "string"}}, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_update_timing", "Patch pauses without rerendering narration.", {**_BEAT, "pause_before_ms": {"type": "number"}, "pause_after_ms": {"type": "number"}}, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_update_resources", "Patch beat ambience or SFX direction.", {**_BEAT, "ambience_intent": {"type": "string"}, "sfx": {"type": "array", "items": {"type": "object"}}}, ["project_id", "beat_id"]),
+    _director_tool("chatterbox_voice_revisions", "Get persisted revision history and invalidation state.", _PROJECT, ["project_id"]),
+    _director_tool("chatterbox_voice_reproduce", "Schedule minimum-safe incremental reproduction.", {**_PROJECT, "revision_ids": {"type": "array", "items": {"type": "string"}}, "provider": {"type": "string"}, "policy": {"type": "object"}}, ["project_id"]),
+])
+
+
 def get_tools_list() -> list[dict]:
     """Return all tool schemas available on this MCP server."""
-    return VOICE_TOOL_SCHEMAS + PROJECT_TOOL_SCHEMAS
+    return VOICE_TOOL_SCHEMAS + PROJECT_TOOL_SCHEMAS + VOICE_PROJECT_TOOL_SCHEMAS

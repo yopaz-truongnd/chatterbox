@@ -194,7 +194,7 @@ def save_audio_wav(output_path: str | Path, tensor: torch.Tensor, sample_rate: i
     """Save audio tensor as standard WAV file ensuring directory exists."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    ta.save(str(path), tensor.cpu(), sample_rate)
+    ta.save(str(path), tensor.cpu(), sample_rate, encoding="PCM_S", bits_per_sample=16)
 
 
 def evaluate_audio_signal(
