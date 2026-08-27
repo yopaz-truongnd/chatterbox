@@ -203,25 +203,32 @@ class VoiceSeriesOperations:
             if staging_dir.exists():
                 shutil.rmtree(staging_dir)
 
-        # Write series-level manifests
-        manifest_path = series_dir / "series-manifest.yaml"
-        with open(manifest_path, "w", encoding="utf-8") as fh:
-            fh.write(yaml.safe_dump({
+        return copied
+
+    @staticmethod
+    def _write_series_manifests(series: VoiceSeries, export_root: Path) -> None:
+        """Atomically write shared series metadata once per completed batch."""
+        series_dir = export_root / series.slug
+        series_dir.mkdir(parents=True, exist_ok=True)
+        documents = {
+            "series-manifest.yaml": {
                 "series_id": series.series_id,
                 "title": series.title,
                 "language": series.language,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
-            }))
-
-        voice_bible_path = series_dir / "voice-bible.yaml"
-        with open(voice_bible_path, "w", encoding="utf-8") as fh:
-            fh.write(yaml.safe_dump(series.voice_bible.model_dump()))
-
-        pron_bible_path = series_dir / "pronunciation-bible.yaml"
-        with open(pron_bible_path, "w", encoding="utf-8") as fh:
-            fh.write(yaml.safe_dump(series.pronunciation_bible.model_dump()))
-
-        return copied
+            },
+            "voice-bible.yaml": series.voice_bible.model_dump(),
+            "pronunciation-bible.yaml": series.pronunciation_bible.model_dump(),
+        }
+        for filename, document in documents.items():
+            target = series_dir / filename
+            temporary = series_dir / f".{filename}.{uuid.uuid4().hex}.tmp"
+            try:
+                temporary.write_text(yaml.safe_dump(document), encoding="utf-8")
+                os.replace(temporary, target)
+            finally:
+                if temporary.exists():
+                    temporary.unlink()
 
     def produce_series(
         self,
@@ -467,6 +474,7 @@ class VoiceSeriesOperations:
                             len(results) / len(target_episodes) * 100.0,
                             {"completed_episodes": len(results), "total_episodes": len(target_episodes)},
                         )
+            self._write_series_manifests(series, exp_root)
         finally:
             with _tokens_lock:
                 _active_series_tokens.pop(series_id, None)

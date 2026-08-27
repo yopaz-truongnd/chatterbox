@@ -5,11 +5,11 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+import yaml
 
 from services.voice_project_models import InvalidProjectStateError
 from services.voice_series_models import (
     EpisodeStatus,
-    SeriesProductionPolicy,
     SeriesSoundBible,
     SeriesVoiceBible,
     VoiceSeries,
@@ -73,10 +73,18 @@ class TestVoiceSeriesOperations(unittest.TestCase):
         ep2 = self.series_service.add_episode(series.series_id, "proj_ep2", "The Stallion", 2)
 
         exp_dir = Path(self.tmp.name) / "exports"
-        summary = self.series_ops.produce_series(
-            series.series_id,
-            export_root=exp_dir,
-        )
+        with mock.patch.object(
+            self.series_ops,
+            "_write_series_manifests",
+            wraps=self.series_ops._write_series_manifests,
+        ) as write_manifests:
+            summary = self.series_ops.produce_series(
+                series.series_id,
+                export_root=exp_dir,
+            )
+        self.assertEqual(write_manifests.call_count, 1)
+        self.assertEqual(write_manifests.call_args.args[0].series_id, series.series_id)
+        self.assertEqual(write_manifests.call_args.args[1], exp_dir)
 
         self.assertEqual(summary.total_episodes, 2)
         self.assertEqual(summary.completed, 2)
@@ -88,6 +96,10 @@ class TestVoiceSeriesOperations(unittest.TestCase):
         self.assertTrue((exp_dir / slug / "voice-bible.yaml").exists())
         self.assertTrue((exp_dir / slug / "episode-001" / "FINAL.wav").exists())
         self.assertTrue((exp_dir / slug / "episode-002" / "FINAL.wav").exists())
+        series_dir = exp_dir / slug
+        for filename in ("series-manifest.yaml", "voice-bible.yaml", "pronunciation-bible.yaml"):
+            self.assertIsInstance(yaml.safe_load((series_dir / filename).read_text()), dict)
+        self.assertEqual(list(series_dir.glob(".*.tmp")), [])
 
     def test_failure_in_one_episode_does_not_corrupt_another(self):
         series = self.series_service.create_series(
