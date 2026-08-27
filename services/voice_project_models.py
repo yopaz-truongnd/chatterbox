@@ -44,12 +44,22 @@ class InvalidProjectStateError(VoiceProjectError):
 
 
 class StaleArtifactError(VoiceProjectError):
-    """Raised when an artifact (e.g. VoicePlan) is stale relative to its dependency source."""
+    """Raised when dependent upstream files have changed and invalidate the current state."""
+    pass
+
+
+class MixPlanStaleError(VoiceProjectError):
+    """Raised when VoicePlan, audio renders, or assets have changed since MixPlan was built."""
+    pass
+
+
+class ExportDependencyUnavailableError(VoiceProjectError):
+    """Raised when an external exporter binary (e.g. FFmpeg) is required but missing."""
     pass
 
 
 class BeatNotFoundError(VoiceProjectError):
-    """Raised when a specific beat ID is not found in the project's VoicePlan."""
+    """Raised when a specific beat ID does not exist in the project VoicePlan."""
     pass
 
 
@@ -102,15 +112,20 @@ class VoiceProjectSummary(BaseModel):
     project_id: str
     title: str = ""
     stage: ProjectStatus
+    language: str = "en"
     total_beats: int = 0
+    rendered_beats: int = 0
     passed_beats: int = 0
     review_beats: int = 0
     failed_beats: int = 0
     resource_readiness_score: float = 0.0
     resource_blocked: bool = False
+    required_gaps_count: int = 0
+    recommended_gaps_count: int = 0
     provider: str = "chatterbox-http"
     suggested_action: str = ""
     human_action: HumanActionRequired | None = None
+    last_error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

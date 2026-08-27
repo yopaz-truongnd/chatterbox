@@ -114,6 +114,52 @@ Dùng cho CLI workspace orchestration, TTS provider abstraction (Fake & Gemini),
   - `tests/test_voice_qc.py`
   - `tests/test_voice_pipeline_e2e.py`
 
+## Voice Project Application Core & REST/MCP Interfaces (Phases 11-13)
+
+Dùng cho VoiceProject application service, YAML workspace storage, background operations concurrency, strict resource gating, REST asynchronous endpoints, và MCP Agent tools.
+
+- Primary Services:
+  - `services/voice_project_service.py` — Unified application facade cho CLI, REST và MCP.
+  - `services/voice_project_models.py` — Domain contracts, error taxonomy và lifecycle results.
+  - `services/voice_project_store.py` — Atomic YAML storage và staleness invalidation.
+  - `services/voice_project_operations.py` — Background operations manager, YAML persistence, cancel & recovery.
+  - `services/voice_project_preflight.py` — Synchronous preflight validation (fail-fast trước 202).
+  - `services/voice_project_dependencies.py` — Dependency injection và strict TTS provider resolution.
+- REST API: `routers/voice_projects.py`
+- MCP Adapter:
+  - `mcp_adapter/voice_project_tools.py` — MCP handlers chuyển tiếp qua REST API layer.
+  - `mcp_adapter/catalog.py` — Tool schemas (35 tools).
+- Tests:
+  - `tests/test_voice_projects_api.py`
+  - `tests/test_voice_project_mcp.py`
+  - `tests/test_voice_project_cross_parity.py`
+  - `tests/test_voice_project_cancellation.py`
+  - `tests/test_voice_project_provider.py`
+  - `tests/test_voice_preflight.py`
+
+## Audio Mix, Master, Export & Autonomous Workflow (Phases 14-15)
+
+Dùng cho multi-track timeline construction (MixPlan), pure Python WAV mixing & crossfade, dynamics mastering (LUFS loudness & true peak limiter), deliverable export (FINAL.wav, export-manifest.yaml), và autonomous workflow orchestration loop (`produce`, pause at human action gates, resume, cancel).
+
+- Primary Services:
+  - `services/audio_mix_models.py` — Domain models cho MixPlan, VoiceClip, AmbienceClip, SFXClip, MasteringProfile, ExportManifest.
+  - `services/mix_plan_builder.py` — Xây dựng multi-track timeline từ real audio durations và beat pauses.
+  - `services/audio_mix_execution.py` — Universal mixing execution protocol.
+  - `services/wave_audio_mixer.py` — Pure Python 16-bit PCM WAV multi-track mixer.
+  - `services/audio_mastering.py` — Pure Python LUFS loudness normalizer và soft-knee peak limiter.
+  - `services/audio_export.py` — Package deliverable audio và tính toán SHA-256 manifest.
+  - `services/voice_project_workflow_models.py` — Workflow state machine và step models.
+  - `services/voice_project_workflow_store.py` — YAML persistence cho workflows.
+  - `services/voice_project_workflow.py` — Multi-step autonomous orchestrator loop.
+- REST API: `routers/voice_workflows.py`
+- Configuration: `rules/mixing.yaml`, `rules/mastering.yaml`
+- Tests:
+  - `tests/test_mix_plan_builder.py`
+  - `tests/test_wave_audio_mixer.py`
+  - `tests/test_audio_mastering.py`
+  - `tests/test_audio_export.py`
+  - `tests/test_voice_workflow.py`
+
 ## Ownership Rules
 
 - `services/project_requirements.py` sở hữu heuristic trích xuất và câu hỏi làm rõ.
@@ -129,6 +175,9 @@ Dùng cho CLI workspace orchestration, TTS provider abstraction (Fake & Gemini),
 - `services/voice_renderer.py` & `services/tts/` sở hữu render voice narration theo từng beat.
 - `services/voice_qc.py` sở hữu kiểm định chất lượng âm thanh 3 lớp và chính sách retry.
 - `services/voice_cli.py` sở hữu giao diện dòng lệnh orchestration layer.
+- `services/voice_project_service.py` sở hữu business logic cốt lõi của Voice Projects.
+- `services/mix_plan_builder.py`, `services/wave_audio_mixer.py`, `services/audio_mastering.py`, `services/audio_export.py` sở hữu hậu kỳ âm thanh (Mix/Master/Export).
+- `services/voice_project_workflow.py` sở hữu điều phối quy trình tự động từ kịch bản đến sản phẩm cuối cùng.
 - `JobManager` sở hữu tiến trình kỹ thuật chạy inference TTS và phát sinh sự kiện `EventBus`.
 - Các router `routers/`, adapter MCP `mcp_adapter/`, UI `webui/` và CLI `services/voice_cli.py` tuyệt đối không chứa business logic; chỉ đóng vai trò validate, chuyển đổi hoặc hiển thị dữ liệu.
 - Product state và confirmation gates thuộc `services/project_planner.py`.

@@ -182,11 +182,12 @@ class TestVoiceProjectServicePhase11(unittest.TestCase):
         with mock.patch(
             "services.voice_project_service.render_project_narration",
             return_value=(manifest, {}),
-        ):
-            result = self.service.render("qc_failed_proj")
+        ) as render_mock:
+            result = self.service.render("qc_failed_proj", max_retries=1)
 
         self.assertEqual(result.stage, ProjectStatus.FAILED)
         self.assertEqual(result.failed_beats, 1)
+        self.assertEqual(render_mock.call_args.kwargs["max_retries"], 1)
 
     def test_render_unknown_beat_ids_raises_beat_not_found(self):
         self.service.create_project(self.script_content, "unk_render_proj")

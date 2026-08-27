@@ -126,6 +126,44 @@ def save_manifest(manifest: ResourceManifest, path: str | Path | None = None) ->
         f.write(manifest.to_yaml())
 
 
+def resolve_asset_file_path(file_path: str | Path, project_dir: Path | str | None = None) -> Path:
+    """Resolve an asset file path canonically across project local directory and repository assets directory."""
+    path = Path(file_path)
+    if path.is_absolute() and path.exists():
+        return path
+
+    # 1. If project_dir provided, check project local assets/ folder or root
+    if project_dir:
+        proj_root = Path(project_dir)
+        p_path = proj_root / path
+        if p_path.exists():
+            return p_path
+        p_assets = proj_root / "assets" / path
+        if p_assets.exists():
+            return p_assets
+
+    # 2. Check CHATTERBOX_ASSETS_DIR if configured in env
+    env_assets = os.getenv("CHATTERBOX_ASSETS_DIR")
+    if env_assets:
+        e_path = Path(env_assets) / path
+        if e_path.exists():
+            return e_path
+
+    # 3. Check repository assets/ directory
+    repo_assets = Path(__file__).resolve().parent.parent / "assets"
+    r_path = repo_assets / path
+    if r_path.exists():
+        return r_path
+
+    # 4. Check relative to current working directory
+    cwd_assets = Path("assets") / path
+    if cwd_assets.exists():
+        return cwd_assets
+
+    # Fallback to repo assets if not found
+    return repo_assets / path if not path.is_absolute() else path
+
+
 def load_substitution_rules(path: str | Path | None = None) -> dict[str, list[str]]:
     """Load substitution graph from rules/resource-substitution.yaml or given path."""
     if not path:

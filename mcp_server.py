@@ -14,8 +14,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from mcp_adapter.catalog import PROJECT_TOOL_SCHEMAS, VOICE_TOOL_SCHEMAS, get_tools_list
+from mcp_adapter.catalog import PROJECT_TOOL_SCHEMAS, VOICE_TOOL_SCHEMAS, VOICE_PROJECT_TOOL_SCHEMAS, get_tools_list
 from mcp_adapter.project_tools import handle_project_tool
+from mcp_adapter.voice_project_tools import handle_voice_project_tool
 from mcp_adapter.voice_tools import handle_voice_tool
 
 # Backup standard stdout and redirect default sys.stdout to sys.stderr
@@ -54,6 +55,10 @@ def make_api_request(
     log(f"API Request: {method} {url}")
 
     req_headers = {"Accept": "application/json"}
+    api_key = os.getenv("CHATTERBOX_API_KEY")
+    if api_key:
+        req_headers["X-API-Key"] = api_key
+
     if headers:
         req_headers.update(headers)
 
@@ -135,7 +140,18 @@ def execute_tool(name: str, args: dict) -> dict:
         if voice_result is not None:
             return voice_result
 
-        # 2. Check project tools
+        # 2. Check voice project tools
+        voice_project_result = handle_voice_project_tool(
+            name=name,
+            args=args,
+            request_fn=make_api_request,
+            api_url=API_URL,
+            log_fn=log,
+        )
+        if voice_project_result is not None:
+            return voice_project_result
+
+        # 3. Check project tools
         project_result = handle_project_tool(
             name=name,
             args=args,
