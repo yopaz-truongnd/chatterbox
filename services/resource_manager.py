@@ -624,6 +624,34 @@ def resolve_requirement(
     )
 
 
+def _gap_for_requirement(requirement: ResourceRequirement) -> ResourceGap:
+    return ResourceGap(
+        id=f"RG_{requirement.id}",
+        type=requirement.type,
+        intent=requirement.intent,
+        term=requirement.term,
+        priority=requirement.priority,
+        used_at=[requirement.beat_id] if requirement.beat_id else [],
+        narrative_context=requirement.narrative_context,
+        wanted={
+            "duration": f"{requirement.desired.duration_min}-{requirement.desired.duration_max}s"
+            if requirement.desired.duration_max > 0 else "any",
+            "intensity": requirement.desired.intensity,
+            "tags": requirement.desired.tags,
+        },
+        suggested_search=generate_suggested_search(
+            intent=requirement.intent,
+            tags=requirement.desired.tags,
+            duration_min=requirement.desired.duration_min,
+            duration_max=requirement.desired.duration_max,
+            intensity=requirement.desired.intensity,
+        ),
+        accepted_formats=["WAV", "MP3"],
+        reason="no_matching_asset_in_manifest",
+        risk="missing_audio_asset",
+    )
+
+
 def resolve_project_resources(
     plan: VoicePlan,
     manifest: ResourceManifest,
@@ -631,6 +659,8 @@ def resolve_project_resources(
     context: ResolutionContext | None = None,
     substitution_rules: dict[str, list[str]] | None = None,
     selection_rules: dict[str, Any] | None = None,
+    ambience_palette: list[str] | None = None,
+    sfx_palette: list[str] | None = None,
 ) -> ResourceReport:
     """Resolve all resource requirements for a Directed VoicePlan.
 
@@ -646,6 +676,10 @@ def resolve_project_resources(
     resolved_list: list[ResourceResolution] = []
     substituted_list: list[ResourceResolution] = []
     missing_list: list[ResourceGap] = []
+    palettes = {
+        ResourceCategory.AMBIENCE: set(ambience_palette or []),
+        ResourceCategory.SFX: set(sfx_palette or []),
+    }
 
     # 1. Extract requirements
     requirements = extract_resource_requirements(plan)
@@ -668,6 +702,14 @@ def resolve_project_resources(
         )
 
         if isinstance(outcome, ResourceResolution):
+            palette = palettes.get(req.type, set())
+            selected = outcome.selected
+            if palette and selected and not ({selected.id, *selected.intents} & palette):
+                gap = _gap_for_requirement(req)
+                gap.reason = "outside_series_palette"
+                gap.risk = "series_sound_inconsistency"
+                missing_list.append(gap)
+                continue
             if outcome.status == ResolutionStatus.EXACT:
                 resolved_list.append(outcome)
                 earned_weight += weight_val

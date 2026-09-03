@@ -292,6 +292,8 @@ class VoiceProjectService:
         project_id: str,
         manifest_path: Path | str | None = None,
         allow_substitutions: bool = True,
+        ambience_palette: list[str] | None = None,
+        sfx_palette: list[str] | None = None,
     ) -> ResourceCheckResult:
         """Resolve requirements from Directed VoicePlan against Asset Library & Pronunciation Knowledge."""
         state = self.store.get_project_state(project_id)
@@ -322,6 +324,8 @@ class VoiceProjectService:
                     knowledge=pron_knowledge,
                     substitution_rules=sub_rules,
                     selection_rules=sel_rules,
+                    ambience_palette=ambience_palette,
+                    sfx_palette=sfx_palette,
                 )
                 overrides_path = proj_dir / "director-resource-overrides.yaml"
                 if overrides_path.exists():
@@ -656,6 +660,7 @@ class VoiceProjectService:
         mix_config: dict[str, Any] | None = None,
         mastering_profile: str = "storytelling",
         output_formats: list[str] | None = None,
+        target_lufs: float | None = None,
     ) -> MixPlan:
         """Construct and persist deterministic MixPlan from passed narration renders."""
         state = self.store.get_project_state(project_id)
@@ -688,6 +693,8 @@ class VoiceProjectService:
 
                 builder = MixPlanBuilder()
                 m_profile = load_mastering_profile(mastering_profile)
+                if target_lufs is not None:
+                    m_profile = m_profile.model_copy(update={"target_lufs": target_lufs})
                 e_profiles = [ExportProfile(format=fmt) for fmt in (output_formats or ["wav"])]
 
                 mix_plan = builder.build(
@@ -787,6 +794,7 @@ class VoiceProjectService:
         self,
         project_id: str,
         profile_name: str = "storytelling",
+        target_lufs: float | None = None,
         progress_callback: ProgressCallback | None = None,
         cancellation_token: CancellationToken | None = None,
     ) -> dict[str, Any]:
@@ -794,7 +802,7 @@ class VoiceProjectService:
         state = self.store.get_project_state(project_id)
         proj_dir = self.store.get_project_dir(project_id)
         premaster_path = proj_dir / "mix" / "premaster.wav"
-        _, _, mix_plan_path = self._load_valid_mix_plan(project_id)
+        mix_plan, _, mix_plan_path = self._load_valid_mix_plan(project_id)
         if premaster_path.exists():
             self._verify_lineage(
                 premaster_path, proj_dir / "mix" / "premaster.lineage", mix_plan_path, "Premaster"
@@ -811,6 +819,8 @@ class VoiceProjectService:
                 master_path = proj_dir / "mix" / "master.wav"
                 service = AudioMasteringService()
                 prof = load_mastering_profile(profile_name)
+                if target_lufs is not None:
+                    prof = prof.model_copy(update={"target_lufs": target_lufs})
 
                 result = service.master(
                     input_wav_path=premaster_path,
@@ -863,7 +873,7 @@ class VoiceProjectService:
         state = self.store.get_project_state(project_id)
         proj_dir = self.store.get_project_dir(project_id)
         master_path = proj_dir / "mix" / "master.wav"
-        _, _, mix_plan_path = self._load_valid_mix_plan(project_id)
+        mix_plan, _, mix_plan_path = self._load_valid_mix_plan(project_id)
         premaster_path = proj_dir / "mix" / "premaster.wav"
         if premaster_path.exists():
             self._verify_lineage(
@@ -893,6 +903,30 @@ class VoiceProjectService:
                     progress_callback=progress_callback,
                     cancellation_token=cancellation_token,
                 )
+
+                # Preserve reusable-library attribution and usage lineage for every
+                # ambience/SFX source that participated in the current MixPlan.
+                from services.asset_library_store import get_asset_library_store
+                library = get_asset_library_store()
+                licensed = []
+                for clip in [*mix_plan.ambience_clips, *mix_plan.sfx_clips]:
+                    asset = library.find_by_sha256(clip.source_sha256)
+                    if not asset:
+                        continue
+                    library.update_usage(
+                        asset.asset_id,
+                        project_id=project_id,
+                        beat_id=getattr(clip, "beat_id", None),
+                    )
+                    licensed.append({
+                        "asset_id": asset.asset_id,
+                        "sha256": asset.sha256,
+                        "license": asset.license,
+                        "attribution": asset.attribution,
+                        "source_url": asset.source_url,
+                    })
+                manifest.asset_licenses = list({item["asset_id"]: item for item in licensed}.values())
+                manifest.save_yaml(export_dir / "export-manifest.yaml")
 
                 if cancellation_token and cancellation_token.is_cancelled():
                     state.stage = state.last_stable_stage

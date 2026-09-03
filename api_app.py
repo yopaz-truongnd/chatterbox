@@ -18,7 +18,20 @@ from fastapi.staticfiles import StaticFiles
 
 import character_api
 from chatterbox.version import API_VERSION, APP_NAME, __version__
-from routers import critic, events, jobs, projects, system, tts, voice_projects, voice_workflows
+from routers import (
+    critic,
+    events,
+    jobs,
+    projects,
+    system,
+    tts,
+    voice_assets,
+    voice_health,
+    voice_projects,
+    voice_runtime,
+    voice_series,
+    voice_workflows,
+)
 from services.model_registry import is_model_cached, is_multilingual_cached
 from services.job_manager import JobManager
 from services.voice_project_dependencies import get_voice_project_workflow_service
@@ -148,6 +161,10 @@ app.include_router(projects.router)
 app.include_router(events.router)
 app.include_router(voice_projects.router)
 app.include_router(voice_workflows.router)
+app.include_router(voice_assets.router)
+app.include_router(voice_runtime.router)
+app.include_router(voice_series.router)
+app.include_router(voice_health.router)
 
 if WEBUI_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(WEBUI_DIR)), name="static")

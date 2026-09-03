@@ -85,6 +85,7 @@ class DirectorResourceService:
         self.revisions.append(DirectorRevisionEvent(
             revision_id=f"rev_{uuid.uuid4().hex[:12]}", project_id=project_id,
             beat_id=affected[0] if len(affected) == 1 else None, revision_type=revision_type,
+            affected_beats=affected,
             actor_id=actor_id, reason=reason, after={"resource_id": resource_id, **after},
             affected_artifacts=artifacts, required_reproduction_steps=steps,
             approval_required="final_approval" in artifacts,

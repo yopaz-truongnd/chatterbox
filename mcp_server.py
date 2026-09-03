@@ -18,6 +18,24 @@ from mcp_adapter.catalog import PROJECT_TOOL_SCHEMAS, VOICE_TOOL_SCHEMAS, VOICE_
 from mcp_adapter.project_tools import handle_project_tool
 from mcp_adapter.voice_project_tools import handle_voice_project_tool
 from mcp_adapter.voice_tools import handle_voice_tool
+from mcp_adapter.runtime_tools import handle_runtime_capabilities, handle_runtime_preflight
+from mcp_adapter.asset_tools import handle_asset_tool
+from mcp_adapter.series_tools import (
+    handle_series_create,
+    handle_series_get,
+    handle_series_add_episode,
+    handle_series_produce,
+    handle_series_status,
+    handle_series_review_queue,
+    handle_series_cancel,
+)
+from mcp_adapter.health_tools import (
+    handle_voice_health,
+    handle_voice_events,
+    handle_voice_diagnostics,
+    handle_voice_series_health,
+    handle_voice_series_events,
+)
 
 # Backup standard stdout and redirect default sys.stdout to sys.stderr
 # This prevents random print() statements from corrupting the JSON-RPC stdin/stdout channel.
@@ -161,6 +179,51 @@ def execute_tool(name: str, args: dict) -> dict:
         )
         if project_result is not None:
             return project_result
+
+        # 4. Phase 17 Runtime tools
+        if name == "chatterbox_voice_runtime_capabilities":
+            return handle_runtime_capabilities(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_runtime_preflight":
+            return handle_runtime_preflight(args, request_fn=make_api_request)
+
+        # 5. Phase 18 Asset Library tools
+        asset_result = handle_asset_tool(
+            name=name,
+            args=args,
+            request_fn=make_api_request,
+            api_url=API_URL,
+            log_fn=log,
+        )
+        if asset_result is not None:
+            return asset_result
+
+        # 6. Phase 19 Series tools
+        if name == "chatterbox_voice_series_create":
+            return handle_series_create(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_get":
+            return handle_series_get(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_add_episode":
+            return handle_series_add_episode(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_produce":
+            return handle_series_produce(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_status":
+            return handle_series_status(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_review_queue":
+            return handle_series_review_queue(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_cancel":
+            return handle_series_cancel(args, request_fn=make_api_request)
+
+        # 7. Phase 20 Health & Observability tools
+        if name == "chatterbox_voice_health":
+            return handle_voice_health(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_events":
+            return handle_voice_events(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_diagnostics":
+            return handle_voice_diagnostics(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_health":
+            return handle_voice_series_health(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_series_events":
+            return handle_voice_series_events(args, request_fn=make_api_request)
 
         return {"content": [{"type": "text", "text": f"Error: Tool '{name}' not found."}], "isError": True}
     except Exception as e:

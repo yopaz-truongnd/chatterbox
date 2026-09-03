@@ -77,7 +77,11 @@ def resolve_server_tts_provider(
             )
 
         gateway = DefaultJobManagerGateway(jm)
-        return ChatterboxJobProvider(gateway=gateway, default_model=model or "nano")
+        return ChatterboxJobProvider(
+            gateway=gateway,
+            default_model=model or "nano",
+            default_reference_voice=voice,
+        )
 
     if normalized_name == "gemini":
         return GeminiTTSProvider(model_name=model, voice_name=voice)
@@ -94,13 +98,15 @@ def get_voice_project_service(
     provider_name: str = "local",
     store: VoiceProjectStore | None = None,
     execution_port: TTSExecutionPort | None = None,
+    model: str | None = None,
+    voice: str | None = None,
 ) -> VoiceProjectService:
     """Create VoiceProjectService configured for server execution."""
     actual_store = store or get_voice_project_store()
     actual_port = execution_port
     if actual_port is None:
         try:
-            actual_port = resolve_server_tts_provider(provider_name)
+            actual_port = resolve_server_tts_provider(provider_name, model=model, voice=voice)
         except Exception:
             actual_port = None
 

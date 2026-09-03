@@ -184,6 +184,7 @@ class ExportManifest(BaseModel):
     profiles: list[ExportProfile] = Field(default_factory=list)
     artifacts: list[MixArtifact] = Field(default_factory=list)
     source_master_sha256: str = ""
+    asset_licenses: list[dict[str, Any]] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> dict[str, Any]:

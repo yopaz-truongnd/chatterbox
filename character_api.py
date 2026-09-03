@@ -4,7 +4,7 @@ import json
 import shutil
 import threading
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -71,7 +71,7 @@ class CharacterUpdate(BaseModel):
 
 
 def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def migrate_legacy_characters(target_data_dir: Path) -> None:
@@ -571,4 +571,3 @@ def download_reference_audio(character_id: str) -> FileResponse:
 
 
 load_characters()
-

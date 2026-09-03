@@ -63,6 +63,14 @@ class WorkflowPolicy(BaseModel):
     output_formats: list[str] = Field(default_factory=lambda: ["wav"])
     mixing_profile: str = "storytelling"
     mastering_profile: str = "storytelling"
+    model: str | None = None
+    narrator_character: str | None = None
+    narrator_reference_voice: str | None = None
+    voice_style: str | None = None
+    ambience_palette: list[str] = Field(default_factory=list)
+    sfx_palette: list[str] = Field(default_factory=list)
+    loudness_target_lufs: float | None = None
+    pronunciation_overrides: dict[str, str] = Field(default_factory=dict)
 
 
 class VoiceWorkflowState(BaseModel):

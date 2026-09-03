@@ -32,7 +32,8 @@ if [ "$1" = "--test" ] || [ "$1" = "test" ]; then
     echo "======================================================================="
     echo "       CHATTERBOX TTS — CHẠY KIỂM THỬ TÍCH HỢP (UNIT TESTS)           "
     echo "======================================================================="
-    export CHATTERBOX_IN_PROCESS=1
+    export CHATTERBOX_IN_PROCESS="${CHATTERBOX_IN_PROCESS:-1}"
+    export CHATTERBOX_TEST_DUMMY_INFERENCE="${CHATTERBOX_TEST_DUMMY_INFERENCE:-1}"
     exec "$PYTHON_BIN" -m unittest discover -v tests/
 fi
 

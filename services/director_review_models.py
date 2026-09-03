@@ -110,6 +110,7 @@ class DirectorRevisionEvent(BaseModel):
     revision_id: str
     project_id: str
     beat_id: str | None = None
+    affected_beats: list[str] = Field(default_factory=list)
     revision_type: str
     actor_type: str = "human"
     actor_id: str = "unknown"
@@ -120,9 +121,12 @@ class DirectorRevisionEvent(BaseModel):
     affected_artifacts: list[str] = Field(default_factory=list)
     required_reproduction_steps: list[str] = Field(default_factory=list)
     approval_required: bool = False
+    status: str = "pending"
+    reproduced_at: str | None = None
 
 
 class DirectorRevisionState(BaseModel):
+    pending_revision_ids: list[str] = Field(default_factory=list)
     affected_beats: list[str] = Field(default_factory=list)
     invalidated_artifacts: list[str] = Field(default_factory=list)
     required_reproduction_steps: list[str] = Field(default_factory=list)
@@ -199,6 +203,11 @@ class IncrementalReproductionResult(BaseModel):
     executed_steps: list[str] = Field(default_factory=list)
     status: str
     suggested_action: str
+    # Populated when status == "waiting_for_human" (P1-2)
+    artifact_id: str | None = None
+    artifact_sha256: str | None = None
+    human_action: dict[str, Any] | None = None
+    approval_endpoint: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
