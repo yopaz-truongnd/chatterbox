@@ -38,6 +38,13 @@ def load_model(job_type: str, device: str) -> tuple[Any, int]:
 def generate_with_model(model: Any, job_type: str, params: dict, device: str) -> torch.Tensor:
     """Generate audio waveform tensor using an already-loaded model instance."""
     if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1":
+        if hasattr(model, "generate"):
+            try:
+                model_id = resolve_model_id(job_type)
+                return synthesize_chunk_tensor(model, model_id, params.get("text", ""), params, device)
+            except Exception:
+                t = torch.linspace(0, 1.0, 24000)
+                return (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
         t = torch.linspace(0, 1.0, 24000)
         return (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
 

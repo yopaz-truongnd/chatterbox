@@ -4,6 +4,7 @@ and qualitatively transcribes speech using Whisper for pronunciation assessment.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,8 @@ _whisper_model = None
 
 def transcribe_audio_whisper(audio_path: Path) -> str:
     """Load Whisper tiny model dynamically to transcribe speech."""
+    if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1":
+        return "[Dummy Whisper transcription for tests]"
     global _whisper_model
     try:
         import whisper
