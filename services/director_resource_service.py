@@ -105,13 +105,13 @@ class DirectorResourceService:
             if beat.id in affected:
                 beat.voice.pronunciation[term] = phonetic
         self.store.save_voice_plan(project_id, plan)
+        self.project_service.check_resources(project_id)
         manifest = self.store.load_manifest(project_id)
         for beat_id in affected:
             if beat_id in manifest.beats:
                 manifest.beats[beat_id].selected_attempt = None
                 manifest.beats[beat_id].status = RenderStatus.PENDING
         self.store.save_manifest(project_id, manifest)
-        self.project_service.check_resources(project_id)
         artifacts = ["selected_attempt", "beat_qc", *MIX_ARTIFACTS]
         steps = ["render_beat", "evaluate", "prepare_mix", "mix", "master", "export"]
         self._audit(project_id, "pronunciation_added", term, affected, artifacts, steps, actor_id, reason, {"phonetic": phonetic})

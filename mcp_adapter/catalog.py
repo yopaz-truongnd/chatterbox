@@ -868,6 +868,57 @@ RUNTIME_TOOL_SCHEMAS: list[dict] = [
             "required": ["project_id"],
         },
     },
+    {
+        "name": "chatterbox_voice_validate_runtime",
+        "description": "Launch full real-runtime production validation against local Chatterbox TTS.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "description": "TTS Provider ('local', 'gemini', 'fake')."},
+                "model": {"type": "string", "description": "TTS Model (e.g. 'nano', 'turbo')."},
+                "language": {"type": "string", "description": "Language code (default 'en')."},
+                "script_path": {"type": "string", "description": "Optional story script path."},
+                "profile": {"type": "string", "description": "Optional validation profile name/path."},
+                "output_formats": {"type": "array", "items": {"type": "string"}, "description": "Deliverable formats (wav, mp3)."},
+                "require_final_approval": {"type": "boolean", "description": "Whether final master approval is required."},
+                "require_narration_acceptance": {"type": "boolean", "description": "Whether narration review gate is required."},
+                "run_incremental_reproduction": {"type": "boolean", "description": "Test one-beat incremental reproduction."},
+            },
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_status",
+        "description": "Query progress and execution status of a production validation run.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_report",
+        "description": "Retrieve full sanitized diagnostics and metrics report for a production validation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_cancel",
+        "description": "Cancel an active production validation execution.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
 ]
 
 SERIES_TOOL_SCHEMAS: list[dict] = [

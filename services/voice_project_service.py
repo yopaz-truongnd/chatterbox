@@ -486,6 +486,7 @@ class VoiceProjectService:
                 else:
                     final_stage = ProjectStatus.READY_TO_RENDER
 
+                state = self.store.get_project_state(project_id)
                 state.stage = final_stage
                 state.last_stable_stage = final_stage
                 state.error = None
@@ -633,6 +634,7 @@ class VoiceProjectService:
             else:
                 final_stage = ProjectStatus.READY_TO_RENDER
 
+            state = self.store.get_project_state(project_id)
             state.stage = final_stage
             state.last_stable_stage = final_stage
             self.store.save_project_state(state)

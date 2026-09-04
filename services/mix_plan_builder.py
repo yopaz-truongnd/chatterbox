@@ -162,7 +162,13 @@ class MixPlanBuilder:
                 )
 
             audio_path = Path(attempt.audio_path)
-            if not audio_path.is_absolute():
+            if audio_path.exists():
+                pass
+            elif (project_root / audio_path).exists():
+                audio_path = project_root / audio_path
+            elif (project_root / "renders" / beat.id / audio_path.name).exists():
+                audio_path = project_root / "renders" / beat.id / audio_path.name
+            elif not audio_path.is_absolute():
                 audio_path = project_root / audio_path
 
             if not audio_path.exists():

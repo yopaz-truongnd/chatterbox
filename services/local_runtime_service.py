@@ -55,6 +55,9 @@ def _get_model_runtime() -> Any | None:
 class LocalRuntimeService:
     """Stateless service exposing runtime capability inspection and production preflight."""
 
+    def __init__(self, store: Any | None = None) -> None:
+        self._store = store
+
     # ------------------------------------------------------------------ #
     # 1. Capabilities                                                       #
     # ------------------------------------------------------------------ #
@@ -169,6 +172,7 @@ class LocalRuntimeService:
         requested_formats: list[str] | None = None,
         selected_model: str | None = None,
         reference_voice: str | None = None,
+        store: Any | None = None,
     ) -> list[PreflightIssue]:
         """Check all preconditions before starting a production workflow.
 
@@ -190,10 +194,12 @@ class LocalRuntimeService:
         normalized_provider = (provider or "local").lower().strip()
 
         # 1. Project directory existence
-        from services.voice_project_dependencies import get_voice_project_store
+        active_store = store or self._store
+        if active_store is None:
+            from services.voice_project_dependencies import get_voice_project_store
+            active_store = get_voice_project_store()
         try:
-            store = get_voice_project_store()
-            if not store.project_exists(project_id):
+            if not active_store.project_exists(project_id):
                 issues.append(PreflightIssue(
                     severity="error",
                     code="PROJECT_NOT_FOUND",
@@ -213,7 +219,7 @@ class LocalRuntimeService:
 
         # 2. Output directory writability
         try:
-            project_dir = store.get_project_dir(project_id)
+            project_dir = active_store.get_project_dir(project_id)
             output_dir = project_dir / "output"
             output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -252,7 +258,7 @@ class LocalRuntimeService:
 
         # 4. Disk space check
         try:
-            check_path = store.get_project_dir(project_id)
+            check_path = active_store.get_project_dir(project_id)
             stat = shutil.disk_usage(str(check_path))
             if stat.free < _DISK_WARN_BYTES:
                 free_mb = round(stat.free / (1024 * 1024), 1)

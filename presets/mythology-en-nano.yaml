@@ -1,0 +1,31 @@
+preset_id: "mythology-en-nano"
+version: "1.0.0"
+description: "Recommended production preset for English mythology narration using local nano model"
+provider: "local"
+model: "nano"
+voice_style: "mythology_epic_narrator"
+emotion_defaults:
+  narrator: "epic_serious"
+  action: "urgent"
+  triumph: "inspiring"
+pace_defaults:
+  intro: 0.95
+  narrative: 1.00
+  dialogue: 1.05
+  climax: 1.15
+pause_defaults:
+  between_beats_ms: 600
+  scene_transition_ms: 1200
+qc_thresholds:
+  min_overall_score: 0.75
+  max_wer: 0.15
+  max_clipping_ratio: 0.001
+retry_policy:
+  max_automatic_retries: 2
+  temperature_jitter: 0.05
+mixing_profile: "storytelling"
+mastering_profile: "podcast"
+loudness_target_lufs: -19.0
+output_formats:
+  - "wav"
+  - "mp3"
