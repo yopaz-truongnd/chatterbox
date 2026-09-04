@@ -12,7 +12,7 @@ Exposes:
 from __future__ import annotations
 
 from typing import Any
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
 from services.local_runtime_models import LocalRuntimeCapabilities, PreflightIssue
@@ -107,16 +107,12 @@ def run_production_preflight(
 # Real Production Validation Endpoints (Phase 21)
 # =====================================================================
 
-@router.post("/validations", response_model=ProductionValidationReport | StartValidationResponse)
+@router.post("/validations", response_model=StartValidationResponse, status_code=202)
 def start_production_validation(
     request: PublicProductionValidationRequest = Body(default_factory=PublicProductionValidationRequest),
-    sync: bool = Query(default=True, description="Run synchronously or async in background"),
-) -> ProductionValidationReport:
-    """Execute real-runtime production validation against local runtime."""
+) -> StartValidationResponse:
+    """Queue real-runtime production validation and return immediately."""
     validation_request = ProductionValidationRequest.model_validate(request.model_dump())
-    if sync:
-        return _validation_service.validate(validation_request)
-
     initial_report, operation = _validation_service.submit(validation_request)
     return StartValidationResponse(
         validation_id=initial_report.validation_id,

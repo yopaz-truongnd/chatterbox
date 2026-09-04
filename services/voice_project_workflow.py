@@ -63,10 +63,12 @@ class VoiceProjectWorkflowService:
         store: VoiceProjectWorkflowStore | None = None,
         project_store: VoiceProjectStore | None = None,
         op_manager: VoiceProjectOperationManager | None = None,
+        project_service: Any | None = None,
     ) -> None:
         self.store = store or VoiceProjectWorkflowStore()
         self.project_store = project_store or get_voice_project_store()
         self.op_manager = op_manager or get_voice_project_operation_manager()
+        self.project_service = project_service
 
     def start_workflow(
         self,
@@ -181,7 +183,6 @@ class VoiceProjectWorkflowService:
         approved: bool,
         artifact_id: str | None = None,
         artifact_sha256: str | None = None,
-        resume: bool = True,
     ) -> VoiceWorkflowState:
         """Persist an explicit approval decision and resume the workflow."""
         def approve(state: VoiceWorkflowState) -> None:
@@ -223,7 +224,7 @@ class VoiceProjectWorkflowService:
             state.updated_at = datetime.now(timezone.utc).isoformat()
 
         state = self.store.transition_workflow(workflow_id, WorkflowStatus.WAITING_FOR_HUMAN, approve)
-        if not approved or not resume:
+        if not approved:
             return state
         threading.Thread(
             target=self._execute_workflow_loop,
@@ -412,7 +413,7 @@ class VoiceProjectWorkflowService:
             return
 
         try:
-            service = get_voice_project_service(
+            service = self.project_service or get_voice_project_service(
                 provider_name=state.policy.provider,
                 model=state.policy.model,
                 voice=state.policy.narrator_reference_voice,

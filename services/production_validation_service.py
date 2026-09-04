@@ -25,6 +25,7 @@ import resource
 import shutil
 import struct
 import tempfile
+import threading
 import time
 from typing import Any, Callable
 import uuid
@@ -32,7 +33,6 @@ import wave
 import yaml
 
 from services.audio_export import AudioExportService
-from services.director_resource_service import DirectorResourceService
 from services.director_review_models import BeatDirectionPatch, BeatTimingPatch
 from services.director_review_service import DirectorReviewService
 from services.director_revision_service import DirectorRevisionService
@@ -60,7 +60,7 @@ from services.voice_project_service import VoiceProjectService
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_operations import VoiceProjectOperationManager
 from services.voice_project_workflow import VoiceProjectWorkflowService
-from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus, WorkflowStep
+from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 logger = logging.getLogger(__name__)
@@ -311,10 +311,13 @@ class ProductionValidationService:
             project_id=project_id,
         )
         _ACTIVE_VALIDATIONS[validation_id] = report
+        ready = threading.Event()
+
         def run_validation(
             cancellation_token: CancellationToken | None = None,
             progress_callback: ProgressCallback | None = None,
         ) -> ProductionValidationReport:
+            ready.wait()
             return self.validate(
                 req,
                 cancellation_token=cancellation_token,
@@ -323,63 +326,123 @@ class ProductionValidationService:
                 project_id=project_id,
             )
 
-        operation = self.operation_manager.submit(
-            project_id, "production_validation", run_validation
-        )
-        report.operation_ids = [operation.id]
-        _ACTIVE_VALIDATIONS[validation_id] = report
-        return report, operation
+        operation = self.operation_manager.submit(validation_id, "production_validation", run_validation)
+        current = _ACTIVE_VALIDATIONS[validation_id]
+        current.operation_ids = [operation.id]
+        ready.set()
+        return current, operation
 
-    def _approve_validation_gate(
+    def _run_production_workflow(
         self,
+        *,
+        project_service: VoiceProjectService,
+        script_text: str,
         project_id: str,
-        action_type: str,
-        artifact_sha256: str | None = None,
-    ) -> str:
-        """Exercise the canonical persisted human-approval gate for validation."""
-        workflow_id = f"vwf_validation_{uuid.uuid4().hex[:10]}"
-        workflow_store = VoiceProjectWorkflowStore(self.store.root_dir / "workflows")
-        step_names = ["create_project", "plan", "check_resources", "render", "prepare_mix", "mix", "master", "export"]
-        human_action: dict[str, Any] = {
-            "action_type": action_type,
-            "reason": "Production validation requires canonical approval.",
-            "items": [],
-            "resume_action": "export" if action_type == "final_audio_approval" else "prepare_mix",
-        }
-        action = "approve_narration"
-        artifact_id = None
-        if action_type == "final_audio_approval":
-            action = "approve_final_audio"
-            artifact_id = "master_wav"
-            human_action["items"] = [{"artifact_id": artifact_id, "sha256": artifact_sha256}]
-        state = VoiceWorkflowState(
-            workflow_id=workflow_id,
-            project_id=project_id,
-            status=WorkflowStatus.WAITING_FOR_HUMAN,
-            policy=WorkflowPolicy(require_final_approval=action_type == "final_audio_approval"),
-            steps=[WorkflowStep(name=name, status="completed") for name in step_names],
-            human_action=human_action,
-        )
-        workflow_store.save_workflow(state)
-        service = VoiceProjectWorkflowService(
-            store=workflow_store,
+        provider: str,
+        model: str,
+        language: str,
+        output_formats: list[str],
+        mixing_profile: str,
+        mastering_profile: str,
+        loudness_target: float,
+        max_retries: int,
+        require_narration_acceptance: bool,
+        require_final_approval: bool,
+        cancellation_token: CancellationToken,
+        timeout_seconds: int,
+    ) -> VoiceWorkflowState:
+        """Run and approve one real production workflow through its terminal state."""
+        workflow_service = VoiceProjectWorkflowService(
+            store=VoiceProjectWorkflowStore(self.store.root_dir / "workflows"),
             project_store=self.store,
             op_manager=self.operation_manager,
+            project_service=project_service,
         )
-        waiting = service.get_workflow(workflow_id)
-        if not waiting or waiting.status != WorkflowStatus.WAITING_FOR_HUMAN or not waiting.human_action:
-            raise RuntimeError("Canonical approval gate was not persisted.")
-        approved = service.approve_workflow(
-            workflow_id,
-            action=action,
-            approved=True,
-            artifact_id=artifact_id,
-            artifact_sha256=artifact_sha256,
-            resume=False,
+        state = workflow_service.start_workflow(
+            script_text=script_text,
+            project_id=project_id,
+            title="Mythology Production Validation",
+            language=language,
+            policy=WorkflowPolicy(
+                provider=provider,
+                model=model,
+                retry_budget=max(1, max_retries),
+                auto_accept_qc_pass=not require_narration_acceptance,
+                require_final_approval=require_final_approval,
+                output_formats=output_formats,
+                mixing_profile=mixing_profile,
+                mastering_profile=mastering_profile,
+                loudness_target_lufs=loudness_target,
+                pronunciation_overrides={
+                    "Prometheus": "proh-MEE-thee-us",
+                    "Hephaestus": "heh-FES-tus",
+                    "Zeus": "zoos",
+                    "Olympus": "oh-LIM-pus",
+                    "Mount": "mount",
+                    "Titan": "TY-tun",
+                },
+            ),
         )
-        if approved.human_action is not None:
-            raise RuntimeError("Canonical approval gate did not consume the human action.")
-        return workflow_id
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if cancellation_token.is_cancelled():
+                workflow_service.cancel_workflow(state.workflow_id)
+                raise RuntimeError("Production validation was cancelled.")
+            state = workflow_service.get_workflow(state.workflow_id)
+            if not state:
+                raise RuntimeError("Production workflow disappeared during validation.")
+            if state.status == WorkflowStatus.COMPLETED:
+                return state
+            if state.status in (WorkflowStatus.FAILED, WorkflowStatus.CANCELLED, WorkflowStatus.INTERRUPTED):
+                raise RuntimeError(f"Production workflow ended in '{state.status.value}': {state.error}")
+            if state.status == WorkflowStatus.WAITING_FOR_HUMAN:
+                action = state.human_action or {}
+                action_type = action.get("action_type")
+                if action_type == "narration_acceptance":
+                    workflow_service.approve_workflow(
+                        state.workflow_id, action="approve_narration", approved=True
+                    )
+                elif action_type == "final_audio_approval":
+                    item = (action.get("items") or [{}])[0]
+                    master_path = self.store.get_project_dir(project_id) / "mix" / "master.wav"
+                    current_sha = compute_file_sha256(master_path)
+                    if item.get("artifact_id") != "master_wav" or item.get("sha256") != current_sha:
+                        raise RuntimeError("Workflow approval artifact does not match the current master.")
+                    workflow_service.approve_workflow(
+                        state.workflow_id,
+                        action="approve_final_audio",
+                        approved=True,
+                        artifact_id="master_wav",
+                        artifact_sha256=current_sha,
+                    )
+                else:
+                    raise RuntimeError(f"Production workflow requires unsupported human action '{action_type}'.")
+            time.sleep(0.03)
+        workflow_service.cancel_workflow(state.workflow_id)
+        raise TimeoutError(f"Production workflow exceeded {timeout_seconds}s validation timeout.")
+
+    @staticmethod
+    def _wait_for_workflow_terminal(
+        service: VoiceProjectWorkflowService,
+        workflow_id: str,
+        cancellation_token: CancellationToken,
+        timeout_seconds: int,
+    ) -> VoiceWorkflowState:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            state = service.get_workflow(workflow_id)
+            if not state:
+                raise RuntimeError("Production workflow disappeared during validation.")
+            if state.status == WorkflowStatus.COMPLETED:
+                return state
+            if state.status in (WorkflowStatus.FAILED, WorkflowStatus.CANCELLED, WorkflowStatus.INTERRUPTED):
+                raise RuntimeError(f"Production workflow ended in '{state.status.value}': {state.error}")
+            if cancellation_token.is_cancelled():
+                service.cancel_workflow(workflow_id)
+                raise RuntimeError("Production validation was cancelled.")
+            time.sleep(0.03)
+        service.cancel_workflow(workflow_id)
+        raise TimeoutError(f"Production workflow exceeded {timeout_seconds}s validation timeout.")
 
     def validate(
         self,
@@ -480,7 +543,6 @@ class ProductionValidationService:
             execution_port=exec_port,
             provider_name=provider_name,
         )
-        resource_service = DirectorResourceService(project_service)
         review_service = DirectorReviewService(self.store)
         revision_service = DirectorRevisionService(project_service)
 
@@ -556,11 +618,42 @@ class ProductionValidationService:
             report.verdict = ValidationVerdict.FAIL
             return self._finalize_report(report, steps, warnings, failures, start_ts, req)
 
+        workflow_t0 = time.time()
+        try:
+            workflow = self._run_production_workflow(
+                project_service=project_service,
+                script_text=script_text,
+                project_id=project_id,
+                provider=provider_name,
+                model=model_name,
+                language=language,
+                output_formats=output_formats,
+                mixing_profile=mixing_profile,
+                mastering_profile=mastering_profile,
+                loudness_target=loudness_target,
+                max_retries=max_retries,
+                require_narration_acceptance=require_narration_acceptance,
+                require_final_approval=require_final_approval,
+                cancellation_token=token,
+                timeout_seconds=req.runtime_timeout_seconds,
+            )
+            report.workflow_id = workflow.workflow_id
+            report.operation_ids.extend(
+                step.operation_id for step in workflow.steps
+                if step.operation_id and step.operation_id not in report.operation_ids
+            )
+        except Exception as exc:
+            failures.append(ProductionValidationFailure(
+                step_name="production_workflow", code="WORKFLOW_FAILED", message=str(exc)
+            ))
+            report.status = "failed"
+            report.verdict = ValidationVerdict.FAIL
+            return self._finalize_report(report, steps, warnings, failures, start_ts, req)
+
         # --- 3. Voice Planning ---
-        plan_t0 = time.time()
         def _step_plan():
-            plan_res = project_service.plan(project_id)
-            report.planning_duration_ms = round((time.time() - plan_t0) * 1000.0, 1)
+            workflow_step = next(step for step in workflow.steps if step.name == "plan")
+            report.planning_duration_ms = workflow_step.duration_ms if hasattr(workflow_step, "duration_ms") else 0.0
             voice_plan = self.store.load_voice_plan(project_id)
             report.beat_count = len(voice_plan.beats) if voice_plan else 0
             return {"beat_count": report.beat_count}
@@ -573,26 +666,6 @@ class ProductionValidationService:
         # --- 4. Resource Check & Pronunciation Resolution ---
         def _step_resources():
             res_report = project_service.check_resources(project_id)
-            # Auto-resolve proper nouns if blocked
-            if res_report.render_blocked:
-                known_pronunciations = {
-                    "Prometheus": "proh-MEE-thee-us",
-                    "Hephaestus": "heh-FES-tus",
-                    "Zeus": "zoos",
-                    "Olympus": "oh-LIM-pus",
-                    "Mount": "mount",
-                    "Titan": "TY-tun",
-                }
-                # Resolve all required missing proper nouns/pronunciations
-                for gap in res_report.report.missing:
-                    term = gap.term or gap.intent or gap.id
-                    phonetic = known_pronunciations.get(term, term)
-                    try:
-                        resource_service.add_pronunciation(project_id, term, phonetic, "validation_runner")
-                    except Exception:
-                        pass
-                # Recheck
-                res_report = project_service.check_resources(project_id)
             return {
                 "render_blocked": res_report.render_blocked,
                 "missing_gaps_count": len(res_report.report.missing),
@@ -604,14 +677,14 @@ class ProductionValidationService:
             return self._finalize_report(report, steps, warnings, failures, start_ts, req)
 
         # --- 5. Render Narration ---
-        render_t0 = time.time()
         def _step_render():
-            render_res = project_service.render(project_id, cancellation_token=token)
-            report.render_duration_ms = round((time.time() - render_t0) * 1000.0, 1)
+            render_step = next(step for step in workflow.steps if step.name == "render")
+            report.render_duration_ms = 0.0
             manifest = self.store.load_manifest(project_id)
             total_attempts = sum(len(b.attempts) for b in manifest.beats.values()) if manifest else 0
             report.attempt_count = total_attempts
-            return {"render_stage": render_res.stage.value, "total_attempts": total_attempts}
+            return {"render_stage": "NARRATION_READY", "total_attempts": total_attempts,
+                    "operation_id": render_step.operation_id}
 
         if not _run_step("render_narration", _step_render):
             report.status = "failed"
@@ -619,25 +692,9 @@ class ProductionValidationService:
             return self._finalize_report(report, steps, warnings, failures, start_ts, req)
 
         # --- 6. QC & Adaptive Retry Evaluation ---
-        qc_t0 = time.time()
         def _step_qc():
-            project_service.evaluate(project_id)
             manifest = self.store.load_manifest(project_id)
-            for beat_id in list(manifest.beats):
-                while True:
-                    current = self.store.load_manifest(project_id).beats[beat_id]
-                    selected = next(
-                        (attempt for attempt in current.attempts if attempt.attempt == current.selected_attempt),
-                        current.attempts[-1] if current.attempts else None,
-                    )
-                    if not selected or selected.status != RenderStatus.FAILED or len(current.attempts) > max_retries:
-                        break
-                    project_service.render_beat(project_id, beat_id, cancellation_token=token)
-                    project_service.evaluate(project_id, beats=[beat_id])
-                    report.retry_count += 1
-
-            report.qc_duration_ms = round((time.time() - qc_t0) * 1000.0, 1)
-            manifest = self.store.load_manifest(project_id)
+            report.qc_duration_ms = 0.0
             report.attempt_count = sum(len(beat.attempts) for beat in manifest.beats.values())
             pass_cnt = 0
             rev_cnt = 0
@@ -700,18 +757,6 @@ class ProductionValidationService:
         # --- 7. Narration Review / Acceptance ---
         def _step_narration_review():
             review = review_service.get_review(project_id)
-            if require_narration_acceptance:
-                # Ensure all beats have valid selected attempts
-                manifest = self.store.load_manifest(project_id)
-                for beat_id, beat_state in manifest.beats.items():
-                    if beat_state.selected_attempt is None and beat_state.attempts:
-                        revision_service.select_attempt(
-                            project_id, beat_id, beat_state.attempts[0].attempt,
-                            actor_id="validation_runner", reason="Auto-accept for validation",
-                            explicit_approval=True,
-                        )
-                workflow_id = self._approve_validation_gate(project_id, "narration_acceptance")
-                report.workflow_id = workflow_id
             return {"ready": True, "beat_count": len(review.beats), "workflow_id": report.workflow_id}
 
         if not _run_step("narration_review", _step_narration_review):
@@ -721,12 +766,7 @@ class ProductionValidationService:
 
         # --- 8. Prepare Mix ---
         def _step_prepare_mix():
-            mix_plan = project_service.prepare_for_mix(
-                project_id=project_id,
-                mix_config={"profile": mixing_profile},
-                mastering_profile=mastering_profile,
-                output_formats=output_formats,
-            )
+            mix_plan, _, _ = project_service._load_valid_mix_plan(project_id)
             return {"voice_clips_count": len(mix_plan.voice_clips) if mix_plan else 0}
 
         if not _run_step("prepare_mix", _step_prepare_mix):
@@ -735,11 +775,8 @@ class ProductionValidationService:
             return self._finalize_report(report, steps, warnings, failures, start_ts, req)
 
         # --- 9. Audio Mix ---
-        mix_t0 = time.time()
         def _step_mix():
-            mix_art = project_service.mix(project_id, cancellation_token=token)
-            report.mix_duration_ms = round((time.time() - mix_t0) * 1000.0, 1)
-            p_path = mix_art.get("premaster_path") if isinstance(mix_art, dict) else getattr(mix_art, "premaster_path", "")
+            p_path = self.store.get_project_dir(project_id) / "mix" / "premaster.wav"
             return {"premaster_path": _sanitize_path(p_path)}
 
         if not _run_step("mix_audio", _step_mix):
@@ -748,15 +785,8 @@ class ProductionValidationService:
             return self._finalize_report(report, steps, warnings, failures, start_ts, req)
 
         # --- 10. Mastering ---
-        master_t0 = time.time()
         def _step_master():
-            master_art = project_service.master(
-                project_id=project_id,
-                profile_name=mastering_profile,
-                cancellation_token=token,
-            )
-            report.master_duration_ms = round((time.time() - master_t0) * 1000.0, 1)
-            m_path = master_art.get("master_path") if isinstance(master_art, dict) else getattr(master_art, "master_path", "")
+            m_path = self.store.get_project_dir(project_id) / "mix" / "master.wav"
             return {"master_path": _sanitize_path(m_path)}
 
         if not _run_step("master_audio", _step_master):
@@ -768,10 +798,6 @@ class ProductionValidationService:
         def _step_approval():
             master_wav = self.store.get_project_dir(project_id) / "mix" / "master.wav"
             master_sha = compute_file_sha256(master_wav)
-            if require_final_approval:
-                report.workflow_id = self._approve_validation_gate(
-                    project_id, "final_audio_approval", master_sha
-                )
             return {"master_sha256": master_sha, "approved": True, "workflow_id": report.workflow_id}
 
         if not _run_step("final_master_approval", _step_approval):
@@ -780,15 +806,9 @@ class ProductionValidationService:
             return self._finalize_report(report, steps, warnings, failures, start_ts, req)
 
         # --- 12. Deliverable Export ---
-        export_t0 = time.time()
         def _step_export():
-            export_manifest = project_service.export(
-                project_id=project_id,
-                formats=output_formats,
-                cancellation_token=token,
-            )
-            report.export_duration_ms = round((time.time() - export_t0) * 1000.0, 1)
-            return {"export_artifacts_count": len(export_manifest.artifacts)}
+            export_manifest = workflow.result.get("manifest", {}) if workflow.result else {}
+            return {"export_artifacts_count": len(export_manifest.get("artifacts", []))}
 
         if not _run_step("export_deliverables", _step_export):
             report.status = "failed"
@@ -899,9 +919,20 @@ class ProductionValidationService:
                 
                 # If reproduction paused at approval gate, approve and finish export
                 if repro_res.status == "waiting_for_human":
-                    master_sha = compute_file_sha256(self.store.get_project_dir(project_id) / "mix" / "master.wav")
-                    self._approve_validation_gate(project_id, "final_audio_approval", master_sha)
-                    project_service.export(project_id, formats=output_formats, cancellation_token=token)
+                    workflow_service = VoiceProjectWorkflowService(
+                        store=VoiceProjectWorkflowStore(self.store.root_dir / "workflows"),
+                        project_store=self.store,
+                        op_manager=self.operation_manager,
+                        project_service=project_service,
+                    )
+                    workflow_service.approve_workflow(
+                        report.workflow_id,
+                        action="approve_final_audio",
+                        approved=True,
+                        artifact_id=repro_res.artifact_id,
+                        artifact_sha256=repro_res.artifact_sha256,
+                    )
+                    self._wait_for_workflow_terminal(workflow_service, report.workflow_id, token, req.runtime_timeout_seconds)
 
                 # 3. Verify unaffected beats remain unchanged
                 manifest_after = self.store.load_manifest(project_id)
@@ -935,9 +966,20 @@ class ProductionValidationService:
 
                 repro_t = revision_service.reproduce_project(project_id)
                 if repro_t.status == "waiting_for_human":
-                    master_sha = compute_file_sha256(self.store.get_project_dir(project_id) / "mix" / "master.wav")
-                    self._approve_validation_gate(project_id, "final_audio_approval", master_sha)
-                    project_service.export(project_id, formats=output_formats, cancellation_token=token)
+                    workflow_service = VoiceProjectWorkflowService(
+                        store=VoiceProjectWorkflowStore(self.store.root_dir / "workflows"),
+                        project_store=self.store,
+                        op_manager=self.operation_manager,
+                        project_service=project_service,
+                    )
+                    workflow_service.approve_workflow(
+                        report.workflow_id,
+                        action="approve_final_audio",
+                        approved=True,
+                        artifact_id=repro_t.artifact_id,
+                        artifact_sha256=repro_t.artifact_sha256,
+                    )
+                    self._wait_for_workflow_terminal(workflow_service, report.workflow_id, token, req.runtime_timeout_seconds)
 
                 # Confirm zero narration rerendered
                 manifest_timing = self.store.load_manifest(project_id)

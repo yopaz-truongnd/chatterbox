@@ -9,9 +9,12 @@ from services.production_validation_models import (
     ValidationVerdict,
 )
 from services.production_validation_service import ProductionValidationService
+from services.production_validation_service import _ACTIVE_VALIDATIONS
 from services.tts.fake import FakeTTSProvider
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_operations import VoiceProjectOperationManager
+from services.voice_project_workflow_models import WorkflowStatus
+from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 
 class TestProductionValidationService(unittest.TestCase):
@@ -54,6 +57,17 @@ class TestProductionValidationService(unittest.TestCase):
         self.assertGreater(len(report.per_beat_metrics), 0)
         self.assertGreater(len(report.artifacts), 0)
 
+        workflow = VoiceProjectWorkflowStore(self.store.root_dir / "workflows").get_workflow(
+            report.workflow_id
+        )
+        self.assertEqual(workflow.status, WorkflowStatus.COMPLETED)
+        render_step = next(step for step in workflow.steps if step.name == "render")
+        master_step = next(step for step in workflow.steps if step.name == "master")
+        export_step = next(step for step in workflow.steps if step.name == "export")
+        self.assertTrue(render_step.result_summary.get("approved"))
+        self.assertTrue(master_step.result_summary.get("approved"))
+        self.assertEqual(export_step.status, "completed")
+
         # Check step names
         step_names = [s.name for s in report.steps]
         self.assertIn("create_project", step_names)
@@ -88,6 +102,29 @@ class TestProductionValidationService(unittest.TestCase):
         ))
         self.assertEqual(report.operation_ids, [operation.id])
         self.assertEqual(service.get_validation_report(report.validation_id).validation_id, report.validation_id)
+
+    def test_instant_worker_cannot_overwrite_terminal_report_with_queued_snapshot(self):
+        manager = VoiceProjectOperationManager(
+            max_workers=1, operations_dir=Path(self.tmp.name) / "instant-operations"
+        )
+        service = ProductionValidationService(
+            store=self.store, execution_port=self.provider, operation_manager=manager
+        )
+
+        def finish_immediately(*args, validation_id, **kwargs):
+            current = _ACTIVE_VALIDATIONS[validation_id]
+            current.status = "completed"
+            return current
+
+        service.validate = finish_immediately
+        report, operation = service.submit(ProductionValidationRequest(provider="fake"))
+        for _ in range(100):
+            if manager.get_operation(operation.id).status.value == "completed":
+                break
+            import time
+            time.sleep(0.01)
+        self.assertEqual(service.get_validation_report(report.validation_id).status, "completed")
+        self.assertEqual(service.get_validation_report(report.validation_id).operation_ids, [operation.id])
 
     def test_network_service_rejects_raw_paths(self):
         with self.assertRaisesRegex(ValueError, "local CLI"):

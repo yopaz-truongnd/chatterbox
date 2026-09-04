@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from fastapi.testclient import TestClient
 
@@ -29,17 +30,24 @@ class TestProductionValidationInterfaces(unittest.TestCase):
             "output_formats": ["wav"],
             "run_incremental_reproduction": False,
         }
-        res = self.client.post("/api/v1/voice-runtime/validations?sync=true", json=payload)
-        self.assertEqual(res.status_code, 200)
+        res = self.client.post("/api/v1/voice-runtime/validations", json=payload)
+        self.assertEqual(res.status_code, 202)
         data = res.json()
         val_id = data.get("validation_id")
         self.assertIsNotNone(val_id)
-        self.assertEqual(data.get("status"), "completed")
+        self.assertIsNotNone(data.get("operation_id"))
 
         # 2. Get status
-        res_stat = self.client.get(f"/api/v1/voice-runtime/validations/{val_id}")
+        deadline = time.monotonic() + 10
+        while True:
+            res_stat = self.client.get(f"/api/v1/voice-runtime/validations/{val_id}")
+            if res_stat.json().get("status") in {"completed", "failed", "cancelled"}:
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.03)
         self.assertEqual(res_stat.status_code, 200)
         self.assertEqual(res_stat.json().get("validation_id"), val_id)
+        self.assertEqual(res_stat.json().get("status"), "completed")
 
         # 3. Get full report
         res_rep = self.client.get(f"/api/v1/voice-runtime/validations/{val_id}/report")
