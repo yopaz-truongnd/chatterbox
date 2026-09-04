@@ -36,9 +36,10 @@ def main(args_list: list[str] | None = None) -> int:
         voice_mode=args.voice_mode,
         reference_voice=args.reference_voice,
         output_report_path=args.output_report,
+        output_formats=["wav"],
     )
 
-    service = ProductionValidationService()
+    service = ProductionValidationService(allow_raw_paths=True)
     print(f"Starting production validation with provider='{req.provider}', model='{req.model}'...")
     report = service.validate(req)
 

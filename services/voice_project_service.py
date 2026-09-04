@@ -1128,3 +1128,31 @@ class VoiceProjectService:
             "artifact_sha256": compute_file_sha256(artifact),
         }:
             raise MixPlanStaleError(f"{label} is stale relative to {source.name}; rebuild it before continuing.")
+
+    def verify_delivery_lineage(self, project_id: str) -> dict[str, str]:
+        """Verify the complete selected-attempt -> mix -> master -> export chain."""
+        proj_dir = self.store.get_project_dir(project_id)
+        self._load_valid_mix_plan(project_id)
+
+        mix_plan_path = proj_dir / "mix-plan.yaml"
+        premaster = proj_dir / "mix" / "premaster.wav"
+        master = proj_dir / "mix" / "master.wav"
+        self._verify_lineage(premaster, proj_dir / "mix" / "premaster.lineage", mix_plan_path, "Premaster")
+        self._verify_lineage(master, proj_dir / "mix" / "master.lineage", premaster, "Master")
+
+        manifest_path = proj_dir / "exports" / "export-manifest.yaml"
+        if not manifest_path.exists():
+            raise MixPlanStaleError("Export manifest is missing.")
+        manifest = ExportManifest.from_dict(yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {})
+        master_sha = compute_file_sha256(master)
+        if manifest.source_master_sha256 != master_sha:
+            raise MixPlanStaleError("Export manifest is stale relative to master.wav.")
+
+        verified: dict[str, str] = {}
+        for artifact in manifest.artifacts:
+            artifact_path = proj_dir / artifact.file_path
+            if not artifact_path.exists() or compute_file_sha256(artifact_path) != artifact.sha256:
+                raise MixPlanStaleError(f"Export artifact '{artifact.artifact_id}' failed lineage verification.")
+            verified[artifact_path.name] = artifact.sha256
+        verified[manifest_path.name] = compute_file_sha256(manifest_path)
+        return verified

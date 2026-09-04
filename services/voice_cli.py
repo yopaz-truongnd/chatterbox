@@ -876,8 +876,9 @@ def cmd_production_validate(args: argparse.Namespace) -> int:
         language=getattr(args, "language", "en"),
         reference_voice=getattr(args, "reference_voice", None),
         output_report_path=getattr(args, "output_report", None),
+        output_formats=["wav"],
     )
-    service = ProductionValidationService()
+    service = ProductionValidationService(allow_raw_paths=True)
     report = service.validate(req)
 
     if getattr(args, "json", False):
@@ -1022,4 +1023,3 @@ def main(args_list: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

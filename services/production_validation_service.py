@@ -24,6 +24,7 @@ import platform
 import resource
 import shutil
 import struct
+import tempfile
 import time
 from typing import Any, Callable
 import uuid
@@ -31,7 +32,6 @@ import wave
 import yaml
 
 from services.audio_export import AudioExportService
-from services.audio_mastering import AudioMasteringService
 from services.director_resource_service import DirectorResourceService
 from services.director_review_models import BeatDirectionPatch, BeatTimingPatch
 from services.director_review_service import DirectorReviewService
@@ -47,7 +47,7 @@ from services.production_validation_models import (
     ProductionValidationStep,
     ValidationVerdict,
 )
-from services.render_models import ProjectStatus, RenderStatus
+from services.render_models import RenderStatus
 from services.tts.base import CancellationToken, ProgressCallback, TTSExecutionPort
 from services.voice_project_dependencies import (
     get_voice_project_operation_manager,
@@ -58,6 +58,10 @@ from services.voice_project_dependencies import (
 from services.voice_project_models import compute_file_sha256
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_store import VoiceProjectStore
+from services.voice_project_operations import VoiceProjectOperationManager
+from services.voice_project_workflow import VoiceProjectWorkflowService
+from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus, WorkflowStep
+from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 logger = logging.getLogger(__name__)
 
@@ -199,14 +203,39 @@ class ProductionValidationService:
         store: VoiceProjectStore | None = None,
         runtime_service: LocalRuntimeService | None = None,
         execution_port: TTSExecutionPort | None = None,
+        operation_manager: VoiceProjectOperationManager | None = None,
+        allow_raw_paths: bool = False,
     ):
         self.store = store or get_voice_project_store()
         self.runtime_service = runtime_service or LocalRuntimeService(store=self.store)
         self.execution_port = execution_port
+        self.operation_manager = operation_manager or get_voice_project_operation_manager()
+        self.allow_raw_paths = allow_raw_paths
+
+    def _resolve_local_path(self, value: str | Path, *, must_exist: bool = False) -> Path:
+        """Resolve CLI-only paths without permitting traversal or symlink escape."""
+        path = Path(value).expanduser().resolve(strict=must_exist)
+        configured = os.getenv("CHATTERBOX_VALIDATION_ALLOWED_ROOTS", "")
+        roots = [Path.cwd().resolve(), self.store.root_dir.resolve(), Path(tempfile.gettempdir()).resolve()]
+        roots.extend(Path(item).expanduser().resolve() for item in configured.split(os.pathsep) if item)
+        if not any(path == root or root in path.parents for root in roots):
+            raise ValueError(f"Path is outside permitted validation roots: {path.name}")
+        return path
 
     def load_validation_profile(self, profile_id_or_path: str | Path | None = None) -> dict[str, Any]:
         """Load default or specified production validation configuration profile."""
-        config_path = Path(profile_id_or_path) if profile_id_or_path else _DEFAULT_CONFIG_PATH
+        if profile_id_or_path and self.allow_raw_paths:
+            config_path = self._resolve_local_path(profile_id_or_path, must_exist=True)
+        elif profile_id_or_path:
+            profile_id = str(profile_id_or_path)
+            if Path(profile_id).name != profile_id or profile_id in {".", ".."}:
+                raise ValueError("validation_profile_id must be a managed profile ID, not a filesystem path")
+            config_root = Path("configs").resolve()
+            config_path = (config_root / (profile_id if profile_id.endswith((".yaml", ".yml")) else f"{profile_id}.yaml")).resolve()
+            if config_path.parent != config_root:
+                raise ValueError("validation_profile_id resolved outside the managed profile directory")
+        else:
+            config_path = _DEFAULT_CONFIG_PATH
         if not config_path.exists():
             return {}
         try:
@@ -250,6 +279,13 @@ class ProductionValidationService:
 
     def cancel_validation(self, validation_id: str) -> bool:
         """Cancel a running validation."""
+        report = self.get_validation_report(validation_id)
+        if report and report.operation_ids:
+            cancelled, _ = self.operation_manager.cancel_operation(report.operation_ids[-1])
+            if cancelled:
+                report.status = "cancelling"
+                _ACTIVE_VALIDATIONS[validation_id] = report
+            return cancelled
         token = _CANCELLATION_TOKENS.get(validation_id)
         if token:
             token.cancel()
@@ -260,11 +296,98 @@ class ProductionValidationService:
             return True
         return False
 
+    def submit(self, request: ProductionValidationRequest | None = None) -> tuple[ProductionValidationReport, Any]:
+        """Create one validation identity and submit it through the shared operation manager."""
+        req = request or ProductionValidationRequest()
+        validation_id = f"val_{uuid.uuid4().hex[:12]}"
+        project_id = f"vproj_val_{uuid.uuid4().hex[:8]}"
+        report = ProductionValidationReport(
+            validation_id=validation_id,
+            status="queued",
+            verdict=ValidationVerdict.PASS,
+            started_at=_now_iso(),
+            provider=req.provider,
+            model=req.model or "nano",
+            project_id=project_id,
+        )
+        _ACTIVE_VALIDATIONS[validation_id] = report
+        def run_validation(
+            cancellation_token: CancellationToken | None = None,
+            progress_callback: ProgressCallback | None = None,
+        ) -> ProductionValidationReport:
+            return self.validate(
+                req,
+                cancellation_token=cancellation_token,
+                progress_callback=progress_callback,
+                validation_id=validation_id,
+                project_id=project_id,
+            )
+
+        operation = self.operation_manager.submit(
+            project_id, "production_validation", run_validation
+        )
+        report.operation_ids = [operation.id]
+        _ACTIVE_VALIDATIONS[validation_id] = report
+        return report, operation
+
+    def _approve_validation_gate(
+        self,
+        project_id: str,
+        action_type: str,
+        artifact_sha256: str | None = None,
+    ) -> str:
+        """Exercise the canonical persisted human-approval gate for validation."""
+        workflow_id = f"vwf_validation_{uuid.uuid4().hex[:10]}"
+        workflow_store = VoiceProjectWorkflowStore(self.store.root_dir / "workflows")
+        step_names = ["create_project", "plan", "check_resources", "render", "prepare_mix", "mix", "master", "export"]
+        human_action: dict[str, Any] = {
+            "action_type": action_type,
+            "reason": "Production validation requires canonical approval.",
+            "items": [],
+            "resume_action": "export" if action_type == "final_audio_approval" else "prepare_mix",
+        }
+        action = "approve_narration"
+        artifact_id = None
+        if action_type == "final_audio_approval":
+            action = "approve_final_audio"
+            artifact_id = "master_wav"
+            human_action["items"] = [{"artifact_id": artifact_id, "sha256": artifact_sha256}]
+        state = VoiceWorkflowState(
+            workflow_id=workflow_id,
+            project_id=project_id,
+            status=WorkflowStatus.WAITING_FOR_HUMAN,
+            policy=WorkflowPolicy(require_final_approval=action_type == "final_audio_approval"),
+            steps=[WorkflowStep(name=name, status="completed") for name in step_names],
+            human_action=human_action,
+        )
+        workflow_store.save_workflow(state)
+        service = VoiceProjectWorkflowService(
+            store=workflow_store,
+            project_store=self.store,
+            op_manager=self.operation_manager,
+        )
+        waiting = service.get_workflow(workflow_id)
+        if not waiting or waiting.status != WorkflowStatus.WAITING_FOR_HUMAN or not waiting.human_action:
+            raise RuntimeError("Canonical approval gate was not persisted.")
+        approved = service.approve_workflow(
+            workflow_id,
+            action=action,
+            approved=True,
+            artifact_id=artifact_id,
+            artifact_sha256=artifact_sha256,
+            resume=False,
+        )
+        if approved.human_action is not None:
+            raise RuntimeError("Canonical approval gate did not consume the human action.")
+        return workflow_id
+
     def validate(
         self,
         request: ProductionValidationRequest | None = None,
         cancellation_token: CancellationToken | None = None,
         progress_callback: ProgressCallback | None = None,
+        validation_id: str | None = None,
+        project_id: str | None = None,
     ) -> ProductionValidationReport:
         """Execute the full canonical production validation pipeline."""
         req = request or ProductionValidationRequest()
@@ -275,19 +398,29 @@ class ProductionValidationService:
         model_name = req.model or profile_data.get("model", "nano")
         language = req.language or profile_data.get("language", "en")
         output_formats = list(req.output_formats or profile_data.get("output_formats", ["wav", "mp3"]))
-        if not shutil.which("ffmpeg") and any(fmt != "wav" for fmt in output_formats):
-            output_formats = [fmt for fmt in output_formats if fmt == "wav"]
         mixing_profile = req.mixing_profile or profile_data.get("mixing_profile", "storytelling")
         mastering_profile = req.mastering_profile or profile_data.get("mastering_profile", "podcast")
         loudness_target = req.loudness_target_lufs or profile_data.get("loudness_target_lufs", -19.0)
         require_final_approval = req.require_final_approval if req.require_final_approval is not None else profile_data.get("require_final_approval", True)
         require_narration_acceptance = req.require_narration_acceptance if req.require_narration_acceptance is not None else profile_data.get("require_narration_acceptance", True)
         max_retries = req.maximum_automatic_retries or profile_data.get("maximum_automatic_retries", 2)
+        reference_voice = req.reference_voice
+        if reference_voice and self.allow_raw_paths:
+            reference_voice = str(self._resolve_local_path(reference_voice, must_exist=True))
+        elif reference_voice and (
+            Path(reference_voice).is_absolute()
+            or ".." in Path(reference_voice).parts
+            or "/" in reference_voice
+            or "\\" in reference_voice
+        ):
+            raise ValueError("reference_voice must be a managed voice ID; raw paths are CLI-only")
 
         # Load script text
         script_text = req.script_text
+        if (req.script_path or req.output_report_path) and not self.allow_raw_paths:
+            raise ValueError("Raw filesystem paths are only available to the local CLI")
         if not script_text and req.script_path:
-            script_file = Path(req.script_path)
+            script_file = self._resolve_local_path(req.script_path, must_exist=True)
             if script_file.exists():
                 script_text = script_file.read_text(encoding="utf-8")
         if not script_text and _DEFAULT_GOLDEN_SCRIPT_PATH.exists():
@@ -301,8 +434,8 @@ class ProductionValidationService:
                 "With the warmth of life cupped in his hands, the Titan turned toward the mortal world, ready to defy the heavens."
             )
 
-        validation_id = f"val_{uuid.uuid4().hex[:12]}"
-        project_id = f"vproj_val_{uuid.uuid4().hex[:8]}"
+        validation_id = validation_id or f"val_{uuid.uuid4().hex[:12]}"
+        project_id = project_id or f"vproj_val_{uuid.uuid4().hex[:8]}"
         start_time_iso = _now_iso()
         start_ts = time.time()
 
@@ -324,6 +457,9 @@ class ProductionValidationService:
             model=model_name,
             device=runtime_caps.device,
             project_id=project_id,
+            operation_ids=list((_ACTIVE_VALIDATIONS.get(validation_id) or ProductionValidationReport(
+                validation_id=validation_id, started_at=start_time_iso, project_id=project_id
+            )).operation_ids),
         )
         _ACTIVE_VALIDATIONS[validation_id] = report
 
@@ -331,7 +467,7 @@ class ProductionValidationService:
         exec_port = self.execution_port
         if exec_port is None:
             try:
-                exec_port = resolve_server_tts_provider(provider_name, model=model_name, voice=req.reference_voice)
+                exec_port = resolve_server_tts_provider(provider_name, model=model_name, voice=reference_voice)
             except Exception as exc:
                 if provider_name in ("fake", "test"):
                     from services.tts.fake import FakeTTSProvider
@@ -405,7 +541,7 @@ class ProductionValidationService:
                 provider=provider_name,
                 requested_formats=output_formats,
                 selected_model=model_name,
-                reference_voice=req.reference_voice,
+                reference_voice=reference_voice,
             )
             blocking = [i for i in issues if i.severity == "error"]
             for issue in issues:
@@ -485,9 +621,24 @@ class ProductionValidationService:
         # --- 6. QC & Adaptive Retry Evaluation ---
         qc_t0 = time.time()
         def _step_qc():
-            qc_res = project_service.evaluate(project_id)
+            project_service.evaluate(project_id)
+            manifest = self.store.load_manifest(project_id)
+            for beat_id in list(manifest.beats):
+                while True:
+                    current = self.store.load_manifest(project_id).beats[beat_id]
+                    selected = next(
+                        (attempt for attempt in current.attempts if attempt.attempt == current.selected_attempt),
+                        current.attempts[-1] if current.attempts else None,
+                    )
+                    if not selected or selected.status != RenderStatus.FAILED or len(current.attempts) > max_retries:
+                        break
+                    project_service.render_beat(project_id, beat_id, cancellation_token=token)
+                    project_service.evaluate(project_id, beats=[beat_id])
+                    report.retry_count += 1
+
             report.qc_duration_ms = round((time.time() - qc_t0) * 1000.0, 1)
             manifest = self.store.load_manifest(project_id)
+            report.attempt_count = sum(len(beat.attempts) for beat in manifest.beats.values())
             pass_cnt = 0
             rev_cnt = 0
             fail_cnt = 0
@@ -509,15 +660,6 @@ class ProductionValidationService:
                     rev_cnt += 1
                 else:
                     fail_cnt += 1
-
-                # If failed and retry budget allows, trigger retry
-                if verdict == RenderStatus.FAILED.value and len(beat_state.attempts) <= max_retries:
-                    try:
-                        project_service.render_beat(project_id, beat_id, cancellation_token=token)
-                        project_service.evaluate(project_id, beats=[beat_id])
-                        report.retry_count += 1
-                    except Exception:
-                        pass
 
                 # Per-beat metric
                 duration_ms = 0.0
@@ -568,11 +710,9 @@ class ProductionValidationService:
                             actor_id="validation_runner", reason="Auto-accept for validation",
                             explicit_approval=True,
                         )
-                # Confirm stage reaches NARRATION_READY
-                state = self.store.get_project_state(project_id)
-                state.stage = ProjectStatus.NARRATION_READY
-                self.store.save_project_state(state)
-            return {"ready": True, "beat_count": len(review.beats)}
+                workflow_id = self._approve_validation_gate(project_id, "narration_acceptance")
+                report.workflow_id = workflow_id
+            return {"ready": True, "beat_count": len(review.beats), "workflow_id": report.workflow_id}
 
         if not _run_step("narration_review", _step_narration_review):
             report.status = "failed"
@@ -629,11 +769,10 @@ class ProductionValidationService:
             master_wav = self.store.get_project_dir(project_id) / "mix" / "master.wav"
             master_sha = compute_file_sha256(master_wav)
             if require_final_approval:
-                state = self.store.get_project_state(project_id)
-                state.stage = ProjectStatus.MASTERED
-                state.last_stable_stage = state.stage
-                self.store.save_project_state(state)
-            return {"master_sha256": master_sha, "approved": True}
+                report.workflow_id = self._approve_validation_gate(
+                    project_id, "final_audio_approval", master_sha
+                )
+            return {"master_sha256": master_sha, "approved": True, "workflow_id": report.workflow_id}
 
         if not _run_step("final_master_approval", _step_approval):
             report.status = "failed"
@@ -662,8 +801,6 @@ class ProductionValidationService:
             export_dir = proj_dir / "exports"
             final_wav = export_dir / "FINAL.wav"
             final_mp3 = export_dir / "FINAL.mp3"
-            manifest_yaml = export_dir / "export-manifest.yaml"
-
             if not final_wav.exists():
                 raise FileNotFoundError("FINAL.wav was not generated in exports directory.")
 
@@ -694,22 +831,7 @@ class ProductionValidationService:
                 else:
                     warnings.append("MP3 export skipped because ffmpeg is not installed on the system.")
 
-            # Check Manifest SHA-256 matches actual disk files
-            if manifest_yaml.exists():
-                data = yaml.safe_load(manifest_yaml.read_text(encoding="utf-8")) or {}
-                manifest_artifacts = data.get("artifacts", [])
-                for art in manifest_artifacts:
-                    out_p = Path(art.get("file_path") or art.get("output_path") or "")
-                    fname = out_p.name
-                    if not fname:
-                        continue
-                    disk_file = export_dir / fname
-                    if not disk_file.exists():
-                        raise FileNotFoundError(f"Export manifest references {fname} which does not exist on disk.")
-                    disk_sha = compute_file_sha256(disk_file)
-                    manifest_sha = art.get("sha256")
-                    if manifest_sha and disk_sha != manifest_sha:
-                        raise ValueError(f"Checksum mismatch for {fname}: disk={disk_sha}, manifest={manifest_sha}")
+            verified_artifacts = project_service.verify_delivery_lineage(project_id)
 
             # Collect artifacts
             artifacts: list[ProductionValidationArtifact] = []
@@ -731,7 +853,7 @@ class ProductionValidationService:
                         duration_ms=d_ms,
                         sample_rate=insp.get("sample_rate"),
                         loudness_lufs=loudness if fmt == "wav" else None,
-                        verified_lineage=True,
+                        verified_lineage=item.name in verified_artifacts,
                     ))
 
             report.artifacts = artifacts
@@ -777,9 +899,8 @@ class ProductionValidationService:
                 
                 # If reproduction paused at approval gate, approve and finish export
                 if repro_res.status == "waiting_for_human":
-                    state = self.store.get_project_state(project_id)
-                    state.stage = ProjectStatus.MASTERED
-                    self.store.save_project_state(state)
+                    master_sha = compute_file_sha256(self.store.get_project_dir(project_id) / "mix" / "master.wav")
+                    self._approve_validation_gate(project_id, "final_audio_approval", master_sha)
                     project_service.export(project_id, formats=output_formats, cancellation_token=token)
 
                 # 3. Verify unaffected beats remain unchanged
@@ -814,9 +935,8 @@ class ProductionValidationService:
 
                 repro_t = revision_service.reproduce_project(project_id)
                 if repro_t.status == "waiting_for_human":
-                    state = self.store.get_project_state(project_id)
-                    state.stage = ProjectStatus.MASTERED
-                    self.store.save_project_state(state)
+                    master_sha = compute_file_sha256(self.store.get_project_dir(project_id) / "mix" / "master.wav")
+                    self._approve_validation_gate(project_id, "final_audio_approval", master_sha)
                     project_service.export(project_id, formats=output_formats, cancellation_token=token)
 
                 # Confirm zero narration rerendered
@@ -836,6 +956,7 @@ class ProductionValidationService:
                 insp = _inspect_audio_wave(final_wav) if final_wav.exists() else {}
                 artifacts: list[ProductionValidationArtifact] = []
                 artifact_sizes: dict[str, int] = {}
+                verified_artifacts = project_service.verify_delivery_lineage(project_id)
                 for item in export_dir.iterdir():
                     if item.is_file():
                         sha = compute_file_sha256(item)
@@ -853,7 +974,7 @@ class ProductionValidationService:
                             duration_ms=d_ms,
                             sample_rate=insp.get("sample_rate"),
                             loudness_lufs=insp.get("approx_lufs", -19.0) if fmt == "wav" else None,
-                            verified_lineage=True,
+                            verified_lineage=item.name in verified_artifacts,
                         ))
                 report.artifacts = artifacts
                 report.artifact_sizes = artifact_sizes
@@ -881,15 +1002,20 @@ class ProductionValidationService:
                 c_tok = CancellationToken()
                 c_tok.cancel()
                 try:
-                    c_res = project_service.render(cancel_proj_id, cancellation_token=c_tok)
-                    # Verify no pending or partial audio published as passed
-                    m = self.store.load_manifest(cancel_proj_id)
-                    for beat in m.beats.values():
-                        for att in beat.attempts:
-                            if att.status == RenderStatus.PASSED:
-                                raise ValueError("Cancelled render published passed attempt!")
+                    project_service.render(cancel_proj_id, cancellation_token=c_tok)
                 except Exception:
-                    pass
+                    if not c_tok.is_cancelled():
+                        raise
+
+                # Invariant checks deliberately live outside the expected-cancellation handler.
+                manifest = self.store.load_manifest(cancel_proj_id)
+                if manifest:
+                    for beat in manifest.beats.values():
+                        if any(att.status == RenderStatus.PASSED for att in beat.attempts):
+                            raise ValueError("Cancelled render published a passed attempt.")
+                pending_dir = self.store.get_project_dir(cancel_proj_id) / "audio" / "pending"
+                if pending_dir.exists() and any(pending_dir.iterdir()):
+                    raise ValueError("Cancelled render left pending artifacts behind.")
 
                 # Cleanup test project
                 try:
@@ -929,6 +1055,16 @@ class ProductionValidationService:
         report.failures = failures
         report.peak_memory_mb = _get_peak_memory_mb()
 
+        active_token = _CANCELLATION_TOKENS.get(report.validation_id)
+        if active_token and active_token.is_cancelled():
+            report.status = "cancelled"
+            report.verdict = ValidationVerdict.FAIL
+
+        if not report.operation_ids:
+            operations = self.operation_manager.list_operations(project_id=report.project_id, limit=1)
+            if operations:
+                report.operation_ids = [operations[0].id]
+
         # Real-time factor: output audio duration (ms) / total render duration (ms)
         if report.render_duration_ms > 0 and report.output_duration_ms > 0:
             report.real_time_factor = round(report.output_duration_ms / report.render_duration_ms, 2)
@@ -946,7 +1082,7 @@ class ProductionValidationService:
             report_yaml_path.write_text(yaml.safe_dump(report_dict, sort_keys=False), encoding="utf-8")
             report_json_path.write_text(json.dumps(report_dict, indent=2), encoding="utf-8")
             if req.output_report_path:
-                custom_out = Path(req.output_report_path)
+                custom_out = self._resolve_local_path(req.output_report_path)
                 custom_out.parent.mkdir(parents=True, exist_ok=True)
                 custom_out.write_text(yaml.safe_dump(report_dict, sort_keys=False), encoding="utf-8")
         except Exception as exc:

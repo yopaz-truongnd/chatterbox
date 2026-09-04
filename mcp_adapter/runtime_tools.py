@@ -88,7 +88,6 @@ def handle_validate_runtime(args: dict[str, Any], request_fn: Callable | None = 
 
         req = ProductionValidationRequest(
             validation_profile_id=args.get("profile"),
-            script_path=args.get("script_path"),
             script_text=args.get("script_text"),
             provider=args.get("provider", "local"),
             model=args.get("model"),
@@ -103,8 +102,12 @@ def handle_validate_runtime(args: dict[str, Any], request_fn: Callable | None = 
         )
 
         service = ProductionValidationService()
-        report = service.validate(req)
-        return _success(report.model_dump(mode="json"))
+        report, operation = service.submit(req)
+        return _success({
+            "validation_id": report.validation_id,
+            "operation_id": operation.id,
+            "status": operation.status.value,
+        })
     except Exception as exc:
         return _error(f"Failed to run runtime validation: {exc}", code="VALIDATION_FAILED")
 

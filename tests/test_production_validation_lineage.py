@@ -9,6 +9,8 @@ from services.production_validation_service import ProductionValidationService
 from services.tts.fake import FakeTTSProvider
 from services.voice_project_models import compute_file_sha256
 from services.voice_project_store import VoiceProjectStore
+from services.voice_project_service import VoiceProjectService
+from services.voice_project_models import MixPlanStaleError
 
 
 class TestProductionValidationLineage(unittest.TestCase):
@@ -55,6 +57,18 @@ class TestProductionValidationLineage(unittest.TestCase):
         final_wav_path = proj_dir / "exports" / "FINAL.wav"
         self.assertTrue(final_wav_path.exists())
         self.assertEqual(compute_file_sha256(final_wav_path), final_wav_art.sha256)
+
+        # The canonical verifier must reject upstream selected-attempt tampering,
+        # even when the export manifest and final file still match each other.
+        manifest = self.store.load_manifest(report.project_id)
+        beat = next(iter(manifest.beats.values()))
+        selected = next(a for a in beat.attempts if a.attempt == beat.selected_attempt)
+        selected_path = proj_dir / selected.audio_path
+        selected_path.write_bytes(selected_path.read_bytes() + b"tampered")
+        with self.assertRaises(MixPlanStaleError):
+            VoiceProjectService(store=self.store, execution_port=self.provider).verify_delivery_lineage(
+                report.project_id
+            )
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from services.production_validation_models import (
 from services.production_validation_service import ProductionValidationService
 from services.tts.fake import FakeTTSProvider
 from services.voice_project_store import VoiceProjectStore
+from services.voice_project_operations import VoiceProjectOperationManager
 
 
 class TestProductionValidationService(unittest.TestCase):
@@ -73,6 +74,30 @@ class TestProductionValidationService(unittest.TestCase):
         self.assertIsInstance(profile, dict)
         self.assertEqual(profile.get("provider"), "local")
         self.assertEqual(profile.get("language"), "en")
+
+    def test_async_submit_uses_same_validation_id_and_operation(self):
+        manager = VoiceProjectOperationManager(
+            max_workers=1, operations_dir=Path(self.tmp.name) / "operations"
+        )
+        service = ProductionValidationService(
+            store=self.store, execution_port=self.provider, operation_manager=manager
+        )
+        report, operation = service.submit(ProductionValidationRequest(
+            script_text="Prometheus carried the flame.", provider="fake",
+            output_formats=["wav"], run_incremental_reproduction=False,
+        ))
+        self.assertEqual(report.operation_ids, [operation.id])
+        self.assertEqual(service.get_validation_report(report.validation_id).validation_id, report.validation_id)
+
+    def test_network_service_rejects_raw_paths(self):
+        with self.assertRaisesRegex(ValueError, "local CLI"):
+            self.service.validate(ProductionValidationRequest(
+                script_path="/etc/passwd", provider="fake", output_formats=["wav"]
+            ))
+
+    def test_managed_profile_rejects_traversal(self):
+        with self.assertRaisesRegex(ValueError, "managed profile ID"):
+            self.service.load_validation_profile("../secret.yaml")
 
 
 if __name__ == "__main__":

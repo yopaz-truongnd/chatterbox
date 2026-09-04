@@ -11,7 +11,6 @@ Exposes:
 
 from __future__ import annotations
 
-import threading
 from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -21,7 +20,6 @@ from services.local_runtime_service import LocalRuntimeService
 from services.production_validation_models import (
     ProductionValidationReport,
     ProductionValidationRequest,
-    ValidationVerdict,
 )
 from services.production_validation_service import ProductionValidationService
 
@@ -47,8 +45,29 @@ class PreflightResponse(BaseModel):
 
 class StartValidationResponse(BaseModel):
     validation_id: str
+    operation_id: str
     status: str
     message: str
+
+
+class PublicProductionValidationRequest(BaseModel):
+    """Network-safe validation input; filesystem paths remain CLI-only."""
+    validation_profile_id: str | None = None
+    script_text: str | None = None
+    provider: str = "local"
+    model: str | None = None
+    language: str = "en"
+    voice_mode: str = "tts"
+    reference_voice: str | None = None
+    output_formats: list[str] = Field(default_factory=lambda: ["wav", "mp3"])
+    mixing_profile: str | None = None
+    mastering_profile: str | None = None
+    loudness_target_lufs: float = -14.0
+    require_narration_acceptance: bool = True
+    require_final_approval: bool = True
+    maximum_automatic_retries: int = 2
+    run_incremental_reproduction: bool = True
+    run_cancellation_tests: bool = False
 
 
 @router.get("/capabilities", response_model=LocalRuntimeCapabilities)
@@ -88,34 +107,23 @@ def run_production_preflight(
 # Real Production Validation Endpoints (Phase 21)
 # =====================================================================
 
-@router.post("/validations", response_model=ProductionValidationReport)
+@router.post("/validations", response_model=ProductionValidationReport | StartValidationResponse)
 def start_production_validation(
-    request: ProductionValidationRequest = Body(default_factory=ProductionValidationRequest),
+    request: PublicProductionValidationRequest = Body(default_factory=PublicProductionValidationRequest),
     sync: bool = Query(default=True, description="Run synchronously or async in background"),
 ) -> ProductionValidationReport:
     """Execute real-runtime production validation against local runtime."""
+    validation_request = ProductionValidationRequest.model_validate(request.model_dump())
     if sync:
-        return _validation_service.validate(request)
+        return _validation_service.validate(validation_request)
 
-    # Async execution
-    import uuid
-    val_id = f"val_{uuid.uuid4().hex[:12]}"
-    initial_report = ProductionValidationReport(
-        validation_id=val_id,
-        status="running",
-        verdict=ValidationVerdict.PASS,
-        started_at=_runtime_service.get_capabilities().model_dump().get("loaded_models", [""])[0],
-        provider=request.provider,
-        model=request.model or "nano",
-        project_id=f"vproj_{val_id}",
+    initial_report, operation = _validation_service.submit(validation_request)
+    return StartValidationResponse(
+        validation_id=initial_report.validation_id,
+        operation_id=operation.id,
+        status=operation.status.value,
+        message="Production validation queued.",
     )
-    
-    def _run_bg():
-        _validation_service.validate(request)
-
-    t = threading.Thread(target=_run_bg, daemon=True)
-    t.start()
-    return initial_report
 
 
 @router.get("/validations", response_model=list[ProductionValidationReport])

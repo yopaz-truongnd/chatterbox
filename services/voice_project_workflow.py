@@ -181,6 +181,7 @@ class VoiceProjectWorkflowService:
         approved: bool,
         artifact_id: str | None = None,
         artifact_sha256: str | None = None,
+        resume: bool = True,
     ) -> VoiceWorkflowState:
         """Persist an explicit approval decision and resume the workflow."""
         def approve(state: VoiceWorkflowState) -> None:
@@ -222,7 +223,7 @@ class VoiceProjectWorkflowService:
             state.updated_at = datetime.now(timezone.utc).isoformat()
 
         state = self.store.transition_workflow(workflow_id, WorkflowStatus.WAITING_FOR_HUMAN, approve)
-        if not approved:
+        if not approved or not resume:
             return state
         threading.Thread(
             target=self._execute_workflow_loop,
