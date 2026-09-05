@@ -22,6 +22,7 @@ from services.render_models import ProjectStatus, RenderStatus
 from services.voice_plan import AmbienceIntent, SFXIntent
 from services.voice_project_models import BeatNotFoundError, InvalidProjectStateError
 from services.voice_project_service import VoiceProjectService, compute_file_sha256
+from services.voice_project_workflow import VoiceProjectWorkflowService
 
 
 MIX_ARTIFACTS = ["mix_plan", "premaster_wav", "master_wav", "exports", "final_approval"]
@@ -29,10 +30,16 @@ MIX_STEPS = ["prepare_mix", "mix", "master", "export"]
 
 
 class DirectorRevisionService:
-    def __init__(self, project_service: VoiceProjectService, revision_store: DirectorRevisionStore | None = None):
+    def __init__(
+        self,
+        project_service: VoiceProjectService,
+        revision_store: DirectorRevisionStore | None = None,
+        workflow_service: VoiceProjectWorkflowService | None = None,
+    ):
         self.project_service = project_service
         self.store = project_service.store
         self.revisions = revision_store or DirectorRevisionStore(self.store)
+        self.workflow_service = workflow_service
 
     def _beat(self, project_id: str, beat_id: str):
         self.store.get_project_state(project_id)
@@ -176,7 +183,6 @@ class DirectorRevisionService:
         resources = self.project_service.check_resources(project_id)
         manifest = self.store.load_manifest(project_id)
         self.store.save_manifest(project_id, manifest)
-        # P1-3: never advance stage if current stage is RESOURCE_BLOCKED
         state = self.store.get_project_state(project_id)
         if state.stage == ProjectStatus.RESOURCE_BLOCKED:
             return
@@ -184,6 +190,12 @@ class DirectorRevisionService:
             state.stage = ProjectStatus.NARRATION_READY
             state.last_stable_stage = state.stage
             self.store.save_project_state(state)
+
+    def _resolve_workflow_service(self) -> VoiceProjectWorkflowService:
+        if self.workflow_service is not None:
+            return self.workflow_service
+        from services.voice_project_dependencies import get_voice_project_workflow_service
+        return get_voice_project_workflow_service()
 
     def reproduce_project(self, project_id: str, revision_ids: list[str] | None = None, policy: dict[str, Any] | None = None, cancellation_token=None, progress_callback=None) -> IncrementalReproductionResult:
         state = self.revisions.get_state(project_id)
@@ -198,18 +210,14 @@ class DirectorRevisionService:
         ))
         final_approval_invalidated = any(event.approval_required for event in selected)
 
-        from services.voice_project_dependencies import get_voice_project_workflow_service
-        workflow_service = get_voice_project_workflow_service()
+        workflow_service = self._resolve_workflow_service()
         matches = [item for item in workflow_service.store.list_workflows(limit=200) if item.project_id == project_id]
         workflow = max(matches, key=lambda item: item.created_at, default=None)
-        # P1-1 & P1-6: workflow policy is authoritative — start from workflow fields, then
-        # only fill in keys from the caller's policy that the workflow has NOT already set.
         effective = workflow.policy.model_dump(mode="json") if workflow else {}
         if policy:
             for k, v in policy.items():
                 if k not in effective or effective[k] is None:
                     effective[k] = v
-        # P1-1: require_final_approval is only honoured when the workflow explicitly sets it.
         require_final_approval = bool(workflow and workflow.policy.require_final_approval)
         ordered = [step for step in ["check_resources", "render_beat", "evaluate", *MIX_STEPS] if step in steps]
         executed = []
@@ -241,13 +249,11 @@ class DirectorRevisionService:
                 self.project_service.master(project_id, profile_name=effective.get("mastering_profile", "storytelling"), cancellation_token=cancellation_token)
             elif step == "export":
                 if final_approval_invalidated and require_final_approval:
-                    if not workflow or not workflow_service:
+                    if not workflow:
                         raise InvalidProjectStateError("Final approval is required but no authoritative workflow exists.")
                     master_path = self.store.get_project_dir(project_id) / "mix" / "master.wav"
                     artifact_sha = compute_file_sha256(master_path)
                     reopened = workflow_service.request_revision_approval(workflow.workflow_id, artifact_sha, selected_ids)
-                    # P1-2: return full artifact info so caller can act without polling.
-                    # Safely extract human_action via explicit type guards (avoids MagicMock leakage).
                     raw_human_action = getattr(reopened, "human_action", None)
                     if isinstance(raw_human_action, dict):
                         human_action_dict: dict | None = raw_human_action
