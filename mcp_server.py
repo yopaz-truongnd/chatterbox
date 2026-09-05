@@ -18,7 +18,14 @@ from mcp_adapter.catalog import PROJECT_TOOL_SCHEMAS, VOICE_TOOL_SCHEMAS, VOICE_
 from mcp_adapter.project_tools import handle_project_tool
 from mcp_adapter.voice_project_tools import handle_voice_project_tool
 from mcp_adapter.voice_tools import handle_voice_tool
-from mcp_adapter.runtime_tools import handle_runtime_capabilities, handle_runtime_preflight
+from mcp_adapter.runtime_tools import (
+    handle_runtime_capabilities,
+    handle_runtime_preflight,
+    handle_validate_runtime,
+    handle_validation_status,
+    handle_validation_report,
+    handle_validation_cancel,
+)
 from mcp_adapter.asset_tools import handle_asset_tool
 from mcp_adapter.series_tools import (
     handle_series_create,
@@ -180,11 +187,19 @@ def execute_tool(name: str, args: dict) -> dict:
         if project_result is not None:
             return project_result
 
-        # 4. Phase 17 Runtime tools
+        # 4. Phase 17 & 21 Runtime and Validation tools
         if name == "chatterbox_voice_runtime_capabilities":
             return handle_runtime_capabilities(args, request_fn=make_api_request)
         if name == "chatterbox_voice_runtime_preflight":
             return handle_runtime_preflight(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_validate_runtime":
+            return handle_validate_runtime(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_validation_status":
+            return handle_validation_status(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_validation_report":
+            return handle_validation_report(args, request_fn=make_api_request)
+        if name == "chatterbox_voice_validation_cancel":
+            return handle_validation_cancel(args, request_fn=make_api_request)
 
         # 5. Phase 18 Asset Library tools
         asset_result = handle_asset_tool(

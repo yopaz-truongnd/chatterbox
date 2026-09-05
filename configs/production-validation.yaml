@@ -1,0 +1,22 @@
+validation_profile_id: "default_production_validation_v1"
+provider: "local"
+model: "nano"
+language: "en"
+voice_mode: "tts"
+reference_voice: null
+sample_rate: 24000
+output_formats:
+  - "wav"
+  - "mp3"
+mixing_profile: "storytelling"
+mastering_profile: "podcast"
+loudness_target_lufs: -19.0
+require_narration_acceptance: true
+require_final_approval: true
+maximum_automatic_retries: 2
+minimum_free_disk_bytes: 524288000
+maximum_parallel_jobs: 1
+expected_duration_range_ms:
+  min: 5000
+  max: 180000
+runtime_timeout_seconds: 300
