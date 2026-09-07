@@ -53,6 +53,13 @@ class TestProductionValidationCancellation(unittest.TestCase):
         report = self.service.validate(req)
         self.assertEqual(report.status, "completed")
         self.assertTrue(report.cancellation_recovery_passed)
+        step = next(item for item in report.steps if item.name == "cancellation_safety_validation")
+        self.assertEqual(
+            step.details["running_operations_cancelled"],
+            ["render", "mix", "master", "export"],
+        )
+        self.assertTrue(step.details["operation_restart_recovery_verified"])
+        self.assertTrue(step.details["workflow_restart_recovery_verified"])
 
 
 if __name__ == "__main__":

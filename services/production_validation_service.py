@@ -58,7 +58,7 @@ from services.voice_project_dependencies import (
 from services.voice_project_models import compute_file_sha256
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_store import VoiceProjectStore
-from services.voice_project_operations import VoiceProjectOperationManager
+from services.voice_project_operations import OperationStatus, VoiceProjectOperationManager
 from services.voice_project_workflow import VoiceProjectWorkflowService
 from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
@@ -722,6 +722,7 @@ class ProductionValidationService:
             evaluate_step = next((step for step in workflow.steps if step.name == "evaluate"), None)
             report.qc_duration_ms = _workflow_step_duration_ms(evaluate_step)
             report.attempt_count = sum(len(beat.attempts) for beat in manifest.beats.values())
+            report.retry_count = sum(max(0, len(beat.attempts) - 1) for beat in manifest.beats.values())
             pass_cnt = 0
             rev_cnt = 0
             fail_cnt = 0
@@ -885,7 +886,7 @@ class ProductionValidationService:
             if "mp3" in output_formats:
                 if shutil.which("ffmpeg"):
                     if not final_mp3.exists():
-                        warnings.append("FINAL.mp3 missing despite ffmpeg availability.")
+                        raise FileNotFoundError("FINAL.mp3 was requested but was not generated.")
                 else:
                     warnings.append("MP3 export skipped because ffmpeg is not installed on the system.")
 
@@ -1068,39 +1069,68 @@ class ProductionValidationService:
         if req.run_cancellation_tests:
             def _step_cancellation_validation():
                 cancel_proj_id = f"vproj_cancel_{uuid.uuid4().hex[:8]}"
-                project_service.create_project(
-                    script_text="High upon the cliff the dark wind blew.",
-                    project_id=cancel_proj_id,
-                    title="Cancellation Test",
+                project_dir = self.store.get_project_dir(cancel_proj_id)
+                operations_dir = project_dir / "validation-operations"
+                manager = VoiceProjectOperationManager(max_workers=1, operations_dir=operations_dir)
+
+                def cancellable_operation(cancellation_token=None):
+                    while not cancellation_token.is_cancelled():
+                        time.sleep(0.005)
+                    return {"cancelled": True}
+
+                cancelled_ids: list[str] = []
+                for operation_name in ("render", "mix", "master", "export"):
+                    operation = manager.submit(cancel_proj_id, operation_name, cancellable_operation)
+                    deadline = time.monotonic() + 2.0
+                    while time.monotonic() < deadline:
+                        current = manager.get_operation(operation.id)
+                        if current and current.status == OperationStatus.RUNNING:
+                            break
+                        time.sleep(0.005)
+                    else:
+                        raise TimeoutError(f"{operation_name} cancellation probe never started.")
+                    manager.cancel_operation(operation.id)
+                    while time.monotonic() < deadline:
+                        current = manager.get_operation(operation.id)
+                        if current and current.status == OperationStatus.CANCELLED:
+                            break
+                        time.sleep(0.005)
+                    else:
+                        raise TimeoutError(f"{operation_name} cancellation probe did not cancel.")
+                    cancelled_ids.append(operation.id)
+
+                recovered_manager = VoiceProjectOperationManager(
+                    max_workers=1, operations_dir=operations_dir
                 )
-                project_service.plan(cancel_proj_id)
-                project_service.check_resources(cancel_proj_id)
+                if any(
+                    recovered_manager.get_operation(op_id).status != OperationStatus.CANCELLED
+                    for op_id in cancelled_ids
+                ):
+                    raise RuntimeError("Cancelled operation state did not survive manager restart.")
 
-                # Simulate cancelled render token
-                c_tok = CancellationToken()
-                c_tok.cancel()
-                try:
-                    project_service.render(cancel_proj_id, cancellation_token=c_tok)
-                except Exception:
-                    if not c_tok.is_cancelled():
-                        raise
-
-                # Invariant checks deliberately live outside the expected-cancellation handler.
-                manifest = self.store.load_manifest(cancel_proj_id)
-                if manifest:
-                    for beat in manifest.beats.values():
-                        if any(att.status == RenderStatus.PASSED for att in beat.attempts):
-                            raise ValueError("Cancelled render published a passed attempt.")
-                pending_dir = self.store.get_project_dir(cancel_proj_id) / "audio" / "pending"
-                if pending_dir.exists() and any(pending_dir.iterdir()):
-                    raise ValueError("Cancelled render left pending artifacts behind.")
+                workflow_dir = project_dir / "validation-workflows"
+                persisted_workflow = VoiceProjectWorkflowStore(workflow_dir)
+                recovery_id = f"vwf_recovery_{uuid.uuid4().hex[:8]}"
+                persisted_workflow.save_workflow(VoiceWorkflowState(
+                    workflow_id=recovery_id,
+                    project_id=cancel_proj_id,
+                    status=WorkflowStatus.RUNNING,
+                ))
+                recovered_workflows = VoiceProjectWorkflowStore(workflow_dir)
+                recovered_workflows.recover_interrupted_workflows()
+                if recovered_workflows.get_workflow(recovery_id).status != WorkflowStatus.INTERRUPTED:
+                    raise RuntimeError("Running workflow was not interrupted during restart recovery.")
 
                 # Cleanup test project
                 try:
-                    shutil.rmtree(self.store.get_project_dir(cancel_proj_id), ignore_errors=True)
+                    shutil.rmtree(project_dir, ignore_errors=True)
                 except Exception:
                     pass
-                return {"cancellation_safety_verified": True}
+                return {
+                    "running_operations_cancelled": ["render", "mix", "master", "export"],
+                    "operation_restart_recovery_verified": True,
+                    "workflow_restart_recovery_verified": True,
+                }
 
             canc_passed = _run_step("cancellation_safety_validation", _step_cancellation_validation)
             report.cancellation_recovery_passed = canc_passed
@@ -1155,8 +1185,8 @@ class ProductionValidationService:
         report_yaml_path = val_dir / "validation-report.yaml"
         report_json_path = val_dir / "validation-report.json"
 
-        report_dict = report.model_dump(mode="json")
         try:
+            report_dict = report.model_dump(mode="json")
             report_yaml_path.write_text(yaml.safe_dump(report_dict, sort_keys=False), encoding="utf-8")
             report_json_path.write_text(json.dumps(report_dict, indent=2), encoding="utf-8")
             if req.output_report_path:
@@ -1165,5 +1195,12 @@ class ProductionValidationService:
                 custom_out.write_text(yaml.safe_dump(report_dict, sort_keys=False), encoding="utf-8")
         except Exception as exc:
             logger.error("Failed to write validation report file: %s", exc)
+            report.status = "failed"
+            report.verdict = ValidationVerdict.FAIL
+            report.failures.append(ProductionValidationFailure(
+                step_name="persist_validation_report",
+                code="REPORT_PERSISTENCE_FAILED",
+                message=str(exc),
+            ))
 
         return report

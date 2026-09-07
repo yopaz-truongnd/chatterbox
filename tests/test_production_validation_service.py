@@ -2,9 +2,12 @@
 
 from pathlib import Path
 import tempfile
+import time
 import unittest
+from unittest import mock
 
 from services.production_validation_models import (
+    ProductionValidationReport,
     ProductionValidationRequest,
     ValidationVerdict,
 )
@@ -13,6 +16,7 @@ from services.production_validation_service import _ACTIVE_VALIDATIONS
 from services.tts.fake import FakeTTSProvider
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_operations import VoiceProjectOperationManager
+from services.voice_project_service import VoiceProjectService
 from services.voice_project_workflow_models import WorkflowStatus
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
@@ -135,6 +139,49 @@ class TestProductionValidationService(unittest.TestCase):
     def test_managed_profile_rejects_traversal(self):
         with self.assertRaisesRegex(ValueError, "managed profile ID"):
             self.service.load_validation_profile("../secret.yaml")
+
+    def test_report_persistence_failure_forces_failed_verdict(self):
+        report = ProductionValidationReport(
+            validation_id="val_persist_fail",
+            status="completed",
+            verdict=ValidationVerdict.PASS,
+            started_at="2026-09-07T00:00:00+00:00",
+            project_id="persist_fail",
+            operation_ids=["vp_op_test"],
+        )
+        with mock.patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            result = self.service._finalize_report(
+                report,
+                steps=[],
+                warnings=[],
+                failures=[],
+                start_ts=time.time(),
+                req=ProductionValidationRequest(provider="fake"),
+            )
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.verdict, ValidationVerdict.FAIL)
+        self.assertEqual(result.failures[-1].code, "REPORT_PERSISTENCE_FAILED")
+
+    def test_requested_mp3_missing_with_ffmpeg_fails_validation(self):
+        original_export = VoiceProjectService.export
+
+        def export_without_mp3(service, project_id, *args, **kwargs):
+            kwargs["formats"] = ["wav"]
+            result = original_export(service, project_id, *args, **kwargs)
+            return result
+
+        with mock.patch("services.production_validation_service.shutil.which", return_value="ffmpeg"), \
+             mock.patch.object(VoiceProjectService, "export", new=export_without_mp3):
+            report = self.service.validate(ProductionValidationRequest(
+                script_text="Prometheus carried the flame to humanity.",
+                provider="fake",
+                output_formats=["wav", "mp3"],
+                run_incremental_reproduction=False,
+            ))
+
+        self.assertEqual(report.status, "failed")
+        self.assertEqual(report.verdict, ValidationVerdict.FAIL)
+        self.assertTrue(any("FINAL.mp3 was requested" in failure.message for failure in report.failures))
 
 
 if __name__ == "__main__":

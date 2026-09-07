@@ -93,6 +93,7 @@ class VoiceProjectWorkflowService:
                 WorkflowStep(name=WorkflowStepName.PLAN.value, status="pending"),
                 WorkflowStep(name=WorkflowStepName.CHECK_RESOURCES.value, status="pending"),
                 WorkflowStep(name=WorkflowStepName.RENDER.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.EVALUATE.value, status="pending"),
                 WorkflowStep(name=WorkflowStepName.PREPARE_MIX.value, status="pending"),
                 WorkflowStep(name=WorkflowStepName.MIX.value, status="pending"),
                 WorkflowStep(name=WorkflowStepName.MASTER.value, status="pending"),
@@ -589,6 +590,33 @@ class VoiceProjectWorkflowService:
 
                 if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
                     raise RuntimeError(f"Rendering did not achieve NARRATION_READY; ended in '{stage_str}'.")
+
+                evaluate_res = self._run_workflow_op(
+                    workflow_id,
+                    WorkflowStepName.EVALUATE.value,
+                    "evaluate",
+                    service.evaluate,
+                    project_id,
+                )
+                if evaluate_res is None:
+                    return
+                evaluated_stage = (
+                    evaluate_res.get("stage")
+                    if isinstance(evaluate_res, dict)
+                    else getattr(evaluate_res, "stage", None)
+                )
+                evaluated_stage = (
+                    evaluated_stage.value
+                    if hasattr(evaluated_stage, "value")
+                    else str(evaluated_stage)
+                )
+                if evaluated_stage not in (
+                    ProjectStatus.NARRATION_READY.value,
+                    ProjectStatus.COMPLETED.value,
+                ):
+                    raise RuntimeError(
+                        f"QC evaluation did not achieve NARRATION_READY; ended in '{evaluated_stage}'."
+                    )
 
                 if not state.policy.auto_accept_qc_pass:
                     manifest = self.project_store.load_manifest(project_id)

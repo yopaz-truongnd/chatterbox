@@ -576,6 +576,8 @@ class VoiceProjectService:
                     continue
 
                 for attempt in b_state.attempts:
+                    if not attempt.audio_path:
+                        continue
                     audio_path = Path(attempt.audio_path)
                     if not audio_path.is_absolute():
                         audio_path = proj_dir / audio_path

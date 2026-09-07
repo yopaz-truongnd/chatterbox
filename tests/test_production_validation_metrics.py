@@ -56,6 +56,7 @@ class TestProductionValidationMetrics(unittest.TestCase):
             output_formats=["wav"],
             run_incremental_reproduction=False,
         )
+        self.provider.transient_fail_beats.add(("B01", 1))
         report = self.service.validate(req)
 
         # Confirm metrics were populated
@@ -64,6 +65,9 @@ class TestProductionValidationMetrics(unittest.TestCase):
         self.assertEqual(len(report.per_beat_metrics), 2)
         self.assertGreater(report.render_duration_ms, 0.0)
         self.assertGreater(report.output_duration_ms, 0.0)
+        self.assertGreater(report.qc_duration_ms, 0.0)
+        self.assertEqual(report.retry_count, 1)
+        self.assertEqual(report.attempt_count, 3)
         self.assertEqual(
             report.real_time_factor,
             round(report.render_duration_ms / report.output_duration_ms, 2),
