@@ -146,10 +146,12 @@ async function directorMutation(url, options = {}) {
 }
 
 async function approveDirectorGate(approved) {
-  const action = directorActive.human_action?.action_type;
-  if (!action) return;
-  const gate = directorActive.human_action || {};
-  await directorMutation(`/api/v1/voice-workflows/${directorActive.workflow_id}/approve`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action, approved, artifact_id:gate.artifact_id || null, artifact_sha256:gate.artifact_sha256 || null})});
+  const gate = directorActive.human_action;
+  if (!gate) return;
+  const action = {narration_acceptance:'approve_narration', final_audio_approval:'approve_final_audio'}[gate.action_type];
+  if (!action) return showToast('error', `Unsupported human gate: ${escapeHtml(gate.action_type)}`);
+  const artifact = gate.action_type === 'final_audio_approval' ? gate.items?.[0] || {} : {};
+  await directorMutation(`/api/v1/voice-workflows/${directorActive.workflow_id}/approve`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action, approved, artifact_id:artifact.artifact_id || null, artifact_sha256:artifact.sha256 || null})});
 }
 async function cancelDirectorWorkflow() { await directorMutation(`/api/v1/voice-workflows/${directorActive.workflow_id}/cancel`, {method:'POST'}); }
 async function resumeDirectorWorkflow() { await directorMutation(`/api/v1/voice-workflows/${directorActive.workflow_id}/resume`, {method:'POST'}); }
