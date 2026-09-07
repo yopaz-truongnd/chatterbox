@@ -250,6 +250,24 @@ def get_voice_project(project_id: str):
         return _handle_domain_error(exc, project_id=project_id)
 
 
+@router.get(
+    "/api/v1/voice-projects/{project_id}/script",
+    summary="Get Immutable Source Script",
+)
+def get_voice_script(project_id: str):
+    """Return the canonical source text for read-only director presentation."""
+    store = get_voice_project_store()
+    try:
+        state = store.get_project_state(project_id)
+        return {
+            "project_id": project_id,
+            "script_text": store.read_source_script(project_id),
+            "sha256": state.artifacts.source_sha256,
+        }
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
 @router.put(
     "/api/v1/voice-projects/{project_id}/script",
     response_model=VoiceProjectResponse,

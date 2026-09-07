@@ -6,7 +6,7 @@ Provides autonomous multi-step orchestration endpoints for end-to-end audio prod
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
 from schemas.voice_workflows import (
@@ -73,6 +73,17 @@ def create_voice_workflow(req: CreateVoiceWorkflowRequest):
         policy=policy,
     )
     return _format_workflow_response(state)
+
+
+@router.get(
+    "/api/v1/voice-workflows",
+    response_model=list[VoiceWorkflowResponse],
+    summary="List Voice Workflows",
+)
+def list_voice_workflows(limit: int = Query(default=50, ge=1, le=200)):
+    """List persisted workflows so consoles can recover their server state."""
+    service = get_voice_project_workflow_service()
+    return [_format_workflow_response(item) for item in service.list_workflows(limit=limit)]
 
 
 @router.get(

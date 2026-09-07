@@ -15,6 +15,27 @@ from services.voice_project_workflow_models import (
 
 
 class TestVoiceWorkflowsAPI(TestCase):
+    def test_list_returns_persisted_workflows_for_console(self):
+        states = [
+            VoiceWorkflowState(
+                workflow_id="vwf_console",
+                project_id="console_project",
+                status=WorkflowStatus.WAITING_FOR_HUMAN,
+                policy=WorkflowPolicy(provider="local", model="turbo"),
+                human_action={"action_type": "narration_acceptance"},
+            )
+        ]
+        with patch("routers.voice_workflows.get_voice_project_workflow_service") as get_service:
+            get_service.return_value.list_workflows.return_value = states
+            with TestClient(api_app.app) as client:
+                response = client.get("/api/v1/voice-workflows?limit=25")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()[0]["workflow_id"], "vwf_console")
+        self.assertEqual(response.json()[0]["policy"]["model"], "turbo")
+        self.assertEqual(response.json()[0]["human_action"]["action_type"], "narration_acceptance")
+        get_service.return_value.list_workflows.assert_called_once_with(limit=25)
+
     def test_create_preserves_policy_and_step_operation_progress(self):
         policy = WorkflowPolicy(
             provider="fake",

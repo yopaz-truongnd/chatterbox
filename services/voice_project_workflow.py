@@ -70,6 +70,10 @@ class VoiceProjectWorkflowService:
         self.op_manager = op_manager or get_voice_project_operation_manager()
         self.project_service = project_service
 
+    def list_workflows(self, limit: int = 50) -> list[VoiceWorkflowState]:
+        """Return persisted workflows for human-facing orchestration clients."""
+        return self.store.list_workflows(limit=limit)
+
     def start_workflow(
         self,
         script_text: str,
