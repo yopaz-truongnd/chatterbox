@@ -879,6 +879,28 @@ def download_project_artifact(project_id: str, artifact_id: str):
 # =========================================================
 
 
+def _format_operation(op) -> VoiceProjectJobResponse:
+    return VoiceProjectJobResponse(
+        id=op.id, project_id=op.project_id, operation=op.operation,
+        status=op.status.value if hasattr(op.status, "value") else str(op.status),
+        stage=op.stage, beat_id=op.beat_id, child_job_id=op.child_job_id,
+        progress_percent=op.progress_percent, message=op.message,
+        created_at=op.created_at, updated_at=op.updated_at,
+        result=op.result, error=op.error,
+    )
+
+
+@router.get(
+    "/api/v1/voice-project-jobs",
+    response_model=list[VoiceProjectJobResponse],
+    summary="List Operation Jobs",
+)
+def list_voice_project_jobs(project_id: str | None = None, limit: int = Query(default=20, ge=1, le=100)):
+    """List persisted operations for refresh-safe orchestration clients."""
+    operations = get_voice_project_operation_manager().list_operations(project_id=project_id, limit=limit)
+    return [_format_operation(op) for op in operations]
+
+
 @router.get(
     "/api/v1/voice-project-jobs/{job_id}",
     response_model=VoiceProjectJobResponse,
@@ -894,21 +916,7 @@ def get_voice_project_job(job_id: str):
             detail=f"Voice project operation job '{job_id}' not found.",
         )
 
-    return VoiceProjectJobResponse(
-        id=op.id,
-        project_id=op.project_id,
-        operation=op.operation,
-        status=op.status.value if hasattr(op.status, "value") else str(op.status),
-        stage=op.stage,
-        beat_id=op.beat_id,
-        child_job_id=op.child_job_id,
-        progress_percent=op.progress_percent,
-        message=op.message,
-        created_at=op.created_at,
-        updated_at=op.updated_at,
-        result=op.result,
-        error=op.error,
-    )
+    return _format_operation(op)
 
 
 @router.post(

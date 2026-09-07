@@ -33,6 +33,7 @@ class DirectorReviewService:
             resource_type=gap.type.value,
             priority=gap.priority.value,
             description=gap.reason or gap.term or gap.intent or gap.id,
+            term=gap.term,
             affected_beats=gap.used_at or ([context.beat_id] if context and context.beat_id else []),
             story_context=context.text if context else None,
             desired_characteristics=wanted,

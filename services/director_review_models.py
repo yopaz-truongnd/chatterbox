@@ -26,6 +26,7 @@ class DirectorResourceGap(BaseModel):
     resource_type: str
     priority: str
     description: str
+    term: str | None = None
     affected_beats: list[str] = Field(default_factory=list)
     story_context: str | None = None
     desired_characteristics: dict[str, Any] = Field(default_factory=dict)

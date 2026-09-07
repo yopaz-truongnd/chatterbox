@@ -1432,12 +1432,19 @@
             <div id="directorEmpty" class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-10 text-center text-sm text-slate-500">Open a production to direct it.</div>
             <div id="directorWorkspace" class="hidden space-y-3">
               <div class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-4"><div class="flex flex-wrap justify-between gap-2"><div><h3 id="directorActiveTitle" class="font-bold text-white"></h3><p id="directorActiveMeta" class="text-[10px] text-slate-400 font-mono"></p></div><div id="directorGateActions" class="flex gap-2"></div></div><div id="directorProgress" class="grid grid-cols-3 md:grid-cols-5 gap-1 mt-4"></div></div>
+              <div id="directorOperations" class="hidden bg-[#18151E] rounded-xl border border-purple-500/30 p-4"></div>
+              <div id="directorPendingRevisions" class="hidden bg-[#18151E] rounded-xl border border-amber-500/30 p-4"></div>
               <nav class="flex gap-1 overflow-x-auto" id="directorViews"><button data-view="workspace" onclick="showDirectorView('workspace')">Workspace</button><button data-view="review" onclick="showDirectorView('review')">Narration Review</button><button data-view="mix" onclick="showDirectorView('mix')">Mix & Master</button><button data-view="delivery" onclick="showDirectorView('delivery')">Approval / Delivery</button></nav>
               <div id="directorViewContent" class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-4 min-h-64"></div>
             </div>
           </div>
         </div>
       </section>
+
+      <dialog id="directorBeatDialog" class="m-auto w-[min(760px,94vw)] max-h-[90vh] overflow-y-auto rounded-xl bg-[#18151E] text-white border border-[#3F3A46] shadow-m3-3 backdrop:bg-black/70">
+        <div class="sticky top-0 bg-[#18151E] border-b border-[#3F3A46] p-4 flex justify-between items-center z-10"><div><h3 id="directorBeatTitle" class="font-bold"></h3><p class="text-[10px] text-slate-400">Beat Review</p></div><button onclick="closeDirectorBeat()" aria-label="Close beat review"><span class="material-symbols-outlined">close</span></button></div>
+        <div id="directorBeatBody" class="p-4 space-y-4"></div>
+      </dialog>
 
       <!-- ========================================================================= -->
       <!-- TAB 7: CHARACTERS (VOICES)                                                -->
