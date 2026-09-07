@@ -60,7 +60,12 @@ from services.voice_project_service import VoiceProjectService
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_operations import OperationStatus, VoiceProjectOperationManager
 from services.voice_project_workflow import VoiceProjectWorkflowService
-from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
+from services.voice_project_workflow_models import (
+    VoiceWorkflowState,
+    WorkflowPolicy,
+    WorkflowStatus,
+    WorkflowStep,
+)
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
 logger = logging.getLogger(__name__)
@@ -835,7 +840,12 @@ class ProductionValidationService:
         def _step_approval():
             master_wav = self.store.get_project_dir(project_id) / "mix" / "master.wav"
             master_sha = compute_file_sha256(master_wav)
-            return {"master_sha256": master_sha, "approved": True, "workflow_id": report.workflow_id}
+            return {
+                "master_sha256": master_sha,
+                "approval_required": require_final_approval,
+                "approved": True if require_final_approval else None,
+                "workflow_id": report.workflow_id,
+            }
 
         if not _run_step("final_master_approval", _step_approval):
             report.status = "failed"
@@ -1061,7 +1071,12 @@ class ProductionValidationService:
                 return {"reproduced_beat": target_beat, "timing_only_passed": True}
 
             inc_passed = _run_step("incremental_reproduction_validation", _step_incremental_reproduction)
-            report.incremental_reproduction_passed = inc_passed
+            incremental_step = steps[-1]
+            if inc_passed and incremental_step.details.get("skipped"):
+                incremental_step.status = "skipped"
+                report.incremental_reproduction_passed = None
+            else:
+                report.incremental_reproduction_passed = inc_passed
             if not inc_passed:
                 report.verdict = ValidationVerdict.PASS_WITH_WARNINGS if not failures else ValidationVerdict.FAIL
 
@@ -1069,26 +1084,71 @@ class ProductionValidationService:
         if req.run_cancellation_tests:
             def _step_cancellation_validation():
                 cancel_proj_id = f"vproj_cancel_{uuid.uuid4().hex[:8]}"
-                project_dir = self.store.get_project_dir(cancel_proj_id)
-                operations_dir = project_dir / "validation-operations"
+                project_dir = self.store.get_project_dir(project_id)
+                operations_dir = project_dir / "validation-operations" / cancel_proj_id
                 manager = VoiceProjectOperationManager(max_workers=1, operations_dir=operations_dir)
 
-                def cancellable_operation(cancellation_token=None):
-                    while not cancellation_token.is_cancelled():
-                        time.sleep(0.005)
-                    return {"cancelled": True}
+                manifest = self.store.load_manifest(project_id)
+                target_beat = next(iter(manifest.beats))
+                selected = manifest.beats[target_beat].selected_attempt
+                attempt = next(item for item in manifest.beats[target_beat].attempts if item.attempt == selected)
+                artifact_paths = [
+                    _project_artifact_path(project_dir, attempt.audio_path),
+                    project_dir / "mix" / "premaster.wav",
+                    project_dir / "mix" / "master.wav",
+                    project_dir / "exports" / "FINAL.wav",
+                    project_dir / "exports" / "export-manifest.yaml",
+                ]
+                artifact_hashes = {
+                    str(path): compute_file_sha256(path) for path in artifact_paths if path.is_file()
+                }
+
+                domain_calls = {
+                    "render": lambda token, callback: project_service.render(
+                        project_id,
+                        beats=[target_beat],
+                        force_rerender=True,
+                        progress_callback=callback,
+                        cancellation_token=token,
+                    ),
+                    "mix": lambda token, callback: project_service.mix(
+                        project_id, progress_callback=callback, cancellation_token=token
+                    ),
+                    "master": lambda token, callback: project_service.master(
+                        project_id, progress_callback=callback, cancellation_token=token
+                    ),
+                    "export": lambda token, callback: project_service.export(
+                        project_id,
+                        formats=["wav"],
+                        progress_callback=callback,
+                        cancellation_token=token,
+                    ),
+                }
 
                 cancelled_ids: list[str] = []
-                for operation_name in ("render", "mix", "master", "export"):
-                    operation = manager.submit(cancel_proj_id, operation_name, cancellable_operation)
+                for operation_name, domain_call in domain_calls.items():
+                    entered_domain = threading.Event()
+
+                    def run_domain(cancellation_token=None, *, call=domain_call):
+                        def pause_in_domain(*_args, **_kwargs):
+                            entered_domain.set()
+                            while not cancellation_token.is_cancelled():
+                                time.sleep(0.005)
+                        return call(cancellation_token, pause_in_domain)
+
+                    operation = manager.submit(cancel_proj_id, operation_name, run_domain)
                     deadline = time.monotonic() + 2.0
                     while time.monotonic() < deadline:
                         current = manager.get_operation(operation.id)
-                        if current and current.status == OperationStatus.RUNNING:
+                        if (
+                            current
+                            and current.status == OperationStatus.RUNNING
+                            and entered_domain.is_set()
+                        ):
                             break
                         time.sleep(0.005)
                     else:
-                        raise TimeoutError(f"{operation_name} cancellation probe never started.")
+                        raise TimeoutError(f"{operation_name} domain operation never became active.")
                     manager.cancel_operation(operation.id)
                     while time.monotonic() < deadline:
                         current = manager.get_operation(operation.id)
@@ -1098,6 +1158,13 @@ class ProductionValidationService:
                     else:
                         raise TimeoutError(f"{operation_name} cancellation probe did not cancel.")
                     cancelled_ids.append(operation.id)
+                    for path_str, expected_hash in artifact_hashes.items():
+                        if compute_file_sha256(Path(path_str)) != expected_hash:
+                            raise RuntimeError(
+                                f"{operation_name} cancellation replaced valid artifact {Path(path_str).name}."
+                            )
+                    if any(project_dir.rglob("*.pending.*")) or any(project_dir.rglob("*.tmp_*")):
+                        raise RuntimeError(f"{operation_name} cancellation published a pending artifact.")
 
                 recovered_manager = VoiceProjectOperationManager(
                     max_workers=1, operations_dir=operations_dir
@@ -1108,7 +1175,7 @@ class ProductionValidationService:
                 ):
                     raise RuntimeError("Cancelled operation state did not survive manager restart.")
 
-                workflow_dir = project_dir / "validation-workflows"
+                workflow_dir = project_dir / "validation-workflows" / cancel_proj_id
                 persisted_workflow = VoiceProjectWorkflowStore(workflow_dir)
                 recovery_id = f"vwf_recovery_{uuid.uuid4().hex[:8]}"
                 persisted_workflow.save_workflow(VoiceWorkflowState(
@@ -1121,15 +1188,56 @@ class ProductionValidationService:
                 if recovered_workflows.get_workflow(recovery_id).status != WorkflowStatus.INTERRUPTED:
                     raise RuntimeError("Running workflow was not interrupted during restart recovery.")
 
+                master_sha = compute_file_sha256(project_dir / "mix" / "master.wav")
+                approval_id = f"vwf_approval_{uuid.uuid4().hex[:8]}"
+                recovered_workflows.save_workflow(VoiceWorkflowState(
+                    workflow_id=approval_id,
+                    project_id=project_id,
+                    status=WorkflowStatus.WAITING_FOR_HUMAN,
+                    policy=WorkflowPolicy(require_final_approval=True, output_formats=["wav"]),
+                    steps=[WorkflowStep(
+                        name="master", status="completed", result_summary={"approved": False}
+                    )],
+                    human_action={
+                        "action_type": "final_audio_approval",
+                        "items": [{"artifact_id": "master_wav", "sha256": master_sha}],
+                    },
+                ))
+                restarted_workflow_service = VoiceProjectWorkflowService(
+                    store=VoiceProjectWorkflowStore(workflow_dir),
+                    project_store=self.store,
+                    op_manager=manager,
+                    project_service=project_service,
+                )
+                preserved = restarted_workflow_service.get_workflow(approval_id)
+                if not preserved or preserved.human_action != {
+                    "action_type": "final_audio_approval",
+                    "items": [{"artifact_id": "master_wav", "sha256": master_sha}],
+                }:
+                    raise RuntimeError("Final approval gate did not survive workflow service restart.")
+                restarted_workflow_service.approve_workflow(
+                    approval_id,
+                    action="approve_final_audio",
+                    approved=True,
+                    artifact_id="master_wav",
+                    artifact_sha256=master_sha,
+                )
+                self._wait_for_workflow_terminal(
+                    restarted_workflow_service, approval_id, CancellationToken(), 5
+                )
+
                 # Cleanup test project
                 try:
-                    shutil.rmtree(project_dir, ignore_errors=True)
+                    shutil.rmtree(operations_dir.parent, ignore_errors=True)
+                    shutil.rmtree(workflow_dir.parent, ignore_errors=True)
                 except Exception:
                     pass
                 return {
                     "running_operations_cancelled": ["render", "mix", "master", "export"],
+                    "artifact_hashes_preserved": True,
                     "operation_restart_recovery_verified": True,
                     "workflow_restart_recovery_verified": True,
+                    "human_gate_resume_verified": True,
                 }
 
             canc_passed = _run_step("cancellation_safety_validation", _step_cancellation_validation)
@@ -1185,16 +1293,12 @@ class ProductionValidationService:
         report_yaml_path = val_dir / "validation-report.yaml"
         report_json_path = val_dir / "validation-report.json"
 
+        report_dict = report.model_dump(mode="json")
         try:
-            report_dict = report.model_dump(mode="json")
             report_yaml_path.write_text(yaml.safe_dump(report_dict, sort_keys=False), encoding="utf-8")
             report_json_path.write_text(json.dumps(report_dict, indent=2), encoding="utf-8")
-            if req.output_report_path:
-                custom_out = self._resolve_local_path(req.output_report_path)
-                custom_out.parent.mkdir(parents=True, exist_ok=True)
-                custom_out.write_text(yaml.safe_dump(report_dict, sort_keys=False), encoding="utf-8")
         except Exception as exc:
-            logger.error("Failed to write validation report file: %s", exc)
+            logger.error("Failed to write canonical validation report: %s", exc)
             report.status = "failed"
             report.verdict = ValidationVerdict.FAIL
             report.failures.append(ProductionValidationFailure(
@@ -1202,5 +1306,17 @@ class ProductionValidationService:
                 code="REPORT_PERSISTENCE_FAILED",
                 message=str(exc),
             ))
+
+        if req.output_report_path and report.status != "failed":
+            try:
+                custom_out = self._resolve_local_path(req.output_report_path)
+                custom_out.parent.mkdir(parents=True, exist_ok=True)
+                custom_out.write_text(yaml.safe_dump(report_dict, sort_keys=False), encoding="utf-8")
+            except Exception as exc:
+                warning = f"Could not write secondary validation report: {exc}"
+                logger.warning(warning)
+                report.warnings.append(warning)
+                if report.verdict == ValidationVerdict.PASS:
+                    report.verdict = ValidationVerdict.PASS_WITH_WARNINGS
 
         return report

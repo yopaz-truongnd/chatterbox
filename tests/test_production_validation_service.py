@@ -162,6 +162,56 @@ class TestProductionValidationService(unittest.TestCase):
         self.assertEqual(result.verdict, ValidationVerdict.FAIL)
         self.assertEqual(result.failures[-1].code, "REPORT_PERSISTENCE_FAILED")
 
+    def test_secondary_report_failure_is_only_a_warning(self):
+        report = ProductionValidationReport(
+            validation_id="val_secondary_fail",
+            status="completed",
+            verdict=ValidationVerdict.PASS,
+            started_at="2026-09-07T00:00:00+00:00",
+            project_id="secondary_fail",
+            operation_ids=["vp_op_test"],
+        )
+        with mock.patch.object(self.service, "_resolve_local_path", side_effect=OSError("read-only")):
+            result = self.service._finalize_report(
+                report,
+                steps=[],
+                warnings=[],
+                failures=[],
+                start_ts=time.time(),
+                req=ProductionValidationRequest(
+                    provider="fake", output_report_path="secondary.yaml"
+                ),
+            )
+        canonical = self.store.root_dir / "validations" / report.validation_id
+        self.assertTrue((canonical / "validation-report.yaml").is_file())
+        self.assertTrue((canonical / "validation-report.json").is_file())
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.verdict, ValidationVerdict.PASS_WITH_WARNINGS)
+        self.assertFalse(result.failures)
+
+    def test_single_beat_incremental_validation_is_inconclusive(self):
+        report = self.service.validate(ProductionValidationRequest(
+            script_text="Prometheus carried the flame to humanity.",
+            provider="fake",
+            output_formats=["wav"],
+            run_incremental_reproduction=True,
+        ))
+        step = next(item for item in report.steps if item.name == "incremental_reproduction_validation")
+        self.assertEqual(step.status, "skipped")
+        self.assertIsNone(report.incremental_reproduction_passed)
+
+    def test_optional_final_approval_is_reported_as_not_required(self):
+        report = self.service.validate(ProductionValidationRequest(
+            script_text="Prometheus carried the flame to humanity.",
+            provider="fake",
+            output_formats=["wav"],
+            require_final_approval=False,
+            run_incremental_reproduction=False,
+        ))
+        step = next(item for item in report.steps if item.name == "final_master_approval")
+        self.assertFalse(step.details["approval_required"])
+        self.assertIsNone(step.details["approved"])
+
     def test_requested_mp3_missing_with_ffmpeg_fails_validation(self):
         original_export = VoiceProjectService.export
 

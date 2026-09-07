@@ -248,16 +248,19 @@ class AudioExportService:
                 pct = (idx / float(total_profiles)) * 100.0
                 progress_callback("exporting_deliverables", pct, {"format": fmt})
 
-        if len(artifacts) != len(export_profiles):
-            missing_fmts = [p.format for p in export_profiles if not any(a.artifact_type == f"final_{p.format.lower()}" for a in artifacts)]
-            raise RuntimeError(f"Export failed to produce requested format(s): {', '.join(missing_fmts)}")
-
         manifest = ExportManifest(
             project_id=project_id,
             profiles=export_profiles,
             artifacts=artifacts,
             source_master_sha256=compute_file_sha256(src_master),
         )
+
+        if cancellation_token and cancellation_token.is_cancelled() and len(artifacts) == len(export_profiles):
+            return manifest
+
+        if len(artifacts) != len(export_profiles):
+            missing_fmts = [p.format for p in export_profiles if not any(a.artifact_type == f"final_{p.format.lower()}" for a in artifacts)]
+            raise RuntimeError(f"Export failed to produce requested format(s): {', '.join(missing_fmts)}")
 
         manifest_path = out_dir / "export-manifest.yaml"
         manifest.save_yaml(manifest_path)

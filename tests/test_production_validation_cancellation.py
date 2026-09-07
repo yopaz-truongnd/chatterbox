@@ -58,8 +58,10 @@ class TestProductionValidationCancellation(unittest.TestCase):
             step.details["running_operations_cancelled"],
             ["render", "mix", "master", "export"],
         )
+        self.assertTrue(step.details["artifact_hashes_preserved"])
         self.assertTrue(step.details["operation_restart_recovery_verified"])
         self.assertTrue(step.details["workflow_restart_recovery_verified"])
+        self.assertTrue(step.details["human_gate_resume_verified"])
 
 
 if __name__ == "__main__":

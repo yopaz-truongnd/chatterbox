@@ -908,6 +908,11 @@ class VoiceProjectService:
                     cancellation_token=cancellation_token,
                 )
 
+                if cancellation_token and cancellation_token.is_cancelled():
+                    state.stage = state.last_stable_stage
+                    self.store.save_project_state(state)
+                    return manifest
+
                 # Preserve reusable-library attribution and usage lineage for every
                 # ambience/SFX source that participated in the current MixPlan.
                 from services.asset_library_store import get_asset_library_store
@@ -931,11 +936,6 @@ class VoiceProjectService:
                     })
                 manifest.asset_licenses = list({item["asset_id"]: item for item in licensed}.values())
                 manifest.save_yaml(export_dir / "export-manifest.yaml")
-
-                if cancellation_token and cancellation_token.is_cancelled():
-                    state.stage = state.last_stable_stage
-                    self.store.save_project_state(state)
-                    return manifest
 
                 state.stage = ProjectStatus.COMPLETED
                 state.last_stable_stage = ProjectStatus.COMPLETED
