@@ -292,6 +292,18 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
     # Core Lifecycle Tools (Phase 13)
     # ---------------------------------------------------------
     {
+        "name": "chatterbox_voice_projects",
+        "description": "List authoritative Voice Project summaries for discovery and session recovery.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                "language": {"type": "string"},
+                "stage": {"type": "string"},
+            },
+        },
+    },
+    {
         "name": "chatterbox_voice_project_create",
         "description": "Create a new Voice Narration project with source script and configuration.",
         "inputSchema": {
@@ -439,6 +451,18 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "items": {"type": "string"},
                     "description": "Optional subset of beat IDs to re-evaluate.",
                 },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_jobs",
+        "description": "List persisted operations for a project so an agent can recover active and recent work.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
             },
             "required": ["project_id"],
         },
@@ -644,6 +668,16 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "chatterbox_voice_workflows",
+        "description": "List persisted workflow state for discovery and interrupted-session recovery.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+            },
+        },
+    },
+    {
         "name": "chatterbox_voice_workflow_status",
         "description": "Check status, current step, human action gates, and results of an autonomous production workflow.",
         "inputSchema": {
@@ -699,8 +733,12 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                 "approved": {"type": "boolean"},
                 "artifact_id": {"type": "string"},
                 "artifact_sha256": {"type": "string"},
+                "human_confirmed": {
+                    "type": "boolean",
+                    "description": "Must be true only after the human explicitly approved this current gate.",
+                },
             },
-            "required": ["workflow_id", "action", "approved"],
+            "required": ["workflow_id", "action", "approved", "human_confirmed"],
         },
     },
 ]

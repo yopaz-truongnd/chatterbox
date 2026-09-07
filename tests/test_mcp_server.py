@@ -43,8 +43,8 @@ class MCPServerTestCase(unittest.TestCase):
             "chatterbox_list_projects",
             "chatterbox_get_events",
         }
-        # 49 prior tools + 19 Phase 17-20 tools + 4 Phase 21 validation tools
-        self.assertEqual(len(tools), 72)
+        # 72 prior tools + 3 Phase 23 discovery/recovery tools
+        self.assertEqual(len(tools), 75)
 
     def test_list_characters_handles_dict_and_list_responses(self):
         # 1. Dict response format (standard from /api/v1/characters)
@@ -295,8 +295,8 @@ class MCPServerTestCase(unittest.TestCase):
             # 2. Tools list RPC
             tools_res = send_and_recv({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
             tools = tools_res.get("result", {}).get("tools", [])
-            # 49 prior tools + 19 Phase 17-20 tools + 4 Phase 21 validation tools
-            self.assertEqual(len(tools), 72)
+            # 72 prior tools + 3 Phase 23 discovery/recovery tools
+            self.assertEqual(len(tools), 75)
             tool_names = {t["name"] for t in tools}
             self.assertIn("chatterbox_list_characters", tool_names)
             self.assertIn("chatterbox_generate_tts", tool_names)
