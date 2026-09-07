@@ -27,6 +27,8 @@ def test_console_contract_has_drawer_server_impact_and_refresh_safe_jobs():
     assert "/api/v1/voice-projects/${directorActive.project_id}/revisions" in source
     assert "/api/v1/voice-project-jobs?project_id=" in source
     assert "human_action.items?.[0]" in source
+    assert "masterStatus?.exists && masterStatus?.fresh && masterStatus?.sha256 === gate?.sha256" in source
+    assert "Lineage VERIFIED" not in source
 
 
 def test_operation_list_api_exposes_persisted_project_jobs():
