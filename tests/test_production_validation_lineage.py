@@ -3,6 +3,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from services.production_validation_models import ProductionValidationRequest
 from services.production_validation_service import ProductionValidationService
@@ -42,7 +43,11 @@ class TestProductionValidationLineage(unittest.TestCase):
             run_incremental_reproduction=True,
         )
 
-        report = self.service.validate(req)
+        with mock.patch(
+            "services.voice_project_dependencies.get_voice_project_workflow_service",
+            side_effect=AssertionError("validation must inject its authoritative workflow service"),
+        ):
+            report = self.service.validate(req)
         self.assertEqual(report.status, "completed")
         self.assertTrue(report.incremental_reproduction_passed)
 

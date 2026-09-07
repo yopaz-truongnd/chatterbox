@@ -127,6 +127,26 @@ def _get_peak_memory_mb() -> float:
         return 0.0
 
 
+def _workflow_step_duration_ms(step: Any) -> float:
+    """Return persisted wall-clock duration for a completed workflow step."""
+    if not step or not step.started_at or not step.completed_at:
+        return 0.0
+    try:
+        started = datetime.fromisoformat(step.started_at.replace("Z", "+00:00"))
+        completed = datetime.fromisoformat(step.completed_at.replace("Z", "+00:00"))
+        return round(max(0.0, (completed - started).total_seconds() * 1000.0), 1)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _project_artifact_path(project_dir: Path, stored_path: str | Path) -> Path:
+    """Resolve manifest paths that may be absolute, cwd-relative, or project-relative."""
+    path = Path(stored_path)
+    if path.is_absolute() or path.exists():
+        return path
+    return project_dir / path
+
+
 def _inspect_audio_wave(wav_path: Path) -> dict[str, Any]:
     """Inspect and measure technical properties of a WAV file."""
     if not wav_path.exists() or wav_path.stat().st_size == 0:
@@ -335,6 +355,7 @@ class ProductionValidationService:
     def _run_production_workflow(
         self,
         *,
+        workflow_service: VoiceProjectWorkflowService,
         project_service: VoiceProjectService,
         script_text: str,
         project_id: str,
@@ -352,12 +373,6 @@ class ProductionValidationService:
         timeout_seconds: int,
     ) -> VoiceWorkflowState:
         """Run and approve one real production workflow through its terminal state."""
-        workflow_service = VoiceProjectWorkflowService(
-            store=VoiceProjectWorkflowStore(self.store.root_dir / "workflows"),
-            project_store=self.store,
-            op_manager=self.operation_manager,
-            project_service=project_service,
-        )
         state = workflow_service.start_workflow(
             script_text=script_text,
             project_id=project_id,
@@ -543,8 +558,17 @@ class ProductionValidationService:
             execution_port=exec_port,
             provider_name=provider_name,
         )
+        workflow_service = VoiceProjectWorkflowService(
+            store=VoiceProjectWorkflowStore(self.store.root_dir / "workflows"),
+            project_store=self.store,
+            op_manager=self.operation_manager,
+            project_service=project_service,
+        )
         review_service = DirectorReviewService(self.store)
-        revision_service = DirectorRevisionService(project_service)
+        revision_service = DirectorRevisionService(
+            project_service,
+            workflow_service=workflow_service,
+        )
 
         steps: list[ProductionValidationStep] = []
         warnings: list[str] = list(runtime_caps.warnings)
@@ -621,6 +645,7 @@ class ProductionValidationService:
         workflow_t0 = time.time()
         try:
             workflow = self._run_production_workflow(
+                workflow_service=workflow_service,
                 project_service=project_service,
                 script_text=script_text,
                 project_id=project_id,
@@ -653,7 +678,7 @@ class ProductionValidationService:
         # --- 3. Voice Planning ---
         def _step_plan():
             workflow_step = next(step for step in workflow.steps if step.name == "plan")
-            report.planning_duration_ms = workflow_step.duration_ms if hasattr(workflow_step, "duration_ms") else 0.0
+            report.planning_duration_ms = _workflow_step_duration_ms(workflow_step)
             voice_plan = self.store.load_voice_plan(project_id)
             report.beat_count = len(voice_plan.beats) if voice_plan else 0
             return {"beat_count": report.beat_count}
@@ -679,7 +704,7 @@ class ProductionValidationService:
         # --- 5. Render Narration ---
         def _step_render():
             render_step = next(step for step in workflow.steps if step.name == "render")
-            report.render_duration_ms = 0.0
+            report.render_duration_ms = _workflow_step_duration_ms(render_step)
             manifest = self.store.load_manifest(project_id)
             total_attempts = sum(len(b.attempts) for b in manifest.beats.values()) if manifest else 0
             report.attempt_count = total_attempts
@@ -694,13 +719,15 @@ class ProductionValidationService:
         # --- 6. QC & Adaptive Retry Evaluation ---
         def _step_qc():
             manifest = self.store.load_manifest(project_id)
-            report.qc_duration_ms = 0.0
+            evaluate_step = next((step for step in workflow.steps if step.name == "evaluate"), None)
+            report.qc_duration_ms = _workflow_step_duration_ms(evaluate_step)
             report.attempt_count = sum(len(beat.attempts) for beat in manifest.beats.values())
             pass_cnt = 0
             rev_cnt = 0
             fail_cnt = 0
             beat_metrics: list[ProductionValidationBeatMetric] = []
 
+            total_attempts = max(1, report.attempt_count)
             for beat_id, beat_state in manifest.beats.items():
                 selected_att = beat_state.selected_attempt
                 attempt_obj = next((a for a in beat_state.attempts if a.attempt == selected_att), None)
@@ -721,7 +748,9 @@ class ProductionValidationService:
                 # Per-beat metric
                 duration_ms = 0.0
                 if attempt_obj and attempt_obj.audio_path:
-                    p = self.store.get_project_dir(project_id) / attempt_obj.audio_path
+                    p = _project_artifact_path(
+                        self.store.get_project_dir(project_id), attempt_obj.audio_path
+                    )
                     insp = _inspect_audio_wave(p)
                     if insp.get("valid"):
                         duration_ms = insp.get("duration_ms", 0.0)
@@ -734,7 +763,10 @@ class ProductionValidationService:
                     beat_id=beat_id,
                     text_length=text_len,
                     duration_ms=duration_ms,
-                    render_duration_ms=round(report.render_duration_ms / max(1, len(manifest.beats)), 1),
+                    render_duration_ms=round(
+                        report.render_duration_ms * len(beat_state.attempts) / total_attempts,
+                        1,
+                    ),
                     attempt_count=len(beat_state.attempts),
                     selected_attempt=selected_att,
                     qc_score=qc_score,
@@ -776,6 +808,8 @@ class ProductionValidationService:
 
         # --- 9. Audio Mix ---
         def _step_mix():
+            workflow_step = next(step for step in workflow.steps if step.name == "mix")
+            report.mix_duration_ms = _workflow_step_duration_ms(workflow_step)
             p_path = self.store.get_project_dir(project_id) / "mix" / "premaster.wav"
             return {"premaster_path": _sanitize_path(p_path)}
 
@@ -786,6 +820,8 @@ class ProductionValidationService:
 
         # --- 10. Mastering ---
         def _step_master():
+            workflow_step = next(step for step in workflow.steps if step.name == "master")
+            report.master_duration_ms = _workflow_step_duration_ms(workflow_step)
             m_path = self.store.get_project_dir(project_id) / "mix" / "master.wav"
             return {"master_path": _sanitize_path(m_path)}
 
@@ -807,6 +843,8 @@ class ProductionValidationService:
 
         # --- 12. Deliverable Export ---
         def _step_export():
+            workflow_step = next(step for step in workflow.steps if step.name == "export")
+            report.export_duration_ms = _workflow_step_duration_ms(workflow_step)
             export_manifest = workflow.result.get("manifest", {}) if workflow.result else {}
             return {"export_artifacts_count": len(export_manifest.get("artifacts", []))}
 
@@ -902,7 +940,9 @@ class ProductionValidationService:
                     sel = manifest.beats[b_id].selected_attempt
                     att = next((a for a in manifest.beats[b_id].attempts if a.attempt == sel), None)
                     if att and att.audio_path:
-                        p = self.store.get_project_dir(project_id) / att.audio_path
+                        p = _project_artifact_path(self.store.get_project_dir(project_id), att.audio_path)
+                        if not p.is_file():
+                            raise FileNotFoundError(f"Selected narration artifact is missing for {b_id}.")
                         unaffected_hashes_before[b_id] = compute_file_sha256(p)
 
                 # 1. Change direction of target beat
@@ -919,12 +959,6 @@ class ProductionValidationService:
                 
                 # If reproduction paused at approval gate, approve and finish export
                 if repro_res.status == "waiting_for_human":
-                    workflow_service = VoiceProjectWorkflowService(
-                        store=VoiceProjectWorkflowStore(self.store.root_dir / "workflows"),
-                        project_store=self.store,
-                        op_manager=self.operation_manager,
-                        project_service=project_service,
-                    )
                     workflow_service.approve_workflow(
                         report.workflow_id,
                         action="approve_final_audio",
@@ -940,7 +974,11 @@ class ProductionValidationService:
                     sel_after = manifest_after.beats[b_id].selected_attempt
                     att_after = next((a for a in manifest_after.beats[b_id].attempts if a.attempt == sel_after), None)
                     if att_after and att_after.audio_path:
-                        p_after = self.store.get_project_dir(project_id) / att_after.audio_path
+                        p_after = _project_artifact_path(
+                            self.store.get_project_dir(project_id), att_after.audio_path
+                        )
+                        if not p_after.is_file():
+                            raise FileNotFoundError(f"Selected narration artifact is missing for {b_id}.")
                         curr_hash = compute_file_sha256(p_after)
                         if curr_hash != unaffected_hashes_before.get(b_id):
                             raise ValueError(f"Unaffected beat {b_id} narration changed during reproduction!")
@@ -951,7 +989,9 @@ class ProductionValidationService:
                     sel = manifest_after.beats[b_id].selected_attempt
                     att = next((a for a in manifest_after.beats[b_id].attempts if a.attempt == sel), None)
                     if att and att.audio_path:
-                        p = self.store.get_project_dir(project_id) / att.audio_path
+                        p = _project_artifact_path(self.store.get_project_dir(project_id), att.audio_path)
+                        if not p.is_file():
+                            raise FileNotFoundError(f"Selected narration artifact is missing for {b_id}.")
                         timing_hashes_before[b_id] = compute_file_sha256(p)
 
                 t_impact = revision_service.update_timing(
@@ -966,12 +1006,6 @@ class ProductionValidationService:
 
                 repro_t = revision_service.reproduce_project(project_id)
                 if repro_t.status == "waiting_for_human":
-                    workflow_service = VoiceProjectWorkflowService(
-                        store=VoiceProjectWorkflowStore(self.store.root_dir / "workflows"),
-                        project_store=self.store,
-                        op_manager=self.operation_manager,
-                        project_service=project_service,
-                    )
                     workflow_service.approve_workflow(
                         report.workflow_id,
                         action="approve_final_audio",
@@ -987,7 +1021,9 @@ class ProductionValidationService:
                     sel = manifest_timing.beats[b_id].selected_attempt
                     att = next((a for a in manifest_timing.beats[b_id].attempts if a.attempt == sel), None)
                     if att and att.audio_path:
-                        p = self.store.get_project_dir(project_id) / att.audio_path
+                        p = _project_artifact_path(self.store.get_project_dir(project_id), att.audio_path)
+                        if not p.is_file():
+                            raise FileNotFoundError(f"Selected narration artifact is missing for {b_id}.")
                         if compute_file_sha256(p) != timing_hashes_before.get(b_id):
                             raise ValueError(f"Narration hash changed for {b_id} during timing-only reproduction!")
 
@@ -1107,9 +1143,9 @@ class ProductionValidationService:
             if operations:
                 report.operation_ids = [operations[0].id]
 
-        # Real-time factor: output audio duration (ms) / total render duration (ms)
+        # Real-time factor: render wall time / produced audio duration.
         if report.render_duration_ms > 0 and report.output_duration_ms > 0:
-            report.real_time_factor = round(report.output_duration_ms / report.render_duration_ms, 2)
+            report.real_time_factor = round(report.render_duration_ms / report.output_duration_ms, 2)
 
         _ACTIVE_VALIDATIONS[report.validation_id] = report
 

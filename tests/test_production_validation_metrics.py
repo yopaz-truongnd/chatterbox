@@ -62,9 +62,22 @@ class TestProductionValidationMetrics(unittest.TestCase):
         self.assertGreater(report.total_duration_ms, 0.0)
         self.assertEqual(report.beat_count, 2)
         self.assertEqual(len(report.per_beat_metrics), 2)
+        self.assertGreater(report.render_duration_ms, 0.0)
+        self.assertGreater(report.output_duration_ms, 0.0)
+        self.assertEqual(
+            report.real_time_factor,
+            round(report.render_duration_ms / report.output_duration_ms, 2),
+        )
+        self.assertAlmostEqual(
+            sum(metric.render_duration_ms for metric in report.per_beat_metrics),
+            report.render_duration_ms,
+            delta=0.2,
+        )
         for bm in report.per_beat_metrics:
             self.assertGreater(bm.text_length, 0)
             self.assertEqual(bm.provider, "fake")
+            self.assertGreater(bm.duration_ms, 0.0)
+            self.assertGreater(bm.render_duration_ms, 0.0)
 
         # Confirm no full script stored directly in report fields
         report_dict = report.model_dump(mode="json")
