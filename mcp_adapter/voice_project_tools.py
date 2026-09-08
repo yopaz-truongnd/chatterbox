@@ -99,7 +99,13 @@ def _handle_response(res: dict | list, project_id: str | None = None) -> dict:
         err = res["error"]
         msg = err.get("message", "Error") if isinstance(err, dict) else str(err)
         code = err.get("code", "ERROR") if isinstance(err, dict) else "ERROR"
-        return _error_content(msg, error_code=code, project_id=project_id)
+        details = err.get("details", {}) if isinstance(err, dict) else {}
+        if isinstance(err, dict):
+            details = {
+                **details,
+                **{key: err[key] for key in ("workflow_id", "operation_id", "retryable") if key in err},
+            }
+        return _error_content(msg, error_code=code, project_id=project_id, details=details)
     if "detail" in res and not res.get("id"):
         return _error_content(str(res["detail"]), project_id=project_id)
     return _success_content(res)

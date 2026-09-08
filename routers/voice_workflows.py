@@ -22,11 +22,24 @@ from services.voice_project_workflow_models import (
     VoiceWorkflowState,
     WorkflowPolicy,
 )
-from services.voice_project_models import InvalidProjectStateError
+from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["voice-workflows"])
+
+
+def _workflow_error(code: str, message: str, workflow_id: str, status_code: int = 409) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": {
+            "code": code,
+            "message": message,
+            "workflow_id": workflow_id,
+            "retryable": False,
+            "details": {},
+        }},
+    )
 
 
 def _format_workflow_response(state: VoiceWorkflowState) -> VoiceWorkflowResponse:
@@ -117,7 +130,7 @@ def get_voice_workflow_next_action(workflow_id: str):
     try:
         return get_voice_project_workflow_service().next_action(workflow_id)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        return _workflow_error("WORKFLOW_NOT_FOUND", str(exc), workflow_id, status.HTTP_404_NOT_FOUND)
 
 
 @router.post(
@@ -132,10 +145,8 @@ def resume_voice_workflow(workflow_id: str):
         state = service.resume_workflow(workflow_id)
         return _format_workflow_response(state)
     except InvalidProjectStateError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot resume workflow: {str(exc)}",
-        )
+        code = "HUMAN_APPROVAL_REQUIRED" if "explicit approval" in str(exc) else "INVALID_WORKFLOW_STATE"
+        return _workflow_error(code, f"Cannot resume workflow: {str(exc)}", workflow_id)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -160,8 +171,10 @@ def approve_voice_workflow(workflow_id: str, req: ApproveVoiceWorkflowRequest):
             artifact_sha256=req.artifact_sha256,
         )
         return _format_workflow_response(state)
+    except InvalidArtifactShaError as exc:
+        return _workflow_error("INVALID_ARTIFACT_SHA", str(exc), workflow_id)
     except InvalidProjectStateError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        return _workflow_error("HUMAN_APPROVAL_REQUIRED", str(exc), workflow_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 

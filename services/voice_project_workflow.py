@@ -30,6 +30,7 @@ from services.voice_project_dependencies import (
     get_voice_project_store,
 )
 from services.voice_project_models import (
+    InvalidArtifactShaError,
     InvalidProjectStateError,
     compute_file_sha256,
 )
@@ -206,7 +207,10 @@ class VoiceProjectWorkflowService:
             requested = {f"final_{fmt}" for fmt in state.policy.output_formats}
             deliverables = [
                 item for item in review.artifact_status
-                if item.artifact_id in requested and item.exists and item.fresh and item.sha256
+                if item.artifact_id in requested
+                and item.exists
+                and item.fresh
+                and item.sha256
             ]
             if requested and {item.artifact_id for item in deliverables} != requested:
                 return decision(
@@ -215,6 +219,19 @@ class VoiceProjectWorkflowService:
                     requires_human=True,
                     waiting_for="valid_deliverable",
                     blocking_issue="stale_or_unverified_artifact",
+                )
+            service = self.project_service or get_voice_project_service(store=self.project_store)
+            verified = service.verify_delivery_lineage(state.project_id, workflow_state=state)
+            if any(
+                verified.get("FINAL." + item.artifact_id.removeprefix("final_")) != item.sha256
+                for item in deliverables
+            ):
+                return decision(
+                    "request_recovery_direction",
+                    "A requested deliverable failed canonical lineage verification.",
+                    requires_human=True,
+                    waiting_for="valid_deliverable",
+                    blocking_issue="lineage_invalid",
                 )
             return decision(
                 "deliver",
@@ -287,6 +304,9 @@ class VoiceProjectWorkflowService:
             state.updated_at = datetime.now(timezone.utc).isoformat()
 
         state = self.store.transition_workflow(workflow_id, expected_status, resume)
+        self._emit_production_event(
+            state, "workflow_resumed", "Production workflow resumed.", status=state.status.value
+        )
 
         # Launch background resume loop
         threading.Thread(
@@ -329,16 +349,19 @@ class VoiceProjectWorkflowService:
                 master_path = self.project_store.get_project_dir(state.project_id) / "mix" / "master.wav"
                 current_sha = compute_file_sha256(master_path)
                 if artifact_id != "master_wav" or not artifact_sha256:
-                    raise InvalidProjectStateError(
+                    raise InvalidArtifactShaError(
                         "Final audio approval requires artifact_id='master_wav' and artifact_sha256."
                     )
                 if artifact_sha256 != expected_sha or current_sha != expected_sha:
-                    raise InvalidProjectStateError("Master audio changed after review; review the current artifact again.")
+                    raise InvalidArtifactShaError("Master audio changed after review; review the current artifact again.")
 
             step_name = WorkflowStepName.MASTER.value if action_type == "final_audio_approval" else WorkflowStepName.RENDER.value
             for step in state.steps:
                 if step.name == step_name:
                     step.result_summary["approved"] = True
+                    if action_type == "final_audio_approval":
+                        step.result_summary["approved_artifact_id"] = artifact_id
+                        step.result_summary["approved_artifact_sha256"] = artifact_sha256
                     break
             state.status = WorkflowStatus.RUNNING
             state.human_action = None
@@ -348,6 +371,22 @@ class VoiceProjectWorkflowService:
         state = self.store.transition_workflow(workflow_id, WorkflowStatus.WAITING_FOR_HUMAN, approve)
         if not approved:
             return state
+        self._emit_production_event(
+            state,
+            "human_gate_resolved",
+            "Human approval gate resolved.",
+            status=state.status.value,
+            action=action,
+            artifact_id=artifact_id,
+        )
+        if action == "approve_final_audio":
+            self._emit_production_event(
+                state,
+                "final_approval_granted",
+                "Final master approval granted.",
+                artifact_id=artifact_id,
+                artifact_sha256=artifact_sha256,
+            )
         threading.Thread(
             target=self._execute_workflow_loop,
             args=(workflow_id, None, None, None),
@@ -467,6 +506,13 @@ class VoiceProjectWorkflowService:
             if s.name == step_name:
                 s.operation_id = op.id
         self.store.save_workflow(fresh_state)
+        self._emit_production_event(
+            fresh_state,
+            "operation_started",
+            f"Operation '{op_name}' started.",
+            step=step_name,
+            operation_id=op.id,
+        )
 
         while True:
             fresh_state = self.store.get_workflow(workflow_id)
@@ -487,13 +533,35 @@ class VoiceProjectWorkflowService:
 
             if curr_op.status == OperationStatus.COMPLETED:
                 self._mark_step(workflow_id, step_name, "completed", result_summary={"operation_id": op.id})
+                self._emit_production_event(
+                    fresh_state,
+                    "operation_completed",
+                    f"Operation '{op_name}' completed.",
+                    step=step_name,
+                    operation_id=op.id,
+                )
                 return curr_op.result
             elif curr_op.status in (OperationStatus.FAILED, OperationStatus.INTERRUPTED):
                 err = curr_op.error or {"code": "OPERATION_FAILED", "message": "Operation failed"}
                 self._mark_step(workflow_id, step_name, "failed", error=err)
+                self._emit_production_event(
+                    fresh_state,
+                    "operation_failed",
+                    f"Operation '{op_name}' failed.",
+                    step=step_name,
+                    operation_id=op.id,
+                    error=err,
+                )
                 raise RuntimeError(f"Workflow step '{step_name}' failed: {err.get('message')}")
             elif curr_op.status == OperationStatus.CANCELLED:
                 self._mark_step(workflow_id, step_name, "failed", error={"code": "CANCELLED", "message": "Operation cancelled"})
+                self._emit_production_event(
+                    fresh_state,
+                    "operation_cancelled",
+                    f"Operation '{op_name}' cancelled.",
+                    step=step_name,
+                    operation_id=op.id,
+                )
                 self._wait_for_op_terminal_and_cancel_wf(workflow_id, op.id)
                 return None
 
@@ -650,6 +718,11 @@ class VoiceProjectWorkflowService:
                         state, "human_action_required", "Required resources need human action.",
                         step=WorkflowStepName.CHECK_RESOURCES.value,
                     )
+                    self._emit_production_event(
+                        state, "human_gate_entered", "Required-resource gate entered.",
+                        step=WorkflowStepName.CHECK_RESOURCES.value,
+                        action_type="resource_required",
+                    )
                     return  # Pause workflow until user/agent resumes
 
                 self._mark_step(
@@ -707,6 +780,11 @@ class VoiceProjectWorkflowService:
                         state, "human_action_required", "Narration requires human acceptance.",
                         step=WorkflowStepName.RENDER.value,
                     )
+                    self._emit_production_event(
+                        state, "human_gate_entered", "Audio-quality gate entered.",
+                        step=WorkflowStepName.RENDER.value,
+                        action_type="audio_quality_review",
+                    )
                     return
 
                 if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
@@ -753,6 +831,11 @@ class VoiceProjectWorkflowService:
                     }
                     state.suggested_action = "Review and approve the QC-passed narration beats."
                     self.store.save_workflow(state)
+                    self._emit_production_event(
+                        state, "human_gate_entered", "Narration-acceptance gate entered.",
+                        step=WorkflowStepName.RENDER.value,
+                        action_type="narration_acceptance",
+                    )
                     return
 
             state = self.store.get_workflow(workflow_id)
@@ -806,6 +889,12 @@ class VoiceProjectWorkflowService:
                     profile_name=state.policy.mastering_profile,
                     target_lufs=state.policy.loudness_target_lufs,
                 )
+                fresh = self.store.get_workflow(workflow_id)
+                if fresh:
+                    self._emit_production_event(
+                        fresh, "master_created", "Current master artifact created.",
+                        step=WorkflowStepName.MASTER.value, artifact_id="master_wav",
+                    )
 
             state = self.store.get_workflow(workflow_id)
             if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
@@ -838,6 +927,12 @@ class VoiceProjectWorkflowService:
                     state, "approval_required", "Master audio requires final approval.",
                     step=WorkflowStepName.MASTER.value,
                 )
+                self._emit_production_event(
+                    state, "human_gate_entered", "Final-audio approval gate entered.",
+                    step=WorkflowStepName.MASTER.value,
+                    action_type="final_audio_approval",
+                    artifact_id="master_wav",
+                )
                 return
 
             # 8. Step: EXPORT (via OperationManager)
@@ -852,16 +947,21 @@ class VoiceProjectWorkflowService:
 
             master_step = next((s for s in state.steps if s.name == WorkflowStepName.MASTER.value), None)
             revision_ids = (master_step.result_summary.get("revision_ids", []) if master_step else [])
-            if revision_ids:
-                from services.director_revision_store import DirectorRevisionStore
-                DirectorRevisionStore(self.project_store).mark_reproduced(project_id, revision_ids)
+            from services.director_revision_store import DirectorRevisionStore
+            revision_store = DirectorRevisionStore(self.project_store)
+            pending_revision_ids = revision_store.get_state(project_id).pending_revision_ids
+            satisfied_revision_ids = list(dict.fromkeys([*revision_ids, *pending_revision_ids]))
+            if satisfied_revision_ids:
+                # A successful full workflow export has rebuilt every downstream
+                # artifact, including revisions created while resolving resources.
+                revision_store.mark_reproduced(project_id, satisfied_revision_ids)
 
             state = self.store.get_workflow(workflow_id)
             if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
                 return
 
             # Complete Workflow
-            artifacts = service.list_artifacts(project_id)
+            artifacts = service.list_artifacts(project_id, workflow_state=state)
             state.status = WorkflowStatus.COMPLETED
             state.current_step = WorkflowStepName.COMPLETE.value
             state.suggested_action = "Production completed successfully. Audio deliverables ready."
@@ -874,6 +974,10 @@ class VoiceProjectWorkflowService:
             self.store.save_workflow(state)
             self._emit_production_event(
                 state, "export_completed", "Production export completed.",
+                step=WorkflowStepName.EXPORT.value, status=state.status.value,
+            )
+            self._emit_production_event(
+                state, "delivery_exported", "Verified delivery exported.",
                 step=WorkflowStepName.EXPORT.value, status=state.status.value,
             )
 
@@ -904,6 +1008,7 @@ class VoiceProjectWorkflowService:
             get_production_event_store().append_project_event(ProductionEvent(
                 project_id=state.project_id,
                 workflow_id=state.workflow_id,
+                operation_id=details.pop("operation_id", None),
                 event_type=ProductionEventType(event_type),
                 step=details.pop("step", None),
                 status=details.pop("status", None),

@@ -64,7 +64,9 @@ from services.director_revision_store import DirectorRevisionStore
 from services.voice_project_models import (
     BeatNotFoundError,
     ExportDependencyUnavailableError,
+    InvalidArtifactShaError,
     InvalidProjectStateError,
+    LineageInvalidError,
     MixPlanStaleError,
     ResourceBlockedError,
     StaleArtifactError,
@@ -138,12 +140,18 @@ def _handle_domain_error(exc: Exception, project_id: str | None = None) -> JSONR
     elif isinstance(exc, VoiceProjectAlreadyExists):
         status_code = status.HTTP_409_CONFLICT
         error_code = "PROJECT_ALREADY_EXISTS"
+    elif isinstance(exc, InvalidArtifactShaError):
+        status_code = status.HTTP_409_CONFLICT
+        error_code = "INVALID_ARTIFACT_SHA"
     elif isinstance(exc, InvalidProjectStateError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "INVALID_PROJECT_STATE"
     elif isinstance(exc, StaleArtifactError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "STALE_ARTIFACT"
+    elif isinstance(exc, LineageInvalidError):
+        status_code = status.HTTP_409_CONFLICT
+        error_code = "LINEAGE_INVALID"
     elif isinstance(exc, MixPlanStaleError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "MIX_PLAN_STALE"
@@ -825,6 +833,8 @@ def download_project_artifact(project_id: str, artifact_id: str):
         if not store.project_exists(project_id):
             raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
         proj_dir = store.get_project_dir(project_id).resolve()
+        if artifact_id in {"final_wav", "final_mp3", "export_manifest"}:
+            get_voice_project_service(store=store).verify_delivery_lineage(project_id)
 
         # Map known artifact IDs to relative paths
         artifact_map = {

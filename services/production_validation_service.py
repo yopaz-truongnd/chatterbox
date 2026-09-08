@@ -900,7 +900,10 @@ class ProductionValidationService:
                 else:
                     warnings.append("MP3 export skipped because ffmpeg is not installed on the system.")
 
-            verified_artifacts = project_service.verify_delivery_lineage(project_id)
+            verified_artifacts = project_service.verify_delivery_lineage(
+                project_id,
+                workflow_state=workflow_service.get_workflow(report.workflow_id),
+            )
 
             # Collect artifacts
             artifacts: list[ProductionValidationArtifact] = []
@@ -1045,7 +1048,10 @@ class ProductionValidationService:
                 insp = _inspect_audio_wave(final_wav) if final_wav.exists() else {}
                 artifacts: list[ProductionValidationArtifact] = []
                 artifact_sizes: dict[str, int] = {}
-                verified_artifacts = project_service.verify_delivery_lineage(project_id)
+                verified_artifacts = project_service.verify_delivery_lineage(
+                    project_id,
+                    workflow_state=workflow_service.get_workflow(report.workflow_id),
+                )
                 for item in export_dir.iterdir():
                     if item.is_file():
                         sha = compute_file_sha256(item)

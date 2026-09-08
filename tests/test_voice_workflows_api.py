@@ -12,6 +12,7 @@ from services.voice_project_workflow_models import (
     WorkflowStatus,
     WorkflowStep,
 )
+from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError
 
 
 class TestVoiceWorkflowsAPI(TestCase):
@@ -97,6 +98,25 @@ class TestVoiceWorkflowsAPI(TestCase):
 
         self.assertTrue(all(response.status_code == 200 for response in responses))
         self.assertTrue(all(response.json()["status"] == "running" for response in responses))
+
+    def test_workflow_errors_keep_stable_rest_semantics(self):
+        with patch("routers.voice_workflows.get_voice_project_workflow_service") as get_service:
+            get_service.return_value.approve_workflow.side_effect = InvalidArtifactShaError("changed")
+            get_service.return_value.resume_workflow.side_effect = InvalidProjectStateError(
+                "requires an explicit approval decision"
+            )
+            with TestClient(api_app.app) as client:
+                approval = client.post(
+                    "/api/v1/voice-workflows/wf_error/approve",
+                    json={"action": "approve_final_audio", "approved": True},
+                )
+                resume = client.post("/api/v1/voice-workflows/wf_error/resume")
+
+        self.assertEqual(approval.status_code, 409)
+        self.assertEqual(approval.json()["error"]["code"], "INVALID_ARTIFACT_SHA")
+        self.assertEqual(approval.json()["error"]["workflow_id"], "wf_error")
+        self.assertFalse(approval.json()["error"]["retryable"])
+        self.assertEqual(resume.json()["error"]["code"], "HUMAN_APPROVAL_REQUIRED")
 
 
 if __name__ == "__main__":

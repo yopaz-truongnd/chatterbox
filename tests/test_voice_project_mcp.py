@@ -136,6 +136,30 @@ class TestVoiceProjectMCP(unittest.TestCase):
         self.assertFalse(response["isError"])
         self.assertEqual(calls, [("GET", "/api/v1/voice-workflows/wf_resume/next-action", None)])
 
+    def test_mcp_preserves_structured_workflow_error_semantics(self):
+        response = handle_voice_project_tool(
+            "chatterbox_voice_workflow_approve",
+            {
+                "workflow_id": "wf_error",
+                "action": "approve_final_audio",
+                "approved": True,
+                "human_confirmed": True,
+            },
+            request_fn=lambda *args, **kwargs: {"error": {
+                "code": "INVALID_ARTIFACT_SHA",
+                "message": "changed",
+                "workflow_id": "wf_error",
+                "retryable": False,
+                "details": {},
+            }},
+        )
+
+        payload = json.loads(response["content"][0]["text"])["error"]
+        self.assertTrue(response["isError"])
+        self.assertEqual(payload["code"], "INVALID_ARTIFACT_SHA")
+        self.assertEqual(payload["details"]["workflow_id"], "wf_error")
+        self.assertFalse(payload["details"]["retryable"])
+
     def test_mcp_produce_maps_top_level_policy_fields(self):
         captured = {}
 

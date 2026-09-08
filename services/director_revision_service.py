@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 import uuid
 from typing import Any
 
@@ -19,6 +20,8 @@ from services.director_review_models import (
 )
 from services.director_revision_store import DirectorRevisionStore
 from services.render_models import ProjectStatus, RenderStatus
+from services.production_event_models import ProductionEvent, ProductionEventType
+from services.production_event_store import ProductionEventStore
 from services.voice_plan import AmbienceIntent, SFXIntent
 from services.voice_project_models import BeatNotFoundError, InvalidProjectStateError
 from services.voice_project_service import VoiceProjectService, compute_file_sha256
@@ -27,6 +30,7 @@ from services.voice_project_workflow import VoiceProjectWorkflowService
 
 MIX_ARTIFACTS = ["mix_plan", "premaster_wav", "master_wav", "exports", "final_approval"]
 MIX_STEPS = ["prepare_mix", "mix", "master", "export"]
+logger = logging.getLogger(__name__)
 
 
 class DirectorRevisionService:
@@ -64,7 +68,42 @@ class DirectorRevisionService:
             approval_required="final_approval" in artifacts,
         )
         self.revisions.append(event)
+        self._production_event(
+            project_id,
+            ProductionEventType.REVISION_CREATED,
+            "Director revision created.",
+            revision_id=event.revision_id,
+            revision_type=revision_type,
+            beat_id=beat_id,
+        )
+        if artifacts:
+            self._production_event(
+                project_id,
+                ProductionEventType.ARTIFACT_INVALIDATED,
+                "Downstream artifacts invalidated by revision.",
+                revision_id=event.revision_id,
+                artifact_ids=artifacts,
+            )
         return event
+
+    def _production_event(
+        self,
+        project_id: str,
+        event_type: ProductionEventType,
+        message: str,
+        **details: Any,
+    ) -> None:
+        try:
+            ProductionEventStore(root_dir=self.store.root_dir).append_project_event(
+                ProductionEvent(
+                    project_id=project_id,
+                    event_type=event_type,
+                    message=message,
+                    details=details,
+                )
+            )
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not persist production event %s: %s", event_type.value, exc)
 
     def select_attempt(
         self, project_id: str, beat_id: str, attempt_id: int, actor_id: str = "unknown", reason: str | None = None,
@@ -209,6 +248,15 @@ class DirectorRevisionService:
             beat for event in selected for beat in (event.affected_beats or ([event.beat_id] if event.beat_id else []))
         ))
         final_approval_invalidated = any(event.approval_required for event in selected)
+
+        self._production_event(
+            project_id,
+            ProductionEventType.REPRODUCTION_STARTED,
+            "Incremental reproduction started.",
+            revision_ids=selected_ids,
+            affected_beats=affected_beats,
+            required_steps=steps,
+        )
 
         workflow_service = self._resolve_workflow_service()
         matches = [item for item in workflow_service.store.list_workflows(limit=200) if item.project_id == project_id]
