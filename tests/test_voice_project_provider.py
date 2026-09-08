@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from services.tts.chatterbox_job import ChatterboxJobProvider
 from services.tts.fake import FakeTTSProvider
 from services.tts.gemini import GeminiTTSProvider
-from services.voice_project_dependencies import resolve_server_tts_provider
+from services.voice_project_dependencies import get_voice_project_service, resolve_server_tts_provider
 from services.voice_renderer import ProviderUnavailableError
 
 
@@ -18,6 +18,11 @@ class TestVoiceProjectProviderWiring(unittest.TestCase):
             with self.assertRaises(ProviderUnavailableError) as ctx:
                 resolve_server_tts_provider("local")
             self.assertIn("JobManager", str(ctx.exception))
+
+    def test_voice_project_service_does_not_hide_unavailable_local_runtime(self):
+        with patch("api_app.job_manager", None):
+            with self.assertRaises(ProviderUnavailableError):
+                get_voice_project_service(provider_name="local")
 
     def test_local_provider_with_jobmanager_returns_chatterbox_job_provider(self):
         mock_jm = MagicMock()

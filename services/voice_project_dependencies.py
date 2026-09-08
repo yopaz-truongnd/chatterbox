@@ -105,10 +105,7 @@ def get_voice_project_service(
     actual_store = store or get_voice_project_store()
     actual_port = execution_port
     if actual_port is None:
-        try:
-            actual_port = resolve_server_tts_provider(provider_name, model=model, voice=voice)
-        except Exception:
-            actual_port = None
+        actual_port = resolve_server_tts_provider(provider_name, model=model, voice=voice)
 
     return VoiceProjectService(
         store=actual_store,
