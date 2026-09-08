@@ -17,7 +17,11 @@ from schemas.voice_workflows import (
     WorkflowStepSchema,
 )
 from services.voice_project_dependencies import get_voice_project_workflow_service
-from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy
+from services.voice_project_workflow_models import (
+    VoiceOrchestrationDecision,
+    VoiceWorkflowState,
+    WorkflowPolicy,
+)
 from services.voice_project_models import InvalidProjectStateError
 
 logger = logging.getLogger(__name__)
@@ -101,6 +105,19 @@ def get_voice_workflow(workflow_id: str):
             detail=f"Voice workflow '{workflow_id}' not found.",
         )
     return _format_workflow_response(state)
+
+
+@router.get(
+    "/api/v1/voice-workflows/{workflow_id}/next-action",
+    response_model=VoiceOrchestrationDecision,
+    summary="Inspect Authoritative Agent Next Action",
+)
+def get_voice_workflow_next_action(workflow_id: str):
+    """Return the next safe orchestration action without advancing workflow state."""
+    try:
+        return get_voice_project_workflow_service().next_action(workflow_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 @router.post(

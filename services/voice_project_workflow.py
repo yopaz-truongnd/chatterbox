@@ -36,6 +36,7 @@ from services.voice_project_models import (
 from services.voice_project_operations import OperationStatus, VoiceProjectOperationManager
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_workflow_models import (
+    VoiceOrchestrationDecision,
     VoiceWorkflowState,
     WorkflowPolicy,
     WorkflowStatus,
@@ -122,6 +123,113 @@ class VoiceProjectWorkflowService:
         """Retrieve live workflow status and human action gates."""
         return self.store.get_workflow(workflow_id)
 
+    def next_action(self, workflow_id: str) -> VoiceOrchestrationDecision:
+        """Describe the next safe Agent action without advancing domain state."""
+        state = self.store.get_workflow(workflow_id)
+        if not state:
+            raise ValueError(f"Workflow '{workflow_id}' not found.")
+
+        operations = self.op_manager.list_operations(project_id=state.project_id, limit=20)
+        active = next((op for op in operations if op.status in {
+            OperationStatus.QUEUED, OperationStatus.RUNNING, OperationStatus.CANCELLING,
+        }), None)
+        gate = state.human_action or {}
+        available = list(gate.get("available_options") or [])
+
+        def decision(action: str, reason: str, **kwargs: Any) -> VoiceOrchestrationDecision:
+            return VoiceOrchestrationDecision(
+                workflow_id=state.workflow_id,
+                project_id=state.project_id,
+                current_state=state.status.value,
+                next_action=action,
+                reason=reason,
+                available_actions=available,
+                **kwargs,
+            )
+
+        if active:
+            return decision(
+                "monitor_operation",
+                "An equivalent authoritative operation is already active.",
+                operation_id=active.id,
+                parameters={"operation": active.operation, "status": active.status.value},
+            )
+
+        if state.status == WorkflowStatus.WAITING_FOR_HUMAN:
+            action_type = gate.get("action_type", "human_input")
+            action_map = {
+                "resource_required": ("request_resources", "required_resources"),
+                "narration_acceptance": ("request_narration_approval", "narration_acceptance"),
+                "final_audio_approval": ("request_final_audio_approval", "final_audio_approval"),
+                "audio_quality_review": ("request_qc_direction", "retry_budget_exhausted"),
+            }
+            action, issue = action_map.get(action_type, ("request_human_input", action_type))
+            return decision(
+                action,
+                gate.get("reason") or state.suggested_action or "Human input is required.",
+                requires_human=True,
+                waiting_for=action_type,
+                blocking_issue=issue,
+                parameters={"items": gate.get("items", [])},
+            )
+
+        if state.status == WorkflowStatus.INTERRUPTED:
+            return decision("resume_workflow", "The persisted workflow was interrupted and has no active operation.")
+        if state.status == WorkflowStatus.FAILED:
+            return decision(
+                "request_recovery_direction",
+                state.suggested_action or "The workflow failed and requires a recovery decision.",
+                requires_human=True,
+                waiting_for="recovery_direction",
+                blocking_issue=(state.error or {}).get("code", "workflow_failed"),
+            )
+        if state.status in {WorkflowStatus.QUEUED, WorkflowStatus.RUNNING, WorkflowStatus.CANCELLING}:
+            return decision("monitor_workflow", state.suggested_action or "The authoritative workflow is progressing.")
+        if state.status == WorkflowStatus.CANCELLED:
+            return decision("stop", "The workflow was cancelled.", blocking_issue="workflow_cancelled")
+
+        from services.director_revision_store import DirectorRevisionStore
+        revision_state = DirectorRevisionStore(self.project_store).get_state(state.project_id)
+        if revision_state.pending_revision_ids:
+            return decision(
+                "reproduce_pending_revisions",
+                "Persisted revisions require the server-defined reproduction path.",
+                parameters={
+                    "revision_ids": revision_state.pending_revision_ids,
+                    "required_reproduction_steps": revision_state.required_reproduction_steps,
+                },
+            )
+
+        try:
+            from services.director_review_service import DirectorReviewService
+            review = DirectorReviewService(self.project_store).get_review(state.project_id)
+            requested = {f"final_{fmt}" for fmt in state.policy.output_formats}
+            deliverables = [
+                item for item in review.artifact_status
+                if item.artifact_id in requested and item.exists and item.fresh and item.sha256
+            ]
+            if requested and {item.artifact_id for item in deliverables} != requested:
+                return decision(
+                    "request_recovery_direction",
+                    "A requested deliverable is missing, stale, or unverified.",
+                    requires_human=True,
+                    waiting_for="valid_deliverable",
+                    blocking_issue="stale_or_unverified_artifact",
+                )
+            return decision(
+                "deliver",
+                "Workflow is complete and requested deliverables are authoritative and fresh.",
+                parameters={"artifacts": [item.model_dump(mode="json") for item in deliverables]},
+            )
+        except Exception:
+            return decision(
+                "request_recovery_direction",
+                "Workflow completed but authoritative delivery lineage could not be verified.",
+                requires_human=True,
+                waiting_for="lineage_verification",
+                blocking_issue="lineage_unavailable",
+            )
+
     def cancel_workflow(self, workflow_id: str) -> tuple[bool, str]:
         """Cancel an in-flight workflow: transition to CANCELLING, cancel active op, wait for terminal, then mark CANCELLED."""
         state = self.store.get_workflow(workflow_id)
@@ -157,6 +265,15 @@ class VoiceProjectWorkflowService:
 
     def resume_workflow(self, workflow_id: str) -> VoiceWorkflowState:
         """Resume workflow execution after a human gate (e.g. pronunciation provided, final approval) has been resolved."""
+        current = self.store.get_workflow(workflow_id)
+        if not current:
+            raise ValueError(f"Workflow '{workflow_id}' not found.")
+        expected_status = (
+            WorkflowStatus.INTERRUPTED
+            if current.status == WorkflowStatus.INTERRUPTED
+            else WorkflowStatus.WAITING_FOR_HUMAN
+        )
+
         def resume(state: VoiceWorkflowState) -> None:
             action_type = state.human_action.get("action_type") if state.human_action else None
             if action_type in ("final_audio_approval", "narration_acceptance"):
@@ -169,7 +286,7 @@ class VoiceProjectWorkflowService:
             state.suggested_action = f"Resuming workflow execution from {resume_action or 'next step'}..."
             state.updated_at = datetime.now(timezone.utc).isoformat()
 
-        state = self.store.transition_workflow(workflow_id, WorkflowStatus.WAITING_FOR_HUMAN, resume)
+        state = self.store.transition_workflow(workflow_id, expected_status, resume)
 
         # Launch background resume loop
         threading.Thread(

@@ -692,6 +692,17 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "chatterbox_voice_next_action",
+        "description": "Inspect the authoritative next safe Agent action for a persisted workflow without advancing it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string"},
+            },
+            "required": ["workflow_id"],
+        },
+    },
+    {
         "name": "chatterbox_voice_workflow_resume",
         "description": "Resume execution of an autonomous workflow after resolving a human gate (e.g. after adding required pronunciation).",
         "inputSchema": {

@@ -269,6 +269,13 @@ def handle_voice_project_tool(
         res = _execute_rest_request(request_fn, "GET", f"/api/v1/voice-workflows/{workflow_id}")
         return _handle_response(res)
 
+    elif name == "chatterbox_voice_next_action":
+        workflow_id = args.get("workflow_id", "").strip()
+        if not workflow_id:
+            return _error_content("Field 'workflow_id' is required.", error_code="VALIDATION_ERROR")
+        res = _execute_rest_request(request_fn, "GET", f"/api/v1/voice-workflows/{workflow_id}/next-action")
+        return _handle_response(res)
+
     elif name == "chatterbox_voice_workflow_resume":
         workflow_id = args.get("workflow_id", "").strip()
         if not workflow_id:

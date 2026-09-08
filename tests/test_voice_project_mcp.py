@@ -48,6 +48,7 @@ class TestVoiceProjectMCP(unittest.TestCase):
             "chatterbox_voice_produce",
             "chatterbox_voice_workflows",
             "chatterbox_voice_workflow_status",
+            "chatterbox_voice_next_action",
             "chatterbox_voice_workflow_resume",
             "chatterbox_voice_workflow_approve",
             "chatterbox_voice_workflow_cancel",
@@ -120,6 +121,20 @@ class TestVoiceProjectMCP(unittest.TestCase):
         self.assertFalse(approved["isError"])
         self.assertEqual(calls[0][2]["artifact_sha256"], "abc123")
         self.assertNotIn("human_confirmed", calls[0][2])
+
+    def test_mcp_next_action_is_a_thin_authoritative_rest_adapter(self):
+        calls = []
+
+        def request_fn(path, method="GET", data=None):
+            calls.append((method, path, data))
+            return {"current_state": "waiting_for_human", "next_action": "request_narration_approval"}
+
+        response = handle_voice_project_tool(
+            "chatterbox_voice_next_action", {"workflow_id": "wf_resume"}, request_fn=request_fn
+        )
+
+        self.assertFalse(response["isError"])
+        self.assertEqual(calls, [("GET", "/api/v1/voice-workflows/wf_resume/next-action", None)])
 
     def test_mcp_produce_maps_top_level_policy_fields(self):
         captured = {}

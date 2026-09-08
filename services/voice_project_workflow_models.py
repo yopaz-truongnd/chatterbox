@@ -103,3 +103,19 @@ class VoiceWorkflowState(BaseModel):
     def from_yaml(cls, yaml_str: str) -> VoiceWorkflowState:
         data = yaml.safe_load(yaml_str) or {}
         return cls.from_dict(data)
+
+
+class VoiceOrchestrationDecision(BaseModel):
+    """Authoritative next action for an Agent orchestrating a persisted workflow."""
+
+    workflow_id: str
+    project_id: str
+    current_state: str
+    next_action: str
+    reason: str
+    requires_human: bool = False
+    operation_id: str | None = None
+    waiting_for: str | None = None
+    blocking_issue: str | None = None
+    available_actions: list[str] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)

@@ -24,6 +24,10 @@ Repeat until delivery or a required human decision:
 
 Before every consequential action, re-read the project/workflow state, current
 `human_action`, pending revisions, and relevant artifact freshness.
+Use `chatterbox_voice_next_action` as the authoritative action plan. Execute its
+deterministic action, monitor its operation, then inspect again. If it sets
+`requires_human`, stop and present `waiting_for`, `blocking_issue`, and the
+requested items; never manufacture human confirmation.
 
 ## Enter or recover a production
 
