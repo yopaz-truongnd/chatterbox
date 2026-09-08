@@ -695,10 +695,12 @@ class ProductionValidationService:
 
         # --- 4. Resource Check & Pronunciation Resolution ---
         def _step_resources():
-            res_report = project_service.check_resources(project_id)
+            resource_report = self.store.load_resource_report(project_id)
+            if resource_report is None:
+                raise RuntimeError("Workflow completed without a persisted resource report.")
             return {
-                "render_blocked": res_report.render_blocked,
-                "missing_gaps_count": len(res_report.report.missing),
+                "render_blocked": resource_report.readiness.render_blocked,
+                "missing_gaps_count": len(resource_report.missing),
             }
 
         if not _run_step("check_and_resolve_resources", _step_resources):

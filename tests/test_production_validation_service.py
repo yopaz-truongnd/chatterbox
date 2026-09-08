@@ -13,6 +13,7 @@ from services.production_validation_models import (
 )
 from services.production_validation_service import ProductionValidationService
 from services.production_validation_service import _ACTIVE_VALIDATIONS
+from services.render_models import ProjectStatus
 from services.tts.fake import FakeTTSProvider
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_operations import VoiceProjectOperationManager
@@ -60,6 +61,7 @@ class TestProductionValidationService(unittest.TestCase):
         self.assertGreater(len(report.steps), 5)
         self.assertGreater(len(report.per_beat_metrics), 0)
         self.assertGreater(len(report.artifacts), 0)
+        self.assertEqual(self.store.get_project_state(report.project_id).stage, ProjectStatus.COMPLETED)
 
         workflow = VoiceProjectWorkflowStore(self.store.root_dir / "workflows").get_workflow(
             report.workflow_id

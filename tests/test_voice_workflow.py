@@ -12,7 +12,7 @@ import yaml
 
 from services.voice_project_workflow import VoiceProjectWorkflowService
 from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
-from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError, LineageInvalidError
+from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError, LineageInvalidError, ProjectStatus
 from services.voice_project_models import MixPlanStaleError
 from services.tts.fake import FakeTTSProvider
 from services.tts.base import CancellationToken
@@ -49,6 +49,9 @@ class TestVoiceWorkflow(unittest.TestCase):
         # Wait for background orchestration thread to complete all steps
         final_state = self._wait_for_workflow(state.workflow_id)
         self.assertEqual(final_state.status, WorkflowStatus.COMPLETED)
+        self.assertEqual(self.service.project_store.get_project_state("wf_happy_01").stage, ProjectStatus.COMPLETED)
+        summary = VoiceProjectService(store=self.service.project_store, provider_name="fake").get_project("wf_happy_01")
+        self.assertIn("verified deliverables", summary.suggested_action)
         self.assertIsNotNone(final_state.result)
         self.assertIn("artifacts", final_state.result)
         self.assertTrue(any(a["id"] == "final_wav" for a in final_state.result["artifacts"]))

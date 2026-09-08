@@ -972,6 +972,12 @@ class VoiceProjectWorkflowService:
             }
             state.updated_at = datetime.now(timezone.utc).isoformat()
             self.store.save_workflow(state)
+            # Keep the project read model aligned with the terminal workflow
+            # state so REST, MCP and Director Review report the same lifecycle.
+            project_state = self.project_store.get_project_state(project_id)
+            project_state.stage = ProjectStatus.COMPLETED
+            project_state.last_stable_stage = ProjectStatus.COMPLETED
+            self.project_store.save_project_state(project_state)
             self._emit_production_event(
                 state, "export_completed", "Production export completed.",
                 step=WorkflowStepName.EXPORT.value, status=state.status.value,

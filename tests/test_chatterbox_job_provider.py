@@ -20,6 +20,7 @@ from services.render_models import (
 )
 from services.tts.base import CancellationToken
 from services.tts.chatterbox_job import ChatterboxJobProvider, DefaultJobManagerGateway, JobExecutionGateway
+from services.tts.gemini import validate_generated_wave
 from services.tts.provider_factory import create_tts_provider
 
 
@@ -126,6 +127,24 @@ class TestChatterboxJobProviderPhase10A(unittest.TestCase):
         self.assertEqual(result.model, "nano")
         self.assertEqual(result.provider_request_id, "job_inproc_1")
         self.assertTrue(Path(result.audio_path).exists())
+
+    def test_local_runtime_ieee_float_wave_is_valid(self):
+        float_wav = self.temp_dir / "local_float.wav"
+        frames = b"".join(struct.pack("<f", 0.1) for _ in range(24000))
+        fmt = struct.pack("<HHIIHH", 3, 1, 24000, 96000, 4, 32)
+        riff_size = 4 + (8 + len(fmt)) + (8 + len(frames))
+        float_wav.write_bytes(
+            b"RIFF" + struct.pack("<I", riff_size) + b"WAVE"
+            + b"fmt " + struct.pack("<I", len(fmt)) + fmt
+            + b"data" + struct.pack("<I", len(frames)) + frames
+        )
+
+        valid, duration, sample_rate, channels, error = validate_generated_wave(float_wav)
+
+        self.assertTrue(valid, error)
+        self.assertEqual(duration, 1.0)
+        self.assertEqual(sample_rate, 24000)
+        self.assertEqual(channels, 1)
 
     def test_factory_fails_fast_when_chatterbox_job_has_no_gateway(self):
         with self.assertRaisesRegex(ValueError, "requires an injected JobExecutionGateway"):

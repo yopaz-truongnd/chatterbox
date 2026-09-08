@@ -148,6 +148,45 @@ def validate_generated_wave(path: Path) -> tuple[bool, float, int, int, str | No
             if duration <= 0.0:
                 return False, 0.0, sample_rate, channels, f"Invalid duration: {duration}s"
             return True, duration, sample_rate, channels, None
+    except wave.Error:
+        # Local Chatterbox emits IEEE-float WAV (format tag 3), which Python's
+        # wave module does not read. Validate that standard RIFF form directly.
+        try:
+            payload = path.read_bytes()
+            if payload[:4] != b"RIFF" or payload[8:12] != b"WAVE":
+                raise ValueError("missing RIFF/WAVE header")
+            offset = 12
+            fmt: tuple[int, int, int, int, int] | None = None
+            data_size = 0
+            while offset + 8 <= len(payload):
+                chunk_id = payload[offset:offset + 4]
+                chunk_size = struct.unpack_from("<I", payload, offset + 4)[0]
+                start = offset + 8
+                end = start + chunk_size
+                if end > len(payload):
+                    raise ValueError("truncated RIFF chunk")
+                if chunk_id == b"fmt " and chunk_size >= 16:
+                    audio_format, channels, sample_rate, _, block_align, bits = struct.unpack_from(
+                        "<HHIIHH", payload, start
+                    )
+                    fmt = audio_format, channels, sample_rate, block_align, bits
+                elif chunk_id == b"data":
+                    data_size = chunk_size
+                offset = end + (chunk_size % 2)
+            if not fmt or data_size <= 0:
+                raise ValueError("missing fmt or audio data chunk")
+            audio_format, channels, sample_rate, block_align, bits = fmt
+            if audio_format != 3 or channels <= 0 or sample_rate <= 0:
+                raise ValueError(f"unsupported WAV format tag: {audio_format}")
+            if bits not in (32, 64) or block_align != channels * (bits // 8):
+                raise ValueError("invalid IEEE-float WAV format")
+            nframes = data_size // block_align
+            duration = round(nframes / float(sample_rate), 3)
+            if nframes <= 0 or duration <= 0.0:
+                raise ValueError("WAV contains 0 audio frames")
+            return True, duration, sample_rate, channels, None
+        except (OSError, ValueError, struct.error) as exc:
+            return False, 0.0, 0, 0, f"Malformed WAV container: {exc}"
     except Exception as exc:
         return False, 0.0, 0, 0, f"Malformed WAV container: {exc}"
 
@@ -599,4 +638,3 @@ class GeminiTTSProvider(TTSProvider):
                 retry_after_seconds=retry_after,
                 raw_metadata={"voice": voice, "model": self.model_name},
             )
-

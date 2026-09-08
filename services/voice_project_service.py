@@ -165,6 +165,8 @@ class VoiceProjectService:
             suggested_action = "Narration audio passed all QC gates and is ready for sound mixing (Phase 14)"
         elif state.stage == ProjectStatus.MIX_READY:
             suggested_action = "Project mix is fully prepared"
+        elif state.stage == ProjectStatus.COMPLETED:
+            suggested_action = "Production completed; verified deliverables are ready."
         elif state.stage == ProjectStatus.FAILED:
             suggested_action = f"Project failed: {state.error or 'Check error logs and retry'}"
 
