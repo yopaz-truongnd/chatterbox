@@ -180,3 +180,13 @@ class VoiceProjectWorkflowStore:
                 except Exception:
                     continue
         return workflows
+
+    def delete_project_workflows(self, project_id: str) -> list[str]:
+        """Delete all persisted workflows that belong to a project."""
+        deleted = []
+        with self._lock:
+            for workflow in self.list_workflows(limit=10000):
+                if workflow.project_id == project_id:
+                    (self.root_dir / f"{workflow.workflow_id}.yaml").unlink(missing_ok=True)
+                    deleted.append(workflow.workflow_id)
+        return deleted

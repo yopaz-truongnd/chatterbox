@@ -17,6 +17,12 @@ def test_human_gate_approval_maps_public_state_to_command_contract():
     assert "gate.items?.[0]" in source
     assert "artifact_id:artifact.artifact_id" in source
     assert "artifact_sha256:artifact.sha256" in source
+    assert "if (directorGateSubmitting) return" in source
+    assert "button.disabled = true" in source
+    assert "Duyệt toàn bộ giọng đọc & tiếp tục" in source
+    assert "if (directorGateSubmitting) return" in source
+    assert "button.disabled = true" in source
+    assert "Duyệt toàn bộ giọng đọc & tiếp tục" in source
 
 
 def test_console_contract_has_drawer_server_impact_and_refresh_safe_jobs():
@@ -29,6 +35,9 @@ def test_console_contract_has_drawer_server_impact_and_refresh_safe_jobs():
     assert "human_action.items?.[0]" in source
     assert "masterStatus?.exists && masterStatus?.fresh && masterStatus?.sha256 === gate?.sha256" in source
     assert "Lineage VERIFIED" not in source
+    assert "method:'DELETE'" in source
+    assert "Xóa vĩnh viễn bản sản xuất" in source
+    assert "renderDirectorFlowGuide(workflow)" in source
 
 
 def test_operation_list_api_exposes_persisted_project_jobs():

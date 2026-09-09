@@ -120,6 +120,20 @@ def get_voice_workflow(workflow_id: str):
     return _format_workflow_response(state)
 
 
+@router.delete(
+    "/api/v1/voice-workflows/{workflow_id}",
+    summary="Delete Voice Production",
+)
+def delete_voice_workflow(workflow_id: str):
+    """Delete a production workspace, artifacts, workflows, and operation history."""
+    try:
+        return get_voice_project_workflow_service().delete_production(workflow_id)
+    except InvalidProjectStateError as exc:
+        return _workflow_error("OPERATION_ALREADY_RUNNING", str(exc), workflow_id)
+    except ValueError as exc:
+        return _workflow_error("WORKFLOW_NOT_FOUND", str(exc), workflow_id, status.HTTP_404_NOT_FOUND)
+
+
 @router.get(
     "/api/v1/voice-workflows/{workflow_id}/next-action",
     response_model=VoiceOrchestrationDecision,

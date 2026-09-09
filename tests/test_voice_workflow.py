@@ -18,6 +18,8 @@ from services.tts.fake import FakeTTSProvider
 from services.tts.base import CancellationToken
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
+from services.voice_project_operations import VoiceProjectOperationManager
+from services.voice_project_store import VoiceProjectStore
 from services.production_event_store import ProductionEventStore
 
 
@@ -78,6 +80,35 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertTrue(self.service.project_store.project_exists(state.project_id))
         events = event_store.load_project_events(state.project_id)
         self.assertEqual(events[0]["event_type"], "workflow_started")
+
+    def test_delete_production_removes_workspace_workflows_and_operation_history(self):
+        root = Path(self.temp_dir.name)
+        project_store = VoiceProjectStore(root / "projects")
+        operation_manager = VoiceProjectOperationManager(operations_dir=root / "operations")
+        workflow_store = VoiceProjectWorkflowStore(root / "workflows")
+        service = VoiceProjectWorkflowService(
+            store=workflow_store,
+            project_store=project_store,
+            op_manager=operation_manager,
+        )
+        project_store.create_workspace("delete_me", "A short production.")
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_delete_me",
+            project_id="delete_me",
+            status=WorkflowStatus.COMPLETED,
+        ))
+        operation = operation_manager.submit("delete_me", "plan", lambda: {"ok": True})
+        for _ in range(100):
+            if operation_manager.get_operation(operation.id).status.value == "completed":
+                break
+            time.sleep(0.01)
+
+        result = service.delete_production("vwf_delete_me")
+
+        self.assertTrue(result["deleted"])
+        self.assertFalse(project_store.get_project_dir("delete_me").exists())
+        self.assertIsNone(workflow_store.get_workflow("vwf_delete_me"))
+        self.assertIsNone(operation_manager.get_operation(operation.id))
 
     def test_workflow_pauses_at_required_resource_human_gate(self):
         script = "Long ago the mysterious beast Qiongqi walked Mount Zhong."

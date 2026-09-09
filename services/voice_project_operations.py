@@ -467,6 +467,22 @@ class VoiceProjectOperationManager:
             ops.sort(key=lambda o: o.created_at, reverse=True)
             return ops[:limit]
 
+    def delete_project_operations(self, project_id: str) -> list[str]:
+        """Delete terminal operation history for a project without racing active work."""
+        with self._lock:
+            operations = [op for op in self._operations.values() if op.project_id == project_id]
+            active = [op.id for op in operations if op.status not in TERMINAL_OPERATION_STATUSES]
+            if active:
+                raise OperationAlreadyRunningError(project_id, active[0], self._operations[active[0]].operation)
+            deleted = []
+            for operation in operations:
+                self._operations.pop(operation.id, None)
+                self._tokens.pop(operation.id, None)
+                (self.operations_dir / f"{operation.id}.yaml").unlink(missing_ok=True)
+                deleted.append(operation.id)
+            self._project_active_op.pop(project_id, None)
+            return deleted
+
     def cancel_operation(self, job_id: str) -> tuple[bool, str]:
         """Request cooperative cancellation of a queued or running operation.
 

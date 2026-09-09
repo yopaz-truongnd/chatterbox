@@ -124,6 +124,27 @@ class VoiceProjectWorkflowService:
         """Retrieve live workflow status and human action gates."""
         return self.store.get_workflow(workflow_id)
 
+    def delete_production(self, workflow_id: str) -> dict[str, Any]:
+        """Delete one production and every project-owned artifact and state record."""
+        state = self.store.get_workflow(workflow_id)
+        if not state:
+            raise ValueError(f"Workflow '{workflow_id}' not found.")
+        if state.status in {WorkflowStatus.QUEUED, WorkflowStatus.RUNNING, WorkflowStatus.CANCELLING}:
+            raise InvalidProjectStateError("Cancel the active workflow before deleting this production.")
+        deleted_operations = self.op_manager.delete_project_operations(state.project_id)
+        self.project_store.delete_project(state.project_id)
+        deleted_workflows = self.store.delete_project_workflows(state.project_id)
+        logger.info(
+            "production_deleted project_id=%s workflow_id=%s operations=%d workflows=%d",
+            state.project_id, workflow_id, len(deleted_operations), len(deleted_workflows),
+        )
+        return {
+            "deleted": True,
+            "project_id": state.project_id,
+            "workflow_ids": deleted_workflows,
+            "operation_ids": deleted_operations,
+        }
+
     def next_action(self, workflow_id: str) -> VoiceOrchestrationDecision:
         """Describe the next safe Agent action without advancing domain state."""
         state = self.store.get_workflow(workflow_id)

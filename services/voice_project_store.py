@@ -15,6 +15,7 @@ import logging
 import os
 from pathlib import Path
 import re
+import shutil
 import threading
 from typing import Any
 import uuid
@@ -113,6 +114,17 @@ class VoiceProjectStore:
             if p.is_dir() and (p / "project.yaml").exists():
                 res.append(p.name)
         return res
+
+    def delete_project(self, project_id: str) -> None:
+        """Delete a complete project workspace and every artifact stored inside it."""
+        self.validate_project_id(project_id)
+        with self.get_project_lock(project_id):
+            project_dir = self.get_project_dir(project_id)
+            if not (project_dir / "project.yaml").exists():
+                raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
+            shutil.rmtree(project_dir)
+        with self._global_lock:
+            self._project_locks.pop(project_id, None)
 
     # ==========================================
     # Workspace & State Management
