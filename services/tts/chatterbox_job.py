@@ -111,6 +111,7 @@ class ChatterboxJobProvider(TTSProvider):
         self,
         gateway: JobExecutionGateway,
         default_model: str = "nano",
+        default_reference_voice: str | None = None,
         timeout_seconds: float = 300.0,
         poll_interval_seconds: float = 0.1,
     ):
@@ -118,6 +119,7 @@ class ChatterboxJobProvider(TTSProvider):
             raise ValueError("ChatterboxJobProvider requires an injected JobExecutionGateway")
         self.gateway = gateway
         self.default_model = default_model
+        self.default_reference_voice = default_reference_voice
         self.timeout_seconds = timeout_seconds
         self.poll_interval_seconds = poll_interval_seconds
 
@@ -183,6 +185,8 @@ class ChatterboxJobProvider(TTSProvider):
             "project_id": request.project_id,
             "beat_id": request.beat_id,
         }
+        if self.default_reference_voice:
+            params["audio_prompt_path"] = self.default_reference_voice
 
         if request.energy is not None:
             params["temperature"] = round(0.4 + (request.energy / 5.0) * 0.5, 2)

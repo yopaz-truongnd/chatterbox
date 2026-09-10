@@ -838,14 +838,117 @@ def build_parser() -> argparse.ArgumentParser:
     p_reproduce.add_argument("project_id")
     p_reproduce.add_argument("--provider", default="local", choices=["local", "gemini", "fake"])
 
+    # Phase 21 Production Validation commands
+    p_pval = subparsers.add_parser("production_validate", help="Run real-runtime production validation")
+    p_pval.add_argument("--script", help="Path to input story script file")
+    p_pval.add_argument("--provider", default="local", choices=["local", "gemini", "fake"], help="TTS Provider")
+    p_pval.add_argument("--model", default="nano", help="TTS Model name")
+    p_pval.add_argument("--language", default="en", help="Story language")
+    p_pval.add_argument("--reference-voice", help="Path to reference voice")
+    p_pval.add_argument("--output-report", help="Destination path for YAML report")
+    p_pval.add_argument("--profile", help="Path or ID of validation profile YAML")
+    p_pval.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    p_pstat = subparsers.add_parser("production_validation_status", help="Get validation status")
+    p_pstat.add_argument("validation_id", help="Target validation ID")
+    p_pstat.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    p_prep = subparsers.add_parser("production_validation_report", help="Get validation report")
+    p_prep.add_argument("validation_id", help="Target validation ID")
+    p_prep.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    p_pcanc = subparsers.add_parser("production_validation_cancel", help="Cancel validation")
+    p_pcanc.add_argument("validation_id", help="Target validation ID")
+    p_pcanc.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     return parser
+
+
+def cmd_production_validate(args: argparse.Namespace) -> int:
+    from services.production_validation_models import ProductionValidationRequest
+    from services.production_validation_service import ProductionValidationService
+
+    req = ProductionValidationRequest(
+        validation_profile_id=getattr(args, "profile", None),
+        script_path=getattr(args, "script", None),
+        provider=getattr(args, "provider", "local"),
+        model=getattr(args, "model", "nano"),
+        language=getattr(args, "language", "en"),
+        reference_voice=getattr(args, "reference_voice", None),
+        output_report_path=getattr(args, "output_report", None),
+        output_formats=["wav"],
+    )
+    service = ProductionValidationService(allow_raw_paths=True)
+    report = service.validate(req)
+
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps(report.model_dump(mode="json"), indent=2))
+    else:
+        print(f"Validation ID: {report.validation_id} | Status: {report.status} | Verdict: {report.verdict.value}")
+        print(f"Total Duration: {report.total_duration_ms:.1f} ms | Beats: {report.beat_count} | Artifacts: {len(report.artifacts)}")
+    return EXIT_SUCCESS if report.status == "completed" and report.verdict != "FAIL" else EXIT_GENERIC_ERROR
+
+
+def cmd_production_status(args: argparse.Namespace) -> int:
+    from services.production_validation_service import ProductionValidationService
+
+    service = ProductionValidationService()
+    report = service.get_validation_report(args.validation_id)
+    if not report:
+        print(f"Validation '{args.validation_id}' not found.", file=sys.stderr)
+        return EXIT_GENERIC_ERROR
+
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps({
+            "validation_id": report.validation_id,
+            "status": report.status,
+            "verdict": report.verdict.value,
+            "beat_count": report.beat_count,
+            "total_duration_ms": report.total_duration_ms,
+        }, indent=2))
+    else:
+        print(f"Validation: {report.validation_id} | Status: {report.status} | Verdict: {report.verdict.value}")
+    return EXIT_SUCCESS
+
+
+def cmd_production_report(args: argparse.Namespace) -> int:
+    from services.production_validation_service import ProductionValidationService
+
+    service = ProductionValidationService()
+    report = service.get_validation_report(args.validation_id)
+    if not report:
+        print(f"Validation '{args.validation_id}' not found.", file=sys.stderr)
+        return EXIT_GENERIC_ERROR
+
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps(report.model_dump(mode="json"), indent=2))
+    else:
+        import yaml
+        print(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False))
+    return EXIT_SUCCESS
+
+
+def cmd_production_cancel(args: argparse.Namespace) -> int:
+    from services.production_validation_service import ProductionValidationService
+
+    service = ProductionValidationService()
+    cancelled = service.cancel_validation(args.validation_id)
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps({"validation_id": args.validation_id, "cancelled": cancelled}, indent=2))
+    else:
+        print(f"Validation {args.validation_id} cancelled: {cancelled}")
+    return EXIT_SUCCESS if cancelled else EXIT_GENERIC_ERROR
 
 
 def main(args_list: list[str] | None = None) -> int:
     """Main CLI entrypoint function."""
     parser = build_parser()
 
-    # Handle multi-word commands like `voice resources missing` or `voice assets ingest`
+    # Handle multi-word commands like `voice resources missing` or `voice production validate`
     if args_list is None:
         args_list = sys.argv[1:]
 
@@ -863,6 +966,16 @@ def main(args_list: list[str] | None = None) -> int:
             normalized_args = ["direction_update"] + normalized_args[2:]
         elif normalized_args[0] == "assets" and normalized_args[1] == "ingest":
             normalized_args = ["assets_ingest"] + normalized_args[2:]
+        elif normalized_args[0] == "production":
+            sub = normalized_args[1].replace("-", "_")
+            if sub == "validate":
+                normalized_args = ["production_validate"] + normalized_args[2:]
+            elif sub in ("validation_status", "status"):
+                normalized_args = ["production_validation_status"] + normalized_args[2:]
+            elif sub in ("validation_report", "report"):
+                normalized_args = ["production_validation_report"] + normalized_args[2:]
+            elif sub in ("validation_cancel", "cancel"):
+                normalized_args = ["production_validation_cancel"] + normalized_args[2:]
 
     if not normalized_args:
         parser.print_help()
@@ -890,6 +1003,14 @@ def main(args_list: list[str] | None = None) -> int:
         return cmd_rerender(args)
     elif args.command == "qc":
         return cmd_qc(args)
+    elif args.command == "production_validate":
+        return cmd_production_validate(args)
+    elif args.command == "production_validation_status":
+        return cmd_production_status(args)
+    elif args.command == "production_validation_report":
+        return cmd_production_report(args)
+    elif args.command == "production_validation_cancel":
+        return cmd_production_cancel(args)
     elif args.command in {
         "review", "director_resources_missing", "director_pronunciation", "director_bind",
         "beat_review", "beat_select", "beat_approve", "direction_update", "reproduce",

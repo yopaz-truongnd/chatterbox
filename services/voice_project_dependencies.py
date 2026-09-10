@@ -77,7 +77,11 @@ def resolve_server_tts_provider(
             )
 
         gateway = DefaultJobManagerGateway(jm)
-        return ChatterboxJobProvider(gateway=gateway, default_model=model or "nano")
+        return ChatterboxJobProvider(
+            gateway=gateway,
+            default_model=model or "nano",
+            default_reference_voice=voice,
+        )
 
     if normalized_name == "gemini":
         return GeminiTTSProvider(model_name=model, voice_name=voice)
@@ -94,15 +98,14 @@ def get_voice_project_service(
     provider_name: str = "local",
     store: VoiceProjectStore | None = None,
     execution_port: TTSExecutionPort | None = None,
+    model: str | None = None,
+    voice: str | None = None,
 ) -> VoiceProjectService:
     """Create VoiceProjectService configured for server execution."""
     actual_store = store or get_voice_project_store()
     actual_port = execution_port
     if actual_port is None:
-        try:
-            actual_port = resolve_server_tts_provider(provider_name)
-        except Exception:
-            actual_port = None
+        actual_port = resolve_server_tts_provider(provider_name, model=model, voice=voice)
 
     return VoiceProjectService(
         store=actual_store,
@@ -118,8 +121,14 @@ def get_voice_project_workflow_service() -> Any:
         # Local import avoids a module cycle: the workflow service uses the
         # project dependency functions above for its own composition.
         from services.voice_project_workflow import VoiceProjectWorkflowService
+        from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
-        _GLOBAL_WORKFLOW_SERVICE = VoiceProjectWorkflowService()
+        project_store = get_voice_project_store()
+        _GLOBAL_WORKFLOW_SERVICE = VoiceProjectWorkflowService(
+            store=VoiceProjectWorkflowStore(project_store.root_dir / "workflows"),
+            project_store=project_store,
+            op_manager=get_voice_project_operation_manager(),
+        )
     return _GLOBAL_WORKFLOW_SERVICE
 
 

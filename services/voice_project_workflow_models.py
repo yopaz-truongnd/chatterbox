@@ -63,6 +63,14 @@ class WorkflowPolicy(BaseModel):
     output_formats: list[str] = Field(default_factory=lambda: ["wav"])
     mixing_profile: str = "storytelling"
     mastering_profile: str = "storytelling"
+    model: str | None = None
+    narrator_character: str | None = None
+    narrator_reference_voice: str | None = None
+    voice_style: str | None = None
+    ambience_palette: list[str] = Field(default_factory=list)
+    sfx_palette: list[str] = Field(default_factory=list)
+    loudness_target_lufs: float | None = None
+    pronunciation_overrides: dict[str, str] = Field(default_factory=dict)
 
 
 class VoiceWorkflowState(BaseModel):
@@ -95,3 +103,19 @@ class VoiceWorkflowState(BaseModel):
     def from_yaml(cls, yaml_str: str) -> VoiceWorkflowState:
         data = yaml.safe_load(yaml_str) or {}
         return cls.from_dict(data)
+
+
+class VoiceOrchestrationDecision(BaseModel):
+    """Authoritative next action for an Agent orchestrating a persisted workflow."""
+
+    workflow_id: str
+    project_id: str
+    current_state: str
+    next_action: str
+    reason: str
+    requires_human: bool = False
+    operation_id: str | None = None
+    waiting_for: str | None = None
+    blocking_issue: str | None = None
+    available_actions: list[str] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)

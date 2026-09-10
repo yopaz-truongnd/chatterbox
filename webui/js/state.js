@@ -43,6 +43,7 @@ const TAB_URL_MAP = {
   'multilingual': 'multilingual-tts',
   'vc': 'voice-clone',
   'projects': 'projects-studio',
+  'director': 'director-console',
   'characters': 'characters',
   'history': 'history',
   'settings': 'settings',
@@ -60,6 +61,8 @@ const URL_TAB_MAP = {
   'vc': 'vc',
   'projects-studio': 'projects',
   'projects': 'projects',
+  'director-console': 'director',
+  'director': 'director',
   'characters': 'characters',
   'characters-studio': 'characters',
   'history': 'history',
@@ -184,6 +187,7 @@ function switchTab(tabId, updateUrl = true) {
 
   // Tab specific initializers
   if (tabId === 'projects' && typeof loadProjects === 'function') loadProjects();
+  if (tabId === 'director' && typeof loadDirectorWorkflows === 'function') loadDirectorWorkflows();
   if (tabId === 'characters' && typeof loadCharacters === 'function') loadCharacters();
   if (tabId === 'history' && typeof refreshHistory === 'function') refreshHistory();
   if (tabId === 'settings' && typeof loadSettings === 'function') loadSettings();

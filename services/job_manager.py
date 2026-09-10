@@ -9,7 +9,7 @@ import subprocess
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,7 +23,7 @@ logger = logging.getLogger("chatterbox.job_manager")
 
 
 def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 class JobManager:

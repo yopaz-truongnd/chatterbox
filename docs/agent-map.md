@@ -200,3 +200,54 @@ direction/timing/resource revisions, persisted audit trail và minimum-safe repr
 - Product state và confirmation gates thuộc `services/project_planner.py`.
 - HTTP validation thuộc `routers/`.
 - MCP chỉ đóng vai trò adapter chuyển đổi giao thức, định nghĩa schema trong `mcp_adapter/catalog.py`.
+
+## Production Runtime Validation (Phase 17)
+
+Kiểm tra in-process local runtime capabilities và preflight validation trước khi production.
+
+- Primary Services:
+  - `services/local_runtime_models.py` — `LocalRuntimeCapabilities`, `PreflightIssue` data contracts.
+  - `services/local_runtime_service.py` — `get_capabilities()` (model cache, device, formats), `run_production_preflight()` (ffmpeg check, disk space, model readiness). Zero HTTP loopback.
+- REST API: `routers/voice_runtime.py` (`GET /api/v1/voice-runtime/capabilities`, `POST /api/v1/voice-runtime/preflight/{project_id}`).
+- MCP Adapter: `mcp_adapter/runtime_tools.py` → `chatterbox_voice_runtime_capabilities`, `chatterbox_voice_runtime_preflight`.
+- Tests: `tests/test_local_runtime_capabilities.py`, `tests/test_voice_production_preflight.py`.
+
+## Intelligent Asset Library (Phase 18)
+
+Librarian service for ingesting, indexing, semantic matching and security-validating sound assets.
+
+- Primary Services:
+  - `services/asset_library_models.py` — `LibraryAsset`, `AssetCategory`, `AssetMatchResult`.
+  - `services/asset_library_store.py` — Persistent `library-index.yaml`, atomic CRUD.
+  - `services/asset_library_service.py` — Ingest with path-traversal security guard, symlink resolution.
+  - `services/asset_matching_service.py` — Semantic scoring (intent overlap, mood, energy, duration).
+- REST API: `routers/voice_assets.py` (`GET /api/v1/voice-assets`, `POST /register`, `POST /scan`, `POST /match`, `GET /{id}/preview`).
+- MCP Adapter: `mcp_adapter/asset_tools.py` → `chatterbox_voice_asset*` tools via `handle_asset_tool()`.
+- Tests: `tests/test_asset_library.py`, `tests/test_asset_matching.py`, `tests/test_asset_security.py`.
+
+## Story Series & Batch Production (Phase 19)
+
+Multi-episode production with shared Voice, Pronunciation and Sound bibles; concurrent batch execution.
+
+- Primary Services:
+  - `services/voice_series_models.py` — `VoiceSeries`, `VoiceSeriesEpisode`, `SeriesVoiceBible`, `SeriesPronunciationBible`, `SeriesSoundBible`, `SeriesProductionSummary`.
+  - `services/voice_series_store.py` — `projects/series/{series_id}/series.yaml` and `episodes/{episode_id}.yaml`.
+  - `services/voice_series_service.py` — Series/episode CRUD, completed episode invariant guard.
+  - `services/voice_series_operations.py` — Concurrent batch execution, cancellation token, deliverable export packaging (`exports/` fallback `output/`).
+- REST API: `routers/voice_series.py` (`POST /api/v1/voice-series`, `GET /{id}`, episodes, produce, status, review-queue, cancel).
+- MCP Adapter: `mcp_adapter/series_tools.py` → `chatterbox_voice_series_*` tools.
+- Tests: `tests/test_voice_series_models.py`, `tests/test_voice_series_service.py`, `tests/test_voice_series_operations.py`, `tests/test_voice_series_recovery.py`.
+
+## Observability, Recovery & Release Readiness (Phase 20)
+
+Structured audit events, health aggregation, sanitized diagnostics bundles for production observability.
+
+- Primary Services:
+  - `services/production_event_models.py` — `ProductionEvent`, `ProductionEventType`, `ProductionErrorCode`, `ProjectProductionHealth`, `SeriesProductionHealth`.
+  - `services/production_event_store.py` — Append-only `events.jsonl` per project/series (fcntl-locked, corruption-tolerant, auto-rotating at 1000 events).
+  - `services/production_health_service.py` — `get_project_health()`, `get_series_health()`: aggregate state + artifact freshness + active operations + runtime health.
+  - `services/diagnostics_service.py` — `create_project_diagnostics()`, `create_series_diagnostics()`: sanitize paths, redact secrets, bundle runtime caps + health + events.
+- REST API: `routers/voice_health.py` (`GET /api/v1/voice-projects/{id}/health`, `/events`, `POST /diagnostics`; equivalent series endpoints).
+- MCP Adapter: `mcp_adapter/health_tools.py` → `chatterbox_voice_health`, `chatterbox_voice_events`, `chatterbox_voice_diagnostics`, `chatterbox_voice_series_health`, `chatterbox_voice_series_events`.
+- Tests: `tests/test_production_events.py`, `tests/test_production_health.py`, `tests/test_diagnostics_bundle.py`.
+- Cross-Phase Integration: `tests/test_phase17_20_rest.py`, `tests/test_phase17_20_mcp.py`, `tests/test_phase17_20_cross_parity.py`, `tests/test_phase17_20_e2e.py`.

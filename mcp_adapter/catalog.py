@@ -292,6 +292,18 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
     # Core Lifecycle Tools (Phase 13)
     # ---------------------------------------------------------
     {
+        "name": "chatterbox_voice_projects",
+        "description": "List authoritative Voice Project summaries for discovery and session recovery.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                "language": {"type": "string"},
+                "stage": {"type": "string"},
+            },
+        },
+    },
+    {
         "name": "chatterbox_voice_project_create",
         "description": "Create a new Voice Narration project with source script and configuration.",
         "inputSchema": {
@@ -439,6 +451,18 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "items": {"type": "string"},
                     "description": "Optional subset of beat IDs to re-evaluate.",
                 },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_jobs",
+        "description": "List persisted operations for a project so an agent can recover active and recent work.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
             },
             "required": ["project_id"],
         },
@@ -644,6 +668,16 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "chatterbox_voice_workflows",
+        "description": "List persisted workflow state for discovery and interrupted-session recovery.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+            },
+        },
+    },
+    {
         "name": "chatterbox_voice_workflow_status",
         "description": "Check status, current step, human action gates, and results of an autonomous production workflow.",
         "inputSchema": {
@@ -653,6 +687,17 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "type": "string",
                     "description": "The workflow ID (e.g. 'vwf_xxx').",
                 },
+            },
+            "required": ["workflow_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_next_action",
+        "description": "Inspect the authoritative next safe Agent action for a persisted workflow without advancing it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string"},
             },
             "required": ["workflow_id"],
         },
@@ -699,8 +744,12 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                 "approved": {"type": "boolean"},
                 "artifact_id": {"type": "string"},
                 "artifact_sha256": {"type": "string"},
+                "human_confirmed": {
+                    "type": "boolean",
+                    "description": "Must be true only after the human explicitly approved this current gate.",
+                },
             },
-            "required": ["workflow_id", "action", "approved"],
+            "required": ["workflow_id", "action", "approved", "human_confirmed"],
         },
     },
 ]
@@ -734,6 +783,352 @@ VOICE_PROJECT_TOOL_SCHEMAS.extend([
 ])
 
 
+ASSET_TOOL_SCHEMAS: list[dict] = [
+    {
+        "name": "chatterbox_voice_assets",
+        "description": "List all assets in the Intelligent Asset Library, optionally filtered by category.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "enum": ["ambience", "sfx", "voice_reference", "pronunciation_reference"],
+                    "description": "Optional category filter.",
+                },
+            },
+        },
+    },
+    {
+        "name": "chatterbox_voice_asset_register",
+        "description": "Register a single audio file into the Intelligent Asset Library with security validation (path traversal checks, magic byte validation, SHA-256 dedup).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Absolute or permitted-root-relative path to the audio file.",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["ambience", "sfx", "voice_reference", "pronunciation_reference"],
+                    "description": "Asset category.",
+                },
+                "intents": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Semantic intent tags (e.g. 'forest_atmosphere', 'thunder_crack').",
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Search keywords for matching.",
+                },
+                "mood": {"type": "string", "description": "Mood descriptor (e.g. 'tense', 'peaceful')."},
+                "environment": {"type": "string", "description": "Environment descriptor (e.g. 'forest', 'cave')."},
+                "energy": {"type": "number", "minimum": 0.0, "maximum": 5.0, "description": "Energy level 0.0–5.0."},
+                "loopable": {"type": "boolean", "description": "Whether the asset is suitable for looping."},
+                "license": {"type": "string", "description": "License identifier (e.g. 'CC0', 'CC-BY-4.0')."},
+                "source_url": {"type": "string", "description": "URL where this asset was obtained."},
+                "attribution": {"type": "string", "description": "Required attribution text."},
+            },
+            "required": ["file_path", "category"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_asset_scan",
+        "description": "Batch scan a directory and automatically ingest all supported audio files (WAV, MP3, FLAC) into the Asset Library.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "directory_path": {
+                    "type": "string",
+                    "description": "Path to the directory to scan.",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["ambience", "sfx", "voice_reference", "pronunciation_reference"],
+                    "description": "Category to assign to all discovered assets.",
+                },
+            },
+            "required": ["directory_path", "category"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_asset_match",
+        "description": "Find and rank library assets that best match a semantic request using intent overlap, mood, duration, and energy scoring.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "intents": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Required semantic intents to match (e.g. ['forest_atmosphere']).",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["ambience", "sfx", "voice_reference", "pronunciation_reference"],
+                    "description": "Asset category to search within.",
+                },
+                "mood": {"type": "string", "description": "Optional mood filter."},
+                "environment": {"type": "string", "description": "Optional environment keyword filter."},
+                "duration_ms": {"type": "number", "description": "Desired duration in milliseconds."},
+                "loopable": {"type": "boolean", "description": "If true, only loopable assets are returned."},
+                "story_context": {"type": "string", "description": "Story beat context text for energy scoring."},
+                "top_k": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Maximum results to return (default: 5)."},
+            },
+            "required": ["intents", "category"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_asset_preview",
+        "description": "Get the URL to fetch a 200ms WAV preview clip for a specific asset in the library.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "string",
+                    "description": "The asset ID to preview.",
+                },
+            },
+            "required": ["asset_id"],
+        },
+    },
+]
+
+RUNTIME_TOOL_SCHEMAS: list[dict] = [
+    {
+        "name": "chatterbox_voice_runtime_capabilities",
+        "description": "Inspect in-process local Chatterbox runtime capabilities (cached models, active models, compute device, max concurrency, supported formats).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "chatterbox_voice_runtime_preflight",
+        "description": "Perform synchronous preflight validation for a project before execution.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string", "description": "Target project ID."},
+                "provider": {"type": "string", "description": "TTS provider ('local', 'gemini', 'fake')."},
+                "requested_formats": {"type": "array", "items": {"type": "string"}, "description": "Requested output audio formats."},
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validate_runtime",
+        "description": "Launch full real-runtime production validation against local Chatterbox TTS.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "description": "TTS Provider ('local', 'gemini', 'fake')."},
+                "model": {"type": "string", "description": "TTS Model (e.g. 'nano', 'turbo')."},
+                "language": {"type": "string", "description": "Language code (default 'en')."},
+                "script_text": {"type": "string", "description": "Optional inline story script."},
+                "profile": {"type": "string", "description": "Optional managed validation profile ID."},
+                "output_formats": {"type": "array", "items": {"type": "string"}, "description": "Deliverable formats (wav, mp3)."},
+                "require_final_approval": {"type": "boolean", "description": "Whether final master approval is required."},
+                "require_narration_acceptance": {"type": "boolean", "description": "Whether narration review gate is required."},
+                "run_incremental_reproduction": {"type": "boolean", "description": "Test one-beat incremental reproduction."},
+            },
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_status",
+        "description": "Query progress and execution status of a production validation run.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_report",
+        "description": "Retrieve full sanitized diagnostics and metrics report for a production validation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_cancel",
+        "description": "Cancel an active production validation execution.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
+]
+
+SERIES_TOOL_SCHEMAS: list[dict] = [
+    {
+        "name": "chatterbox_voice_series_create",
+        "description": "Create a multi-episode story series with shared voice, pronunciation, and sound bibles.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Title of the series."},
+                "description": {"type": "string", "description": "Optional summary or overview."},
+                "language": {"type": "string", "description": "Primary language code (default 'en')."},
+                "voice_bible": {"type": "object", "description": "Shared narrator and voice configuration."},
+                "pronunciation_bible": {"type": "object", "description": "Shared proper noun pronunciation dictionary."},
+                "sound_bible": {"type": "object", "description": "Shared sound palette and mastering profile."},
+                "series_id": {"type": "string", "description": "Optional explicit series ID."},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_get",
+        "description": "Get detailed status, episodes list, and bibles for a specific series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+            },
+            "required": ["series_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_add_episode",
+        "description": "Add an episode project to a story series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+                "project_id": {"type": "string", "description": "VoiceProject ID corresponding to this episode."},
+                "title": {"type": "string", "description": "Title of the episode."},
+                "episode_number": {"type": "integer", "description": "Episode order number (1-based)."},
+            },
+            "required": ["series_id", "project_id", "title"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_produce",
+        "description": "Execute batch production across episodes in a story series with concurrency control.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+                "episode_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional list of specific episode IDs to produce."},
+            },
+            "required": ["series_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_status",
+        "description": "Get overall batch progress and status for a series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+            },
+            "required": ["series_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_review_queue",
+        "description": "Get all pending human approval gates across episodes in a story series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+            },
+            "required": ["series_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_cancel",
+        "description": "Cancel an in-flight batch production for a story series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+            },
+            "required": ["series_id"],
+        },
+    },
+]
+
+HEALTH_TOOL_SCHEMAS: list[dict] = [
+    {
+        "name": "chatterbox_voice_health",
+        "description": "Get aggregated production health and artifact freshness for a voice project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string", "description": "Target project ID."},
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_events",
+        "description": "Get recent structured audit events for a project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string", "description": "Target project ID."},
+                "limit": {"type": "integer", "description": "Max events to fetch (default: 100)."},
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_diagnostics",
+        "description": "Generate a comprehensive sanitized diagnostic bundle for troubleshooting a project or series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string", "description": "Optional project ID."},
+                "series_id": {"type": "string", "description": "Optional series ID."},
+            },
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_health",
+        "description": "Get aggregated production health for an entire story series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+            },
+            "required": ["series_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_series_events",
+        "description": "Get recent structured audit events for a series.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "series_id": {"type": "string", "description": "Target series ID."},
+                "limit": {"type": "integer", "description": "Max events to fetch (default: 100)."},
+            },
+            "required": ["series_id"],
+        },
+    },
+]
+
+
 def get_tools_list() -> list[dict]:
     """Return all tool schemas available on this MCP server."""
-    return VOICE_TOOL_SCHEMAS + PROJECT_TOOL_SCHEMAS + VOICE_PROJECT_TOOL_SCHEMAS
+    return (
+        VOICE_TOOL_SCHEMAS
+        + PROJECT_TOOL_SCHEMAS
+        + VOICE_PROJECT_TOOL_SCHEMAS
+        + ASSET_TOOL_SCHEMAS
+        + RUNTIME_TOOL_SCHEMAS
+        + SERIES_TOOL_SCHEMAS
+        + HEALTH_TOOL_SCHEMAS
+    )

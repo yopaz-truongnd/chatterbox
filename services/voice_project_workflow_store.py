@@ -128,6 +128,30 @@ class VoiceProjectWorkflowStore:
                 raise InvalidProjectStateError(f"Workflow '{workflow_id}' changed concurrently.")
             return state
 
+    def reopen_for_revision_approval(self, workflow_id: str, mutate: Callable[[VoiceWorkflowState], None]) -> VoiceWorkflowState:
+        """Atomically reopen only a completed workflow for a rebuilt-master approval gate."""
+        with self._lock:
+            state = self.get_workflow(workflow_id)
+            if not state:
+                raise ValueError(f"Workflow '{workflow_id}' not found.")
+            if state.status != WorkflowStatus.COMPLETED:
+                raise InvalidProjectStateError(
+                    f"Workflow '{workflow_id}' must be completed before revision approval can be requested."
+                )
+            mutate(state)
+            target = self.root_dir / f"{workflow_id}.yaml"
+            pending = target.with_suffix(f".tmp_{uuid.uuid4().hex[:6]}.yaml")
+            try:
+                with open(pending, "w", encoding="utf-8") as f:
+                    f.write(state.to_yaml())
+                    f.flush()
+                    os.fsync(f.fileno())
+                pending.replace(target)
+            finally:
+                if pending.exists():
+                    pending.unlink()
+            return state
+
     def get_workflow(self, workflow_id: str) -> VoiceWorkflowState | None:
         """Load workflow state by ID."""
         with self._lock:
@@ -156,3 +180,13 @@ class VoiceProjectWorkflowStore:
                 except Exception:
                     continue
         return workflows
+
+    def delete_project_workflows(self, project_id: str) -> list[str]:
+        """Delete all persisted workflows that belong to a project."""
+        deleted = []
+        with self._lock:
+            for workflow in self.list_workflows(limit=10000):
+                if workflow.project_id == project_id:
+                    (self.root_dir / f"{workflow.workflow_id}.yaml").unlink(missing_ok=True)
+                    deleted.append(workflow.workflow_id)
+        return deleted

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 import uuid
 from typing import Any
+
+from pydantic import BaseModel
 
 from services.director_review_models import (
     BeatDirectionPatch,
@@ -17,20 +20,30 @@ from services.director_review_models import (
 )
 from services.director_revision_store import DirectorRevisionStore
 from services.render_models import ProjectStatus, RenderStatus
+from services.production_event_models import ProductionEvent, ProductionEventType
+from services.production_event_store import ProductionEventStore
 from services.voice_plan import AmbienceIntent, SFXIntent
 from services.voice_project_models import BeatNotFoundError, InvalidProjectStateError
-from services.voice_project_service import VoiceProjectService
+from services.voice_project_service import VoiceProjectService, compute_file_sha256
+from services.voice_project_workflow import VoiceProjectWorkflowService
 
 
 MIX_ARTIFACTS = ["mix_plan", "premaster_wav", "master_wav", "exports", "final_approval"]
 MIX_STEPS = ["prepare_mix", "mix", "master", "export"]
+logger = logging.getLogger(__name__)
 
 
 class DirectorRevisionService:
-    def __init__(self, project_service: VoiceProjectService, revision_store: DirectorRevisionStore | None = None):
+    def __init__(
+        self,
+        project_service: VoiceProjectService,
+        revision_store: DirectorRevisionStore | None = None,
+        workflow_service: VoiceProjectWorkflowService | None = None,
+    ):
         self.project_service = project_service
         self.store = project_service.store
         self.revisions = revision_store or DirectorRevisionStore(self.store)
+        self.workflow_service = workflow_service
 
     def _beat(self, project_id: str, beat_id: str):
         self.store.get_project_state(project_id)
@@ -45,15 +58,52 @@ class DirectorRevisionService:
     def _event(
         self, project_id: str, revision_type: str, beat_id: str | None, before: dict, after: dict,
         artifacts: list[str], steps: list[str], actor_id: str, reason: str | None,
+        affected_beats: list[str] | None = None,
     ) -> DirectorRevisionEvent:
         event = DirectorRevisionEvent(
             revision_id=f"rev_{uuid.uuid4().hex[:12]}", project_id=project_id, beat_id=beat_id,
+            affected_beats=affected_beats or ([beat_id] if beat_id else []),
             revision_type=revision_type, actor_id=actor_id, reason=reason, before=before, after=after,
             affected_artifacts=artifacts, required_reproduction_steps=steps,
             approval_required="final_approval" in artifacts,
         )
         self.revisions.append(event)
+        self._production_event(
+            project_id,
+            ProductionEventType.REVISION_CREATED,
+            "Director revision created.",
+            revision_id=event.revision_id,
+            revision_type=revision_type,
+            beat_id=beat_id,
+        )
+        if artifacts:
+            self._production_event(
+                project_id,
+                ProductionEventType.ARTIFACT_INVALIDATED,
+                "Downstream artifacts invalidated by revision.",
+                revision_id=event.revision_id,
+                artifact_ids=artifacts,
+            )
         return event
+
+    def _production_event(
+        self,
+        project_id: str,
+        event_type: ProductionEventType,
+        message: str,
+        **details: Any,
+    ) -> None:
+        try:
+            ProductionEventStore(root_dir=self.store.root_dir).append_project_event(
+                ProductionEvent(
+                    project_id=project_id,
+                    event_type=event_type,
+                    message=message,
+                    details=details,
+                )
+            )
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not persist production event %s: %s", event_type.value, exc)
 
     def select_attempt(
         self, project_id: str, beat_id: str, attempt_id: int, actor_id: str = "unknown", reason: str | None = None,
@@ -169,62 +219,109 @@ class DirectorRevisionService:
         return RevisionImpact(project_id=project_id, beat_id=beat_id, revision_id=event.revision_id, invalidated_artifacts=MIX_ARTIFACTS, required_reproduction_steps=steps, final_approval_invalidated=True)
 
     def _preserve_narration(self, project_id: str) -> None:
-        self.project_service.check_resources(project_id)
+        resources = self.project_service.check_resources(project_id)
         manifest = self.store.load_manifest(project_id)
         self.store.save_manifest(project_id, manifest)
-        if manifest.beats and all(item.selected_attempt is not None for item in manifest.beats.values()):
-            state = self.store.get_project_state(project_id)
+        state = self.store.get_project_state(project_id)
+        if state.stage == ProjectStatus.RESOURCE_BLOCKED:
+            return
+        if not resources.render_blocked and manifest.beats and all(item.selected_attempt is not None for item in manifest.beats.values()):
             state.stage = ProjectStatus.NARRATION_READY
             state.last_stable_stage = state.stage
             self.store.save_project_state(state)
 
+    def _resolve_workflow_service(self) -> VoiceProjectWorkflowService:
+        if self.workflow_service is not None:
+            return self.workflow_service
+        from services.voice_project_dependencies import get_voice_project_workflow_service
+        return get_voice_project_workflow_service()
+
     def reproduce_project(self, project_id: str, revision_ids: list[str] | None = None, policy: dict[str, Any] | None = None, cancellation_token=None, progress_callback=None) -> IncrementalReproductionResult:
         state = self.revisions.get_state(project_id)
-        steps = state.required_reproduction_steps
-        if revision_ids:
-            selected = [event for event in self.revisions.list_events(project_id) if event.revision_id in revision_ids]
-            if len(selected) != len(set(revision_ids)):
-                raise InvalidProjectStateError("One or more revision IDs do not exist for this project.")
-            steps = list(dict.fromkeys(step for event in selected for step in event.required_reproduction_steps))
+        pending = [event for event in self.revisions.list_events(project_id) if event.status == "pending"]
+        selected_ids = list(dict.fromkeys(revision_ids or [event.revision_id for event in pending]))
+        selected = [event for event in pending if event.revision_id in selected_ids]
+        if len(selected) != len(selected_ids):
+            raise InvalidProjectStateError("One or more revision IDs do not exist or are already reproduced.")
+        steps = list(dict.fromkeys(step for event in selected for step in event.required_reproduction_steps))
+        affected_beats = list(dict.fromkeys(
+            beat for event in selected for beat in (event.affected_beats or ([event.beat_id] if event.beat_id else []))
+        ))
+        final_approval_invalidated = any(event.approval_required for event in selected)
+
+        self._production_event(
+            project_id,
+            ProductionEventType.REPRODUCTION_STARTED,
+            "Incremental reproduction started.",
+            revision_ids=selected_ids,
+            affected_beats=affected_beats,
+            required_steps=steps,
+        )
+
+        workflow_service = self._resolve_workflow_service()
+        matches = [item for item in workflow_service.store.list_workflows(limit=200) if item.project_id == project_id]
+        workflow = max(matches, key=lambda item: item.created_at, default=None)
+        effective = workflow.policy.model_dump(mode="json") if workflow else {}
+        if policy:
+            for k, v in policy.items():
+                if k not in effective or effective[k] is None:
+                    effective[k] = v
+        require_final_approval = bool(workflow and workflow.policy.require_final_approval)
         ordered = [step for step in ["check_resources", "render_beat", "evaluate", *MIX_STEPS] if step in steps]
         executed = []
         total = max(1, len(ordered))
         for index, step in enumerate(ordered):
             if cancellation_token and cancellation_token.is_cancelled():
-                return IncrementalReproductionResult(project_id=project_id, affected_beats=state.affected_beats, executed_steps=executed, status="cancelled", suggested_action="Resume reproduction when ready.")
+                return IncrementalReproductionResult(project_id=project_id, affected_beats=affected_beats, executed_steps=executed, status="cancelled", suggested_action="Resume reproduction when ready.")
             if progress_callback:
-                progress_callback(f"reproduce_{step}", index / total * 100, {"beat_id": state.affected_beats[0] if len(state.affected_beats) == 1 else None})
+                progress_callback(f"reproduce_{step}", index / total * 100, {"beat_id": affected_beats[0] if len(affected_beats) == 1 else None})
             if step == "check_resources":
                 result = self.project_service.check_resources(project_id)
                 if result.render_blocked:
-                    return IncrementalReproductionResult(project_id=project_id, affected_beats=state.affected_beats, executed_steps=executed + [step], status="resource_blocked", suggested_action="Resolve required resources before resuming.")
+                    return IncrementalReproductionResult(project_id=project_id, affected_beats=affected_beats, executed_steps=executed + [step], status="resource_blocked", suggested_action="Resolve required resources before resuming.")
             elif step == "render_beat":
-                for beat_id in state.affected_beats:
+                for beat_id in affected_beats:
                     self.project_service.render_beat(project_id, beat_id, cancellation_token=cancellation_token)
             elif step == "evaluate":
-                self.project_service.evaluate(project_id, beats=state.affected_beats)
+                self.project_service.evaluate(project_id, beats=affected_beats)
             elif step == "prepare_mix":
-                self.project_service.prepare_for_mix(project_id)
+                self.project_service.prepare_for_mix(
+                    project_id,
+                    mix_config={"profile": effective.get("mixing_profile", "storytelling")},
+                    mastering_profile=effective.get("mastering_profile", "storytelling"),
+                    output_formats=effective.get("output_formats") or ["wav"],
+                )
             elif step == "mix":
                 self.project_service.mix(project_id, cancellation_token=cancellation_token)
             elif step == "master":
-                self.project_service.master(project_id, cancellation_token=cancellation_token)
+                self.project_service.master(project_id, profile_name=effective.get("mastering_profile", "storytelling"), cancellation_token=cancellation_token)
             elif step == "export":
-                require_final_approval = (policy or {}).get("require_final_approval")
-                if require_final_approval is None:
-                    require_final_approval = False
-                    try:
-                        from services.voice_project_dependencies import get_voice_project_workflow_service
-                        workflow = next(
-                            (item for item in get_voice_project_workflow_service().store.list_workflows(limit=200)
-                             if item.project_id == project_id), None
-                        )
-                        require_final_approval = bool(workflow and workflow.policy.require_final_approval)
-                    except Exception:
-                        pass
-                if state.final_approval_invalidated and require_final_approval:
-                    return IncrementalReproductionResult(project_id=project_id, affected_beats=state.affected_beats, executed_steps=executed, status="waiting_for_human", suggested_action="Approve the rebuilt master before export.")
-                self.project_service.export(project_id, cancellation_token=cancellation_token)
+                if final_approval_invalidated and require_final_approval:
+                    if not workflow:
+                        raise InvalidProjectStateError("Final approval is required but no authoritative workflow exists.")
+                    master_path = self.store.get_project_dir(project_id) / "mix" / "master.wav"
+                    artifact_sha = compute_file_sha256(master_path)
+                    reopened = workflow_service.request_revision_approval(workflow.workflow_id, artifact_sha, selected_ids)
+                    raw_human_action = getattr(reopened, "human_action", None)
+                    if isinstance(raw_human_action, dict):
+                        human_action_dict: dict | None = raw_human_action
+                    elif isinstance(raw_human_action, BaseModel):
+                        human_action_dict = raw_human_action.model_dump(mode="json")
+                    else:
+                        human_action_dict = None
+                    approval_endpoint = f"/api/v1/voice-projects/{project_id}/workflow/approve"
+                    return IncrementalReproductionResult(
+                        project_id=project_id,
+                        affected_beats=affected_beats,
+                        executed_steps=executed,
+                        status="waiting_for_human",
+                        suggested_action=f"Approve master_wav on workflow {workflow.workflow_id} before export.",
+                        artifact_id="master_wav",
+                        artifact_sha256=artifact_sha,
+                        human_action=human_action_dict,
+                        approval_endpoint=approval_endpoint,
+                    )
+                self.project_service.export(project_id, formats=effective.get("output_formats") or ["wav"], cancellation_token=cancellation_token)
             executed.append(step)
-        self.revisions.clear_reproduced(project_id)
-        return IncrementalReproductionResult(project_id=project_id, affected_beats=state.affected_beats, executed_steps=executed, status="completed", suggested_action="Review the latest artifacts.")
+        self.revisions.mark_reproduced(project_id, selected_ids)
+        return IncrementalReproductionResult(project_id=project_id, affected_beats=affected_beats, executed_steps=executed, status="completed", suggested_action="Review the latest artifacts.")

@@ -1,0 +1,240 @@
+"""Unit and integration tests for ProductionValidationService."""
+
+from pathlib import Path
+import tempfile
+import time
+import unittest
+from unittest import mock
+
+from services.production_validation_models import (
+    ProductionValidationReport,
+    ProductionValidationRequest,
+    ValidationVerdict,
+)
+from services.production_validation_service import ProductionValidationService
+from services.production_validation_service import _ACTIVE_VALIDATIONS
+from services.render_models import ProjectStatus
+from services.tts.fake import FakeTTSProvider
+from services.voice_project_store import VoiceProjectStore
+from services.voice_project_operations import VoiceProjectOperationManager
+from services.voice_project_service import VoiceProjectService
+from services.voice_project_workflow_models import WorkflowStatus
+from services.voice_project_workflow_store import VoiceProjectWorkflowStore
+
+
+class TestProductionValidationService(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.store = VoiceProjectStore(Path(self.tmp.name) / "projects")
+        self.provider = FakeTTSProvider()
+        self.service = ProductionValidationService(
+            store=self.store,
+            execution_port=self.provider,
+        )
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_full_production_validation_flow_with_fake_tts(self):
+        script = (
+            "High atop Mount Olympus, the eternal wind howled across the stone.\n\n"
+            "Prometheus knelt beside the forge of Hephaestus, watching the flame.\n\n"
+            "He touched the stalk... and a golden ember ignited.\n\n"
+            "The Titan turned toward the mortal world, ready to defy Zeus."
+        )
+        req = ProductionValidationRequest(
+            script_text=script,
+            provider="fake",
+            model="test_model",
+            language="en",
+            output_formats=["wav"],
+            require_final_approval=True,
+            require_narration_acceptance=True,
+            run_incremental_reproduction=True,
+        )
+
+        report = self.service.validate(req)
+
+        self.assertEqual(report.status, "completed")
+        self.assertIn(report.verdict, (ValidationVerdict.PASS, ValidationVerdict.PASS_WITH_WARNINGS))
+        self.assertGreater(report.beat_count, 0)
+        self.assertGreater(len(report.steps), 5)
+        self.assertGreater(len(report.per_beat_metrics), 0)
+        self.assertGreater(len(report.artifacts), 0)
+        self.assertEqual(self.store.get_project_state(report.project_id).stage, ProjectStatus.COMPLETED)
+
+        workflow = VoiceProjectWorkflowStore(self.store.root_dir / "workflows").get_workflow(
+            report.workflow_id
+        )
+        self.assertEqual(workflow.status, WorkflowStatus.COMPLETED)
+        render_step = next(step for step in workflow.steps if step.name == "render")
+        master_step = next(step for step in workflow.steps if step.name == "master")
+        export_step = next(step for step in workflow.steps if step.name == "export")
+        self.assertTrue(render_step.result_summary.get("approved"))
+        self.assertTrue(master_step.result_summary.get("approved"))
+        self.assertEqual(export_step.status, "completed")
+
+        # Check step names
+        step_names = [s.name for s in report.steps]
+        self.assertIn("create_project", step_names)
+        self.assertIn("plan_voice_project", step_names)
+        self.assertIn("render_narration", step_names)
+        self.assertIn("mix_audio", step_names)
+        self.assertIn("master_audio", step_names)
+        self.assertIn("export_deliverables", step_names)
+        self.assertIn("audio_and_lineage_validation", step_names)
+
+        # Verify on-disk persistence
+        retrieved = self.service.get_validation_report(report.validation_id)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(retrieved.validation_id, report.validation_id)
+
+    def test_validation_profile_loading(self):
+        profile = self.service.load_validation_profile()
+        self.assertIsInstance(profile, dict)
+        self.assertEqual(profile.get("provider"), "local")
+        self.assertEqual(profile.get("language"), "en")
+
+    def test_async_submit_uses_same_validation_id_and_operation(self):
+        manager = VoiceProjectOperationManager(
+            max_workers=1, operations_dir=Path(self.tmp.name) / "operations"
+        )
+        service = ProductionValidationService(
+            store=self.store, execution_port=self.provider, operation_manager=manager
+        )
+        report, operation = service.submit(ProductionValidationRequest(
+            script_text="Prometheus carried the flame.", provider="fake",
+            output_formats=["wav"], run_incremental_reproduction=False,
+        ))
+        self.assertEqual(report.operation_ids, [operation.id])
+        self.assertEqual(service.get_validation_report(report.validation_id).validation_id, report.validation_id)
+
+    def test_instant_worker_cannot_overwrite_terminal_report_with_queued_snapshot(self):
+        manager = VoiceProjectOperationManager(
+            max_workers=1, operations_dir=Path(self.tmp.name) / "instant-operations"
+        )
+        service = ProductionValidationService(
+            store=self.store, execution_port=self.provider, operation_manager=manager
+        )
+
+        def finish_immediately(*args, validation_id, **kwargs):
+            current = _ACTIVE_VALIDATIONS[validation_id]
+            current.status = "completed"
+            return current
+
+        service.validate = finish_immediately
+        report, operation = service.submit(ProductionValidationRequest(provider="fake"))
+        for _ in range(100):
+            if manager.get_operation(operation.id).status.value == "completed":
+                break
+            import time
+            time.sleep(0.01)
+        self.assertEqual(service.get_validation_report(report.validation_id).status, "completed")
+        self.assertEqual(service.get_validation_report(report.validation_id).operation_ids, [operation.id])
+
+    def test_network_service_rejects_raw_paths(self):
+        with self.assertRaisesRegex(ValueError, "local CLI"):
+            self.service.validate(ProductionValidationRequest(
+                script_path="/etc/passwd", provider="fake", output_formats=["wav"]
+            ))
+
+    def test_managed_profile_rejects_traversal(self):
+        with self.assertRaisesRegex(ValueError, "managed profile ID"):
+            self.service.load_validation_profile("../secret.yaml")
+
+    def test_report_persistence_failure_forces_failed_verdict(self):
+        report = ProductionValidationReport(
+            validation_id="val_persist_fail",
+            status="completed",
+            verdict=ValidationVerdict.PASS,
+            started_at="2026-09-07T00:00:00+00:00",
+            project_id="persist_fail",
+            operation_ids=["vp_op_test"],
+        )
+        with mock.patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            result = self.service._finalize_report(
+                report,
+                steps=[],
+                warnings=[],
+                failures=[],
+                start_ts=time.time(),
+                req=ProductionValidationRequest(provider="fake"),
+            )
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.verdict, ValidationVerdict.FAIL)
+        self.assertEqual(result.failures[-1].code, "REPORT_PERSISTENCE_FAILED")
+
+    def test_secondary_report_failure_is_only_a_warning(self):
+        report = ProductionValidationReport(
+            validation_id="val_secondary_fail",
+            status="completed",
+            verdict=ValidationVerdict.PASS,
+            started_at="2026-09-07T00:00:00+00:00",
+            project_id="secondary_fail",
+            operation_ids=["vp_op_test"],
+        )
+        with mock.patch.object(self.service, "_resolve_local_path", side_effect=OSError("read-only")):
+            result = self.service._finalize_report(
+                report,
+                steps=[],
+                warnings=[],
+                failures=[],
+                start_ts=time.time(),
+                req=ProductionValidationRequest(
+                    provider="fake", output_report_path="secondary.yaml"
+                ),
+            )
+        canonical = self.store.root_dir / "validations" / report.validation_id
+        self.assertTrue((canonical / "validation-report.yaml").is_file())
+        self.assertTrue((canonical / "validation-report.json").is_file())
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.verdict, ValidationVerdict.PASS_WITH_WARNINGS)
+        self.assertFalse(result.failures)
+
+    def test_single_beat_incremental_validation_is_inconclusive(self):
+        report = self.service.validate(ProductionValidationRequest(
+            script_text="Prometheus carried the flame to humanity.",
+            provider="fake",
+            output_formats=["wav"],
+            run_incremental_reproduction=True,
+        ))
+        step = next(item for item in report.steps if item.name == "incremental_reproduction_validation")
+        self.assertEqual(step.status, "skipped")
+        self.assertIsNone(report.incremental_reproduction_passed)
+
+    def test_optional_final_approval_is_reported_as_not_required(self):
+        report = self.service.validate(ProductionValidationRequest(
+            script_text="Prometheus carried the flame to humanity.",
+            provider="fake",
+            output_formats=["wav"],
+            require_final_approval=False,
+            run_incremental_reproduction=False,
+        ))
+        step = next(item for item in report.steps if item.name == "final_master_approval")
+        self.assertFalse(step.details["approval_required"])
+        self.assertIsNone(step.details["approved"])
+
+    def test_requested_mp3_missing_with_ffmpeg_fails_validation(self):
+        original_export = VoiceProjectService.export
+
+        def export_without_mp3(service, project_id, *args, **kwargs):
+            kwargs["formats"] = ["wav"]
+            result = original_export(service, project_id, *args, **kwargs)
+            return result
+
+        with mock.patch("services.production_validation_service.shutil.which", return_value="ffmpeg"), \
+             mock.patch.object(VoiceProjectService, "export", new=export_without_mp3):
+            report = self.service.validate(ProductionValidationRequest(
+                script_text="Prometheus carried the flame to humanity.",
+                provider="fake",
+                output_formats=["wav", "mp3"],
+                run_incremental_reproduction=False,
+            ))
+
+        self.assertEqual(report.status, "failed")
+        self.assertEqual(report.verdict, ValidationVerdict.FAIL)
+        self.assertTrue(any("FINAL.mp3 was requested" in failure.message for failure in report.failures))
+
+
+if __name__ == "__main__":
+    unittest.main()

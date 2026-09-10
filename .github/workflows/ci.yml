@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[api,test]"
+      - run: ./run_chatterbox_api.sh --test
+        env:
+          CHATTERBOX_IN_PROCESS: "1"
+          CHATTERBOX_TEST_DUMMY_INFERENCE: "1"
+          HF_HUB_OFFLINE: "1"
+          PYTHONPATH: "src:."

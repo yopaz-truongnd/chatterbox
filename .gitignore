@@ -62,5 +62,6 @@ voice_presets.json
 data/characters.json
 data/characters/
 
-# Temporary audio files in project
+# Temporary audio files and test projects
 tmp/
+projects/

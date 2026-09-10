@@ -53,6 +53,16 @@ class MixPlanStaleError(VoiceProjectError):
     pass
 
 
+class LineageInvalidError(MixPlanStaleError):
+    """Raised when a final artifact cannot prove canonical end-to-end lineage."""
+    pass
+
+
+class InvalidArtifactShaError(InvalidProjectStateError):
+    """Raised when approval does not bind the exact current artifact checksum."""
+    pass
+
+
 class ExportDependencyUnavailableError(VoiceProjectError):
     """Raised when an external exporter binary (e.g. FFmpeg) is required but missing."""
     pass

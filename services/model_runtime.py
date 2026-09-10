@@ -67,19 +67,6 @@ class ModelRuntime:
         variant = (extra_args or {}).get("ver") if model_id == "multilingual" else None
         cache_key = self.build_cache_key(model_id, target_device, variant)
 
-        # Mock for dummy inference in unit tests
-        if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1":
-            class DummyModel:
-                def __init__(self):
-                    self.sr = 24000
-                    self.conds = {"voice": "default"}
-                    self.default_conds = {"voice": "default"}
-
-                def generate(self, *args, **kwargs):
-                    return torch.zeros(1, 24000)
-
-            return DummyModel(), 24000
-
         with self._lock:
             # 1. Exact active cache key match (same model, device, and variant)
             if self._active_cache_key == cache_key and self._active_instance is not None:
@@ -99,7 +86,35 @@ class ModelRuntime:
             logger.info("Đang nạp mô hình '%s' (%s) trên thiết bị %s...", model_id, variant or "default", target_device.upper())
 
             try:
+                from unittest.mock import Mock, MagicMock
+
+                is_mocked = False
                 if model_id == "standard":
+                    from chatterbox.tts import ChatterboxTTS
+                    is_mocked = isinstance(getattr(ChatterboxTTS, "from_pretrained", None), (Mock, MagicMock))
+                elif model_id in {"turbo", "nano"}:
+                    from chatterbox.tts_turbo import ChatterboxTurboTTS
+                    is_mocked = isinstance(getattr(ChatterboxTurboTTS, "from_pretrained", None), (Mock, MagicMock))
+                elif model_id == "multilingual":
+                    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+                    is_mocked = isinstance(getattr(ChatterboxMultilingualTTS, "from_pretrained", None), (Mock, MagicMock))
+                elif model_id == "voice-conversion":
+                    from chatterbox.vc import ChatterboxVC
+                    is_mocked = isinstance(getattr(ChatterboxVC, "from_pretrained", None), (Mock, MagicMock))
+
+                if os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") == "1" and not is_mocked:
+                    class DummyModel:
+                        def __init__(self):
+                            self.sr = 24000
+                            self.conds = {"voice": "default"}
+                            self.default_conds = {"voice": "default"}
+
+                        def generate(self, *args, **kwargs):
+                            t = torch.linspace(0, 1.0, 24000)
+                            return (0.177 * torch.sin(2 * 3.14159 * 440 * t)).unsqueeze(0)
+
+                    model = DummyModel()
+                elif model_id == "standard":
                     from chatterbox.tts import ChatterboxTTS
                     model = ChatterboxTTS.from_pretrained(target_device)
                 elif model_id in {"turbo", "nano"}:

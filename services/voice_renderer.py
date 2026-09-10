@@ -252,6 +252,11 @@ def render_project_narration(
                 cancellation_token=cancellation_token,
             )
 
+            if cancellation_token and cancellation_token.is_cancelled():
+                if attempt.audio_path:
+                    Path(attempt.audio_path).unlink(missing_ok=True)
+                break
+
             if attempt.status == RenderStatus.FAILED:
                 beat_state.attempts.append(attempt)
                 if attempt.retryable and current_attempt_id < max_retries:

@@ -33,6 +33,7 @@ class DirectorReviewService:
             resource_type=gap.type.value,
             priority=gap.priority.value,
             description=gap.reason or gap.term or gap.intent or gap.id,
+            term=gap.term,
             affected_beats=gap.used_at or ([context.beat_id] if context and context.beat_id else []),
             story_context=context.text if context else None,
             desired_characteristics=wanted,
@@ -60,6 +61,8 @@ class DirectorReviewService:
         cursor = 0
         beats: list[DirectorBeatReview] = []
         invalidated = set(revision_state.invalidated_artifacts)
+        if "exports" in invalidated:
+            invalidated.update({"final_wav", "final_mp3", "export_manifest"})
         for beat in plan.beats:
             start = source.find(beat.script.text, cursor)
             if start < 0:
@@ -123,10 +126,15 @@ class DirectorReviewService:
             ))
 
         workflow_id = workflow_status = None
+        workflow = None
         try:
             from services.voice_project_dependencies import get_voice_project_workflow_service
             workflows = get_voice_project_workflow_service().store.list_workflows(limit=200)
-            workflow = next((item for item in workflows if item.project_id == project_id), None)
+            workflow = max(
+                (item for item in workflows if item.project_id == project_id),
+                key=lambda item: item.created_at,
+                default=None,
+            )
             if workflow:
                 workflow_id = workflow.workflow_id
                 workflow_status = workflow.status.value
@@ -135,20 +143,36 @@ class DirectorReviewService:
 
         required = [self._gap(g) for g in (report.missing if report else []) if g.priority == RequirementPriority.REQUIRED]
         recommended = [self._gap(g) for g in (report.missing if report else []) if g.priority == RequirementPriority.RECOMMENDED]
+        verified_delivery = {}
+        try:
+            from services.voice_project_service import VoiceProjectService
+            verified_delivery = VoiceProjectService(store=self.store).verify_delivery_lineage(
+                project_id, workflow_state=workflow
+            )
+        except Exception:
+            pass
+
         artifacts = []
         for artifact_id, relative, url in (
             ("mix_plan", "mix-plan.yaml", f"/api/v1/voice-projects/{project_id}/artifacts/mix_plan"),
             ("premaster_wav", "mix/premaster.wav", f"/api/v1/voice-projects/{project_id}/artifacts/premaster_wav"),
             ("master_wav", "mix/master.wav", f"/api/v1/voice-projects/{project_id}/artifacts/master_wav"),
             ("final_wav", "exports/FINAL.wav", f"/api/v1/voice-projects/{project_id}/artifacts/final_wav"),
+            ("final_mp3", "exports/FINAL.mp3", f"/api/v1/voice-projects/{project_id}/artifacts/final_mp3"),
+            ("export_manifest", "exports/export-manifest.yaml", f"/api/v1/voice-projects/{project_id}/artifacts/export_manifest"),
         ):
             path = project_dir / relative
+            is_final = artifact_id in {"final_wav", "final_mp3", "export_manifest"}
+            verified_sha = verified_delivery.get(path.name)
+            fresh = path.exists() and artifact_id not in invalidated and (
+                not is_final or verified_sha == compute_file_sha256(path)
+            )
             artifacts.append(DirectorArtifactStatus(
                 artifact_id=artifact_id,
                 exists=path.exists(),
-                fresh=path.exists() and artifact_id not in invalidated,
+                fresh=fresh,
                 sha256=compute_file_sha256(path) if path.exists() else None,
-                download_url=url if path.exists() else None,
+                download_url=url if path.exists() and (fresh or not is_final) else None,
             ))
 
         return DirectorProjectReview(
