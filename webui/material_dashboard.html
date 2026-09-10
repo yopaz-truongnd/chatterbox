@@ -195,6 +195,11 @@
           <span>Dự án âm thanh</span>
         </button>
 
+        <button onclick="switchTab('director')" data-tab="director" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[19px]">movie_edit</span>
+          <span>Director Console</span>
+        </button>
+
         <!-- 6. Characters -->
         <button onclick="switchTab('characters')" data-tab="characters" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
           <span class="material-symbols-outlined text-[19px]">face</span>
@@ -1409,7 +1414,40 @@
       </section>
 
       <!-- ========================================================================= -->
-      <!-- TAB 6: CHARACTERS (VOICES)                                                -->
+      <!-- TAB 6: DIRECTOR CONSOLE                                                   -->
+      <!-- ========================================================================= -->
+      <section id="panel-director" class="tab-panel space-y-3.5">
+        <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 flex flex-wrap items-center justify-between gap-3">
+          <div><h2 class="text-sm font-bold text-white">Bàn điều phối giọng đọc</h2><p class="text-[11px] text-slate-400">Theo dõi và duyệt quy trình sản xuất do máy chủ điều khiển</p></div>
+          <div class="flex gap-2"><button onclick="toggleDirectorCreate()" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Tạo bản thu mới</button><button onclick="loadDirectorWorkflows()" class="p-2 rounded-lg bg-[#231F2A] text-slate-300" title="Làm mới"><span class="material-symbols-outlined text-[18px]">refresh</span></button></div>
+        </div>
+        <div id="directorCreate" class="hidden bg-[#18151E] rounded-xl p-4 border border-purple-500/40 space-y-3">
+          <div class="grid md:grid-cols-4 gap-2"><input id="directorTitle" class="director-input" placeholder="Tên dự án"><input id="directorProjectId" class="director-input" placeholder="Mã dự án (không bắt buộc)"><select id="directorProvider" class="director-input"><option value="local">Chatterbox cục bộ</option><option value="fake">Giả lập (chỉ kiểm thử)</option><option value="gemini">Gemini</option></select><input id="directorModel" class="director-input" placeholder="Model (không bắt buộc)"></div>
+          <textarea id="directorScript" rows="5" class="director-input w-full" placeholder="Kịch bản gốc (không thể sửa sau khi bắt đầu)"></textarea>
+          <div class="flex flex-wrap items-center gap-4 text-xs text-slate-300"><label><input id="directorMp3" type="checkbox"> Xuất thêm MP3</label><label><input id="directorFinalGate" type="checkbox" checked> Yêu cầu duyệt bản master cuối</label><button onclick="startDirectorWorkflow()" class="ml-auto px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Bắt đầu sản xuất</button></div>
+        </div>
+        <div class="grid lg:grid-cols-12 gap-4">
+          <aside class="lg:col-span-4 bg-[#18151E] rounded-xl border border-[#3F3A46] p-3"><div class="flex justify-between mb-3"><h3 class="text-xs font-bold text-white">Các bản sản xuất</h3><span id="directorCount" class="text-[10px] text-slate-400"></span></div><div id="directorWorkflowList" class="space-y-2 max-h-[68vh] overflow-y-auto"><p class="text-xs text-slate-500">Đang tải…</p></div></aside>
+          <div class="lg:col-span-8 space-y-3">
+            <div id="directorEmpty" class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-10 text-center text-sm text-slate-500">Chọn một bản sản xuất ở bên trái để bắt đầu.</div>
+            <div id="directorWorkspace" class="hidden space-y-3">
+              <div class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-4"><div class="flex flex-wrap justify-between gap-2"><div><h3 id="directorActiveTitle" class="font-bold text-white"></h3><p id="directorActiveMeta" class="text-[10px] text-slate-400 font-mono"></p></div><div id="directorGateActions" class="flex gap-2"></div></div><div id="directorFlowGuide" class="mt-3"></div><div id="directorProgress" class="grid grid-cols-3 md:grid-cols-5 gap-1 mt-4"></div></div>
+              <div id="directorOperations" class="hidden bg-[#18151E] rounded-xl border border-purple-500/30 p-4"></div>
+              <div id="directorPendingRevisions" class="hidden bg-[#18151E] rounded-xl border border-amber-500/30 p-4"></div>
+              <nav class="flex gap-1 overflow-x-auto" id="directorViews"><button data-view="workspace" onclick="showDirectorView('workspace')">Kế hoạch</button><button data-view="review" onclick="showDirectorView('review')">Duyệt giọng đọc</button><button data-view="mix" onclick="showDirectorView('mix')">Phối & Master</button><button data-view="delivery" onclick="showDirectorView('delivery')">Duyệt & Tải xuống</button></nav>
+              <div id="directorViewContent" class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-4 min-h-64"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <dialog id="directorBeatDialog" class="m-auto w-[min(760px,94vw)] max-h-[90vh] overflow-y-auto rounded-xl bg-[#18151E] text-white border border-[#3F3A46] shadow-m3-3 backdrop:bg-black/70">
+        <div class="sticky top-0 bg-[#18151E] border-b border-[#3F3A46] p-4 flex justify-between items-center z-10"><div><h3 id="directorBeatTitle" class="font-bold"></h3><p class="text-[10px] text-slate-400">Duyệt từng đoạn</p></div><button onclick="closeDirectorBeat()" aria-label="Đóng cửa sổ duyệt"><span class="material-symbols-outlined">close</span></button></div>
+        <div id="directorBeatBody" class="p-4 space-y-4"></div>
+      </dialog>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 7: CHARACTERS (VOICES)                                                -->
       <!-- ========================================================================= -->
       <section id="panel-characters" class="tab-panel space-y-3.5">
         <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-3.5">
@@ -2136,6 +2174,7 @@
   <script src="/static/js/multilingual.js"></script>
   <script src="/static/js/vc.js"></script>
   <script src="/static/js/projects.js"></script>
+  <script src="/static/js/director-console.js?v=20260909-vi-delete"></script>
   <script src="/static/js/characters.js"></script>
   <script src="/static/js/history.js"></script>
   <script src="/static/js/settings.js"></script>

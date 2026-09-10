@@ -1,0 +1,19 @@
+profiles:
+  storytelling:
+    target_lufs: -16.0
+    true_peak_dbtp: -1.0
+    sample_rate: 44100
+    channels: 1
+    limiter_enabled: true
+  podcast:
+    target_lufs: -19.0
+    true_peak_dbtp: -1.5
+    sample_rate: 44100
+    channels: 1
+    limiter_enabled: true
+  broadcast:
+    target_lufs: -23.0
+    true_peak_dbtp: -1.0
+    sample_rate: 48000
+    channels: 1
+    limiter_enabled: true

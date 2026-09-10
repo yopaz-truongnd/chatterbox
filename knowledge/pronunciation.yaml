@@ -1,0 +1,89 @@
+version: 1
+
+terms:
+  zhulong:
+    display: Zhulong
+    aliases:
+      - Zhu Long
+      - Torch Dragon
+    language: zh
+    pronunciation:
+      tts_hint: "Joo-long"
+      ipa: "ʈʂu˥ luŋ˧˥"
+    status: verified
+    source: manual
+    notes: "Dragon solar deity of Mount Zhong with eyes controlling day and night."
+
+  qiongqi:
+    display: Qiongqi
+    aliases:
+      - Qiong Qi
+    language: zh
+    pronunciation:
+      tts_hint: null
+      ipa: null
+    status: unverified
+    source: manual
+    notes: "One of the Four Fiends; winged tiger devouring virtuous people."
+
+  taotie:
+    display: Taotie
+    aliases:
+      - Tao Tie
+    language: zh
+    pronunciation:
+      tts_hint: "Tow-tyeh"
+      ipa: "tʰɑʊ˥ tʰjɛ˥˩"
+    status: verified
+    source: manual
+    notes: "Gluttonous mythical beast often carved on bronze ritual vessels."
+
+  hundun:
+    display: Hundun
+    aliases:
+      - Hun Dun
+      - Chaos Beast
+    language: zh
+    pronunciation:
+      tts_hint: "Hoon-doon"
+      ipa: "xʊn˥ tuən˥˩"
+    status: verified
+    source: manual
+    notes: "Faceless primordial chaos entity."
+
+  taowu:
+    display: Taowu
+    aliases:
+      - Tao Wu
+    language: zh
+    pronunciation:
+      tts_hint: null
+      ipa: null
+    status: unverified
+    source: manual
+    notes: "Blockheaded monster of obstinacy and ignorance."
+
+  nuwa:
+    display: Nuwa
+    aliases:
+      - Nu Wa
+      - Nüwa
+    language: zh
+    pronunciation:
+      tts_hint: "Noo-wah"
+      ipa: "ny˧˥ wɑ˥"
+    status: verified
+    source: manual
+    notes: "Mother goddess who created mankind and repaired the heavens."
+
+  fuxi:
+    display: Fuxi
+    aliases:
+      - Fu Xi
+    language: zh
+    pronunciation:
+      tts_hint: "Foo-shee"
+      ipa: "fu˧˥ ɕi˥"
+    status: verified
+    source: manual
+    notes: "Cultural hero credited with inventing the Bagua and writing."

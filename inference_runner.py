@@ -238,7 +238,7 @@ def run_batch_inference(config: dict) -> None:
                 err_issues = ", ".join(issues_list) or "Quality and content checks failed"
                 raise RuntimeError(f"QC failed: {err_issues}")
 
-            ta.save(line_out, selected_wav, selected_sr)
+            ta.save(line_out, selected_wav, selected_sr, encoding="PCM_S", bits_per_sample=16)
             line_dur = round(selected_wav.shape[-1] / selected_sr, 3)
             successful_segments.append((line_out, line_pause, line_idx))
 
@@ -512,7 +512,9 @@ def run_inference(config: dict) -> None:
     # 3. Postprocess & save audio
     report_progress("generating_audio", 85, "Đang xử lý hậu kỳ & giải mã sóng âm thanh (WAV)...")
     t0_save = time.time()
-    ta.save(output_path, wav, sr)
+    # Downstream Voice Director mixing uses the stdlib WAV reader, so publish a
+    # canonical PCM container rather than torchaudio's backend-dependent float WAV.
+    ta.save(output_path, wav, sr, encoding="PCM_S", bits_per_sample=16)
     save_time = round(time.time() - t0_save, 3)
 
     audio_samples = wav.shape[-1]

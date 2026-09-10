@@ -386,8 +386,7 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertIn("multilingual", model_names)
 
     def test_model_preload_and_unload_endpoints(self):
-        with patch.dict(os.environ, {"HF_HUB_OFFLINE": "0"}), \
-             patch("services.inference.load_model", return_value=(None, 24000)):
+        with patch.dict(os.environ, {"HF_HUB_OFFLINE": "0", "CHATTERBOX_TEST_DUMMY_INFERENCE": "1"}):
             # 1. Preload nano model
             res_load = self.client.post("/api/v1/models/nano/load")
             self.assertEqual(res_load.status_code, 200)
@@ -492,11 +491,11 @@ class ApiAppTestCase(unittest.TestCase):
         self.assertEqual(api_app.job_manager.get_job(job_id).status, "completed_partial")
 
     def test_completed_partial_job_ttl_cleanup(self):
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         job_id = "test_expired_partial_job"
         out_wav = api_app.API_DATA_DIR / "outputs" / f"{job_id}.wav"
         out_wav.write_bytes(b"fake wav")
-        old_time = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+        old_time = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
 
         job = AudioJob(
             id=job_id,
@@ -517,6 +516,5 @@ class ApiAppTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
 
 

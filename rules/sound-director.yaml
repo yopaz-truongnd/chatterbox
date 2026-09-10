@@ -1,0 +1,49 @@
+version: 1
+
+general:
+  voice_priority: 100
+  ambience_priority: 50
+  sfx_priority: 30
+  never_mask_voice: true
+
+density:
+  max_prominent_sfx_per_minute: 5
+  min_gap_prominent_sfx_seconds: 5
+  max_simultaneous_sfx: 2
+
+roles:
+  hook:
+    ambience: "preferred"
+    riser: "allowed"
+    impact: "discouraged"
+  setup:
+    ambience: "allowed"
+    sfx: "allowed"
+  reveal:
+    riser: "preferred"
+    impact: "allowed"
+  description:
+    ambience: "allowed"
+    sfx: "discouraged"
+  lore:
+    ambience: "preferred"
+    sfx: "minimal"
+  escalation:
+    sfx: "preferred"
+    riser: "preferred"
+  supernatural_event:
+    sfx: "preferred"
+    impact: "allowed"
+  climax:
+    impact: "preferred"
+    silence_after: "preferred"
+  reflection:
+    ambience: "subtle"
+    impact: "forbidden"
+    silence: "preferred"
+  transition:
+    riser: "allowed"
+    whoosh: "preferred"
+  outro:
+    riser: "allowed"
+    final_hit: "allowed"

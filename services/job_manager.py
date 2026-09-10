@@ -9,7 +9,7 @@ import subprocess
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,7 +23,7 @@ logger = logging.getLogger("chatterbox.job_manager")
 
 
 def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 class JobManager:
@@ -166,6 +166,36 @@ class JobManager:
                 pass
 
         return True, "Đã hủy tác vụ thành công"
+
+    def execute_sync(
+        self,
+        job_type: str,
+        params: dict[str, Any],
+        output_path: Path | str,
+        progress_callback: Callable[[str, float, str], None] | None = None,
+    ) -> tuple[bool, str | None]:
+        """Synchronously execute an inference task within JobManager execution ownership."""
+        target_path = Path(output_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        m_type = "tts" if job_type == "standard" else job_type
+        if m_type == "auto":
+            try:
+                import api_app
+                m_type = getattr(api_app, "RECOMMENDED_MODEL", "nano")
+            except Exception:
+                m_type = "nano"
+
+        try:
+            with self._execution_lock:
+                if progress_callback:
+                    progress_callback("generating", 30.0, "Synthesizing audio")
+                wav, sr = execute_model_inference(m_type, params, self.device)
+                save_audio_wav(target_path, wav, sr)
+                if progress_callback:
+                    progress_callback("completed", 100.0, "Synthesis complete")
+            return True, None
+        except Exception as exc:
+            return False, str(exc)
 
     def save_completed_job(self, job: AudioJob) -> None:
         """Register a pre-completed job (such as a batch merge) cleanly into store and memory cache."""

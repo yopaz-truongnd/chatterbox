@@ -290,9 +290,9 @@ async def merge_audio_jobs(
 
     total_duration = round(merged_speech.shape[-1] / target_sr, 2)
     now_iso_str = job_manager.now_iso() if hasattr(job_manager, "now_iso") else ""
-    from datetime import UTC, datetime
+    from datetime import datetime, timezone
     if not now_iso_str:
-        now_iso_str = datetime.now(UTC).isoformat()
+        now_iso_str = datetime.now(timezone.utc).isoformat()
 
     merge_job = AudioJob(
         id=merge_id,

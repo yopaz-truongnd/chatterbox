@@ -6,7 +6,7 @@ import json
 import sqlite3
 import threading
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -262,7 +262,7 @@ class JobStore:
 
     def cleanup_expired(self, retention_days: int = 3, data_dir: Path | None = None) -> tuple[int, int]:
         """Delete jobs and all associated audio/subtitle/chunk/archive files older than retention_days."""
-        cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
         deleted_count = 0
         deleted_bytes = 0
         target_data_dir = data_dir or self.db_path.parent
@@ -298,8 +298,7 @@ class JobStore:
         faster_than_realtime: float,
     ) -> None:
         """Record inference benchmark performance metrics for future comparison."""
-        from datetime import UTC, datetime
-        now_ts = datetime.now(UTC).isoformat()
+        now_ts = datetime.now(timezone.utc).isoformat()
         with self._lock:
             conn = self._get_conn()
             try:
@@ -361,4 +360,3 @@ class JobStore:
             duration_seconds=row["duration_seconds"],
             benchmark=json.loads(row["benchmark_json"]) if row["benchmark_json"] else None,
         )
-

@@ -1,0 +1,176 @@
+version: 1
+
+resources:
+  - id: ambience_dark_001
+    file:
+      path: ambience/dark/dark_wind_01.wav
+      format: wav
+      size_bytes: 3810000
+    category: ambience
+    intents:
+      - ancient_dark_atmosphere
+      - mysterious_environment
+    tags:
+      - dark
+      - ancient
+      - wind
+      - mysterious
+      - ominous
+    properties:
+      duration: 43.2
+      loopable: true
+      intensity: 2
+      sample_rate: 44100
+      channels: 2
+    mix:
+      recommended_db: -29.0
+      max_db: -24.0
+    usage:
+      total: 0
+      last_used: null
+      recent_projects: []
+
+  - id: ambience_temple_001
+    file:
+      path: ambience/ancient/temple_drone_01.wav
+      format: wav
+      size_bytes: 5292000
+    category: ambience
+    intents:
+      - dark_temple_ambience
+      - sacred_hall_ambience
+    tags:
+      - ancient
+      - temple
+      - sacred
+      - mystical
+      - drone
+    properties:
+      duration: 60.0
+      loopable: true
+      intensity: 3
+      sample_rate: 44100
+      channels: 2
+    mix:
+      recommended_db: -30.0
+      max_db: -25.0
+    usage:
+      total: 0
+      last_used: null
+      recent_projects: []
+
+  - id: ambience_cold_wind_001
+    file:
+      path: ambience/wind/cold_mountain_wind_01.wav
+      format: wav
+      size_bytes: 3087000
+    category: ambience
+    intents:
+      - cold_mountain_wind
+      - icy_wind
+    tags:
+      - cold
+      - mountain
+      - wind
+      - icy
+      - bleak
+    properties:
+      duration: 35.0
+      loopable: true
+      intensity: 2
+      sample_rate: 44100
+      channels: 2
+    mix:
+      recommended_db: -28.0
+      max_db: -24.0
+    usage:
+      total: 0
+      last_used: null
+      recent_projects: []
+
+  - id: sfx_riser_mystical_001
+    file:
+      path: sfx/riser/mystical_dark_riser_01.wav
+      format: wav
+      size_bytes: 308700
+    category: sfx
+    intents:
+      - mystical_dark_riser
+      - dark_tension_riser
+    tags:
+      - dark
+      - mystical
+      - riser
+      - tension
+      - cinematic
+    properties:
+      duration: 3.5
+      loopable: false
+      intensity: 3
+      sample_rate: 44100
+      channels: 2
+    mix:
+      recommended_db: -22.0
+      max_db: -18.0
+    usage:
+      total: 0
+      last_used: null
+      recent_projects: []
+
+  - id: sfx_impact_supernatural_001
+    file:
+      path: sfx/impact/supernatural_impact_01.wav
+      format: wav
+      size_bytes: 246960
+    category: sfx
+    intents:
+      - dark_supernatural_impact
+      - heavy_doom_hit
+    tags:
+      - dark
+      - impact
+      - supernatural
+      - heavy
+      - doom
+    properties:
+      duration: 2.8
+      loopable: false
+      intensity: 4
+      sample_rate: 44100
+      channels: 2
+    mix:
+      recommended_db: -20.0
+      max_db: -16.0
+    usage:
+      total: 0
+      last_used: null
+      recent_projects: []
+
+  - id: sfx_whoosh_ancient_001
+    file:
+      path: sfx/whoosh/ancient_air_whoosh_01.wav
+      format: wav
+      size_bytes: 158760
+    category: sfx
+    intents:
+      - ancient_whoosh
+      - mystical_air_sweep
+    tags:
+      - ancient
+      - whoosh
+      - air
+      - sweep
+      - transition
+    properties:
+      duration: 1.8
+      loopable: false
+      intensity: 2
+      sample_rate: 44100
+      channels: 2
+    mix:
+      recommended_db: -24.0
+      max_db: -20.0
+    usage:
+      total: 0
+      last_used: null
+      recent_projects: []

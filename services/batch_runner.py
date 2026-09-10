@@ -180,42 +180,32 @@ class BatchRunner:
                                 cand_wav = wav
                                 cand_sr = sr
 
-                                # 1. Signal QC
-                                init_eval = evaluate_audio_signal(wav, sr)
-                                actions = []
-                                final_eval = init_eval
-                                if not init_eval["passed"] and init_eval.get("fixable"):
-                                    self.jm._update_job_status(job.id, phase="auto_fixing", progress_percent=pct)
-                                    fixed_w, actions, final_eval = auto_fix_audio_signal(wav, sr)
-                                    self.jm._update_job_status(job.id, phase="re_evaluating", progress_percent=pct)
-                                    cand_wav = fixed_w
-                                    wav = fixed_w
-
-                                # 2. Content QC (ASR Speech Critic)
+                                # 1. Canonical Candidate Evaluation (Signal QC + Auto-Fix + ASR Content QC)
+                                from services.audio_candidate_evaluator import AudioCandidateEvaluator
+                                evaluator = AudioCandidateEvaluator(profile="default", auto_fix_signal=True)
                                 target_wpm = narration_plan.get("target_wpm")
-                                content_eval = evaluate_speech_content(wav, sr, reference_text=raw_text, target_wpm=target_wpm)
+                                cand_eval = evaluator.evaluate(
+                                    audio_source=wav,
+                                    reference_text=raw_text,
+                                    direction={"target_wpm": target_wpm} if target_wpm else None,
+                                    sample_rate=sr,
+                                )
 
-                                signal_score = 100.0 if final_eval["passed"] else 30.0
-                                content_score = content_eval.get("score", 100.0)
-                                combined_score = round(content_score * 0.6 + signal_score * 0.4, 1)
-                                is_passing = final_eval["passed"] and content_eval.get("passed", True)
+                                if cand_eval.fixed_tensor is not None:
+                                    cand_wav = cand_eval.fixed_tensor
 
                                 cand_meta = {
                                     "candidate_idx": cand_idx,
                                     "attempt": attempt + 1,
                                     "seed": cand_item.get("seed"),
                                     "temperature": cand_item.get("temperature"),
-                                    "signal": {
-                                        "initial": init_eval,
-                                        "actions": actions,
-                                        "final": final_eval,
-                                    },
-                                    "content": content_eval,
-                                    "score": combined_score,
-                                    "passed": is_passing,
+                                    "signal": cand_eval.signal,
+                                    "content": cand_eval.content,
+                                    "score": cand_eval.score,
+                                    "passed": cand_eval.passed,
                                 }
 
-                                if is_passing:
+                                if cand_eval.passed:
                                     cand_passed = True
                                     break
                             except Exception as e:
