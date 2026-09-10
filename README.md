@@ -1,4 +1,4 @@
-# 🎙️ Chatterbox TTS Studio & REST API
+# 🎙️ Chatterbox TTS Studio, Voice Director & REST API
 
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6.0-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-v1.4.0-009688?logo=fastapi&logoColor=white)](http://localhost:8000/docs)
@@ -25,7 +25,7 @@ pip install -e ".[all]"      # Đầy đủ cả API, Web Studio và Desktop GUI
 # 3. Khởi chạy Web Studio & REST API Server
 ./run_chatterbox_api.sh
 
-# 4. Chạy kiểm thử tự động (37 unit tests)
+# 4. Chạy kiểm thử tự động
 ./run_chatterbox_api.sh --test
 ```
 
@@ -54,6 +54,12 @@ Sau khi khởi chạy, truy cập trình duyệt:
 * 🎭 **Quản lý Nhân vật & Giọng mẫu:** Thư viện 6 giọng mẫu chuyên nghiệp (*MC Thời Sự, Kể Chuyện Đêm Khuya, Review Phim, Anime,...*) và công cụ tạo nhân vật kèm file audio tham chiếu tùy biến.
 * 📊 **Đo lường Hiệu năng (Benchmark Telemetry):** Báo cáo chi tiết tốc độ sinh (`Realtime Factor - RTF`, tốc độ gấp X lần thời gian thực, thời gian nạp model và độ dài file âm thanh).
 * 🎛️ **Preset Chất lượng:** 3 cấu hình nhanh: ⚡ *Siêu Nhanh (Fast)*, ⚖️ *Cân Bằng (Balanced)*, 🎭 *Biểu Cảm Cao (Expressive)*.
+
+### Voice Director & Story Series
+
+Voice Director điều phối toàn bộ quy trình sản xuất: phân tích kịch bản, lập VoicePlan, quản lý phát âm và tài nguyên, render/QC/retry, duyệt bản thu, mix/master, kiểm tra lineage SHA-256 và export. Story Series dùng chung voice/pronunciation/sound bible cho nhiều tập và hỗ trợ sản xuất batch có thể khôi phục.
+
+Con người có thể thao tác qua **Director Console**; agent dùng cùng business logic qua REST/MCP/CLI. Xem [Voice Director Production Guide](docs/voice-director-workflow.md). Runtime hiện được thiết kế cho local single-user và chưa có auth/multi-user.
 
 ---
 
@@ -91,7 +97,7 @@ Sau khi khởi chạy, truy cập trình duyệt:
 
 ## 🤖 5. Model Context Protocol (MCP) Server
 
-Tích hợp sẵn stdio MCP Server tương thích tiêu chuẩn Claude Desktop, Google Antigravity & OpenAI Codex với **16 tools chuyên dụng**:
+Tích hợp sẵn stdio MCP Server tương thích tiêu chuẩn Claude Desktop, Google Antigravity & OpenAI Codex với **76 tools** cho TTS, Voice Director, asset, runtime validation và Story Series. Danh sách bên dưới là nhóm TTS/project cốt lõi:
 * `chatterbox_list_characters`, `chatterbox_generate_tts`, `chatterbox_get_job_status`, `chatterbox_download_audio`, `chatterbox_voice_conversion`, `chatterbox_evaluate_voice`
 * `chatterbox_prepare_project`, `chatterbox_answer_project_questions`, `chatterbox_confirm_requirements`, `chatterbox_generate_script`, `chatterbox_confirm_script`, `chatterbox_confirm_project`, `chatterbox_render_project`, `chatterbox_get_project`, `chatterbox_list_projects`
 * `chatterbox_get_events` (Long-polling real-time updates)
@@ -156,7 +162,7 @@ Kiểm thử toàn bộ hệ thống (được mock inference để chạy tức
 ```bash
 ./run_chatterbox_api.sh --test
 ```
-*Kết quả:* **108/108 tests passed**.
+Pytest và unittest chạy trực tiếp cũng mặc định dùng dummy inference; đặt `CHATTERBOX_TEST_DUMMY_INFERENCE=0` khi cần kiểm thử inference thật. Smoke test production local là opt-in qua `CHATTERBOX_REAL_PRODUCTION_TEST=1`.
 
 ---
 

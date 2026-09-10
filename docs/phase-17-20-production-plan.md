@@ -25,7 +25,7 @@ Use one status per item: `TODO`, `IN PROGRESS`, `BLOCKED`, or `DONE`.
 | Phase 19 complete | DONE | Persisted series operations, episode snapshots, bounded batch production, and gates implemented |
 | Phase 20 complete | DONE | Structured events, recovery, health, diagnostics, and concurrent persistence implemented |
 | Phase 1–20 regression green | DONE | `417 passed, 1 skipped` on 2026-08-26 |
-| Real local production smoke test passed | TODO | Opt-in when runtime is available |
+| Real local production smoke test passed | DONE | Nano local create-to-export passed in 102.883s on 2026-09-10 |
 
 ### Review remediation status
 

@@ -3,7 +3,6 @@ Cấu hình Logger hệ thống thời gian thực cho Chatterbox Studio & Inter
 """
 
 import sys
-import io
 import re
 import logging
 import threading
@@ -50,11 +49,12 @@ class StreamProgressInterceptor:
 
 
 # Thiết lập encoding UTF-8 cho dòng xuất chuẩn trên Windows
-try:
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-except Exception:
-    pass
+if sys.platform == "win32":
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 # Chặn sys.stderr và sys.stdout để bắt progress
 if not isinstance(sys.stderr, StreamProgressInterceptor):
