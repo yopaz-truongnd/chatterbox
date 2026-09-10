@@ -20,16 +20,12 @@ import json
 import logging
 import os
 from pathlib import Path
-import platform
-import resource
 import shutil
-import struct
 import tempfile
 import threading
 import time
 from typing import Any, Callable
 import uuid
-import wave
 import yaml
 
 from services.audio_export import AudioExportService
@@ -46,6 +42,14 @@ from services.production_validation_models import (
     ProductionValidationRequest,
     ProductionValidationStep,
     ValidationVerdict,
+)
+from services.production_validation_metrics import (
+    _get_machine_summary,
+    _get_peak_memory_mb,
+    _inspect_audio_wave,
+    _project_artifact_path,
+    _sanitize_path,
+    _workflow_step_duration_ms,
 )
 from services.render_models import RenderStatus
 from services.tts.base import CancellationToken, ProgressCallback, TTSExecutionPort
@@ -80,144 +84,6 @@ _CANCELLATION_TOKENS: dict[str, CancellationToken] = {}
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _sanitize_path(path_str: str | Path, base_dir: Path | None = None) -> str:
-    """Sanitize absolute filesystem path into clean relative path for reports."""
-    p = Path(path_str)
-    if base_dir:
-        try:
-            return str(p.relative_to(base_dir))
-        except ValueError:
-            pass
-    # If path contains 'projects/', return from 'projects/' onward
-    parts = p.parts
-    if "projects" in parts:
-        idx = parts.index("projects")
-        return "/".join(parts[idx:])
-    return p.name
-
-
-def _get_machine_summary() -> dict[str, Any]:
-    """Capture sanitized host machine details without private credentials."""
-    summary: dict[str, Any] = {
-        "os": platform.system(),
-        "os_release": platform.release(),
-        "python_version": platform.python_version(),
-        "cpu_count": os.cpu_count() or 1,
-        "machine": platform.machine(),
-    }
-    try:
-        import torch
-        summary["cuda_available"] = torch.cuda.is_available()
-        summary["mps_available"] = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
-        if torch.cuda.is_available():
-            summary["gpu_name"] = torch.cuda.get_device_name(0)
-            summary["gpu_count"] = torch.cuda.device_count()
-    except Exception:
-        summary["cuda_available"] = False
-        summary["mps_available"] = False
-    return summary
-
-
-def _get_peak_memory_mb() -> float:
-    """Measure peak process memory in megabytes."""
-    try:
-        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        # macOS returns bytes, Linux returns kilobytes
-        if platform.system() == "Darwin":
-            return round(usage / (1024 * 1024), 2)
-        return round(usage / 1024, 2)
-    except Exception:
-        return 0.0
-
-
-def _workflow_step_duration_ms(step: Any) -> float:
-    """Return persisted wall-clock duration for a completed workflow step."""
-    if not step or not step.started_at or not step.completed_at:
-        return 0.0
-    try:
-        started = datetime.fromisoformat(step.started_at.replace("Z", "+00:00"))
-        completed = datetime.fromisoformat(step.completed_at.replace("Z", "+00:00"))
-        return round(max(0.0, (completed - started).total_seconds() * 1000.0), 1)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _project_artifact_path(project_dir: Path, stored_path: str | Path) -> Path:
-    """Resolve manifest paths that may be absolute, cwd-relative, or project-relative."""
-    path = Path(stored_path)
-    if path.is_absolute() or path.exists():
-        return path
-    return project_dir / path
-
-
-def _inspect_audio_wave(wav_path: Path) -> dict[str, Any]:
-    """Inspect and measure technical properties of a WAV file."""
-    if not wav_path.exists() or wav_path.stat().st_size == 0:
-        return {"valid": False, "error": "File missing or empty"}
-
-    try:
-        with wave.open(str(wav_path), "rb") as wf:
-            channels = wf.getnchannels()
-            sample_width = wf.getsampwidth()
-            framerate = wf.getframerate()
-            n_frames = wf.getnframes()
-            duration_s = n_frames / float(framerate) if framerate > 0 else 0.0
-
-            if n_frames == 0:
-                return {"valid": False, "error": "Zero frames in audio"}
-
-            raw_bytes = wf.readframes(n_frames)
-
-        # 16-bit PCM inspection
-        peak_amp = 0.0
-        clipping_count = 0
-        total_samples = 0
-        sum_sq = 0.0
-        silent_samples = 0
-        max_silent_run = 0
-        current_silent_run = 0
-
-        if sample_width == 2:
-            num_samples = len(raw_bytes) // 2
-            samples = struct.unpack(f"<{num_samples}h", raw_bytes[: num_samples * 2])
-            total_samples = len(samples)
-            for s in samples:
-                norm = abs(s) / 32768.0
-                if norm > peak_amp:
-                    peak_amp = norm
-                if norm >= 0.999:
-                    clipping_count += 1
-                sum_sq += norm * norm
-                if norm < 0.005:  # silence threshold (-46 dBFS)
-                    current_silent_run += 1
-                    silent_samples += 1
-                    if current_silent_run > max_silent_run:
-                        max_silent_run = current_silent_run
-                else:
-                    current_silent_run = 0
-
-        rms = (sum_sq / total_samples) ** 0.5 if total_samples > 0 else 0.0
-        import math
-        rms_dbfs = 20 * math.log10(max(rms, 1e-6))
-        # Approximate LUFS from RMS with standard calibration offset
-        approx_lufs = round(rms_dbfs - 0.5, 2)
-        max_silence_s = (max_silent_run / float(framerate * channels)) if framerate > 0 else 0.0
-
-        return {
-            "valid": True,
-            "duration_ms": round(duration_s * 1000.0, 1),
-            "sample_rate": framerate,
-            "channels": channels,
-            "sample_width": sample_width,
-            "peak_amplitude": round(peak_amp, 4),
-            "clipping_count": clipping_count,
-            "approx_lufs": approx_lufs,
-            "max_silence_s": round(max_silence_s, 2),
-        }
-    except Exception as exc:
-        return {"valid": False, "error": str(exc)}
 
 
 class ProductionValidationService:
