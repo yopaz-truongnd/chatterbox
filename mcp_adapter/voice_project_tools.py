@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from typing import Any, Callable
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +91,21 @@ def _execute_rest_request(
         return {"detail": f"Failed to execute local request: {str(exc)}"}
 
 
-def _handle_response(res: dict, project_id: str | None = None) -> dict:
+def _handle_response(res: dict | list, project_id: str | None = None) -> dict:
     """Safely inspect and format REST response dictionary into MCP envelope."""
+    if isinstance(res, list):
+        return _success_content(res)
     if res.get("error"):
         err = res["error"]
         msg = err.get("message", "Error") if isinstance(err, dict) else str(err)
         code = err.get("code", "ERROR") if isinstance(err, dict) else "ERROR"
-        return _error_content(msg, error_code=code, project_id=project_id)
+        details = err.get("details", {}) if isinstance(err, dict) else {}
+        if isinstance(err, dict):
+            details = {
+                **details,
+                **{key: err[key] for key in ("workflow_id", "operation_id", "retryable") if key in err},
+            }
+        return _error_content(msg, error_code=code, project_id=project_id, details=details)
     if "detail" in res and not res.get("id"):
         return _error_content(str(res["detail"]), project_id=project_id)
     return _success_content(res)
@@ -113,8 +122,13 @@ def handle_voice_project_tool(
     if not name.startswith("chatterbox_voice_"):
         return None
 
-    # 1. Project Creation & Summary
-    if name == "chatterbox_voice_project_create":
+    # 1. Project Discovery, Creation & Summary
+    if name == "chatterbox_voice_projects":
+        query = urlencode({key: args[key] for key in ("limit", "language", "stage") if args.get(key) is not None})
+        path = "/api/v1/voice-projects" + (f"?{query}" if query else "")
+        return _handle_response(_execute_rest_request(request_fn, "GET", path))
+
+    elif name == "chatterbox_voice_project_create":
         script_text = args.get("script_text", "").strip()
         if not script_text:
             return _error_content("Field 'script_text' must not be empty.", error_code="VALIDATION_ERROR")
@@ -210,6 +224,13 @@ def handle_voice_project_tool(
         return _handle_response(res, project_id=project_id)
 
     # 5. Operation Job Tracking & Cancellation
+    elif name == "chatterbox_voice_jobs":
+        project_id = args.get("project_id", "").strip()
+        if not project_id:
+            return _error_content("Field 'project_id' is required.", error_code="VALIDATION_ERROR")
+        query = urlencode({"project_id": project_id, **({"limit": args["limit"]} if args.get("limit") is not None else {})})
+        return _handle_response(_execute_rest_request(request_fn, "GET", f"/api/v1/voice-project-jobs?{query}"), project_id)
+
     elif name == "chatterbox_voice_job_status":
         job_id = args.get("job_id", "").strip()
         if not job_id:
@@ -242,11 +263,23 @@ def handle_voice_project_tool(
         res = _execute_rest_request(request_fn, "POST", "/api/v1/voice-workflows", data=payload)
         return _handle_response(res)
 
+    elif name == "chatterbox_voice_workflows":
+        query = urlencode({"limit": args["limit"]}) if args.get("limit") is not None else ""
+        path = "/api/v1/voice-workflows" + (f"?{query}" if query else "")
+        return _handle_response(_execute_rest_request(request_fn, "GET", path))
+
     elif name == "chatterbox_voice_workflow_status":
         workflow_id = args.get("workflow_id", "").strip()
         if not workflow_id:
             return _error_content("Field 'workflow_id' is required.", error_code="VALIDATION_ERROR")
         res = _execute_rest_request(request_fn, "GET", f"/api/v1/voice-workflows/{workflow_id}")
+        return _handle_response(res)
+
+    elif name == "chatterbox_voice_next_action":
+        workflow_id = args.get("workflow_id", "").strip()
+        if not workflow_id:
+            return _error_content("Field 'workflow_id' is required.", error_code="VALIDATION_ERROR")
+        res = _execute_rest_request(request_fn, "GET", f"/api/v1/voice-workflows/{workflow_id}/next-action")
         return _handle_response(res)
 
     elif name == "chatterbox_voice_workflow_resume":
@@ -260,6 +293,11 @@ def handle_voice_project_tool(
         workflow_id = args.get("workflow_id", "").strip()
         if not workflow_id:
             return _error_content("Field 'workflow_id' is required.", error_code="VALIDATION_ERROR")
+        if args.get("human_confirmed") is not True:
+            return _error_content(
+                "Explicit confirmation from the human is required for workflow approval.",
+                error_code="HUMAN_APPROVAL_REQUIRED",
+            )
         payload = {
             key: args.get(key)
             for key in ("action", "approved", "artifact_id", "artifact_sha256")

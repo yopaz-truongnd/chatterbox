@@ -28,6 +28,7 @@ class TestVoiceProjectMCP(unittest.TestCase):
         tool_names = [t["name"] for t in tools]
 
         expected_tools = [
+            "chatterbox_voice_projects",
             "chatterbox_voice_project_create",
             "chatterbox_voice_project_get",
             "chatterbox_voice_plan",
@@ -35,6 +36,7 @@ class TestVoiceProjectMCP(unittest.TestCase):
             "chatterbox_voice_render",
             "chatterbox_voice_render_beat",
             "chatterbox_voice_qc",
+            "chatterbox_voice_jobs",
             "chatterbox_voice_job_status",
             "chatterbox_voice_job_cancel",
             "chatterbox_voice_prepare_mix",
@@ -44,7 +46,9 @@ class TestVoiceProjectMCP(unittest.TestCase):
             "chatterbox_voice_finalize",
             "chatterbox_voice_artifacts",
             "chatterbox_voice_produce",
+            "chatterbox_voice_workflows",
             "chatterbox_voice_workflow_status",
+            "chatterbox_voice_next_action",
             "chatterbox_voice_workflow_resume",
             "chatterbox_voice_workflow_approve",
             "chatterbox_voice_workflow_cancel",
@@ -52,6 +56,109 @@ class TestVoiceProjectMCP(unittest.TestCase):
 
         for expected in expected_tools:
             self.assertIn(expected, tool_names)
+
+    def test_mcp_discovery_exposes_persisted_recovery_state(self):
+        calls = []
+
+        def request_fn(path, method="GET", data=None):
+            calls.append((method, path, data))
+            if path.startswith("/api/v1/voice-project-jobs"):
+                return [{"id": "op_1", "status": "running", "progress_percent": 42}]
+            return [{"id": "persisted", "status": "interrupted"}]
+
+        projects = handle_voice_project_tool(
+            "chatterbox_voice_projects", {"limit": 5, "stage": "RENDERED"}, request_fn=request_fn
+        )
+        workflows = handle_voice_project_tool(
+            "chatterbox_voice_workflows", {"limit": 5}, request_fn=request_fn
+        )
+        jobs = handle_voice_project_tool(
+            "chatterbox_voice_jobs", {"project_id": "resume_me", "limit": 10}, request_fn=request_fn
+        )
+
+        self.assertTrue(all(not result["isError"] for result in (projects, workflows, jobs)))
+        self.assertEqual(
+            calls,
+            [
+                ("GET", "/api/v1/voice-projects?limit=5&stage=RENDERED", None),
+                ("GET", "/api/v1/voice-workflows?limit=5", None),
+                ("GET", "/api/v1/voice-project-jobs?project_id=resume_me&limit=10", None),
+            ],
+        )
+        job_payload = json.loads(jobs["content"][0]["text"])[0]
+        self.assertEqual(job_payload["id"], "op_1")
+        self.assertEqual(job_payload["status"], "running")
+
+    def test_mcp_workflow_approval_requires_explicit_human_confirmation(self):
+        calls = []
+
+        def request_fn(path, method="GET", data=None):
+            calls.append((method, path, data))
+            return {"workflow_id": "wf_1", "status": "running"}
+
+        args = {
+            "workflow_id": "wf_1",
+            "action": "approve_final_audio",
+            "approved": True,
+            "artifact_id": "master_wav",
+            "artifact_sha256": "abc123",
+        }
+        denied = handle_voice_project_tool(
+            "chatterbox_voice_workflow_approve", args, request_fn=request_fn
+        )
+        self.assertTrue(denied["isError"])
+        self.assertEqual(
+            json.loads(denied["content"][0]["text"])["error"]["code"],
+            "HUMAN_APPROVAL_REQUIRED",
+        )
+        self.assertEqual(calls, [])
+
+        approved = handle_voice_project_tool(
+            "chatterbox_voice_workflow_approve",
+            {**args, "human_confirmed": True},
+            request_fn=request_fn,
+        )
+        self.assertFalse(approved["isError"])
+        self.assertEqual(calls[0][2]["artifact_sha256"], "abc123")
+        self.assertNotIn("human_confirmed", calls[0][2])
+
+    def test_mcp_next_action_is_a_thin_authoritative_rest_adapter(self):
+        calls = []
+
+        def request_fn(path, method="GET", data=None):
+            calls.append((method, path, data))
+            return {"current_state": "waiting_for_human", "next_action": "request_narration_approval"}
+
+        response = handle_voice_project_tool(
+            "chatterbox_voice_next_action", {"workflow_id": "wf_resume"}, request_fn=request_fn
+        )
+
+        self.assertFalse(response["isError"])
+        self.assertEqual(calls, [("GET", "/api/v1/voice-workflows/wf_resume/next-action", None)])
+
+    def test_mcp_preserves_structured_workflow_error_semantics(self):
+        response = handle_voice_project_tool(
+            "chatterbox_voice_workflow_approve",
+            {
+                "workflow_id": "wf_error",
+                "action": "approve_final_audio",
+                "approved": True,
+                "human_confirmed": True,
+            },
+            request_fn=lambda *args, **kwargs: {"error": {
+                "code": "INVALID_ARTIFACT_SHA",
+                "message": "changed",
+                "workflow_id": "wf_error",
+                "retryable": False,
+                "details": {},
+            }},
+        )
+
+        payload = json.loads(response["content"][0]["text"])["error"]
+        self.assertTrue(response["isError"])
+        self.assertEqual(payload["code"], "INVALID_ARTIFACT_SHA")
+        self.assertEqual(payload["details"]["workflow_id"], "wf_error")
+        self.assertFalse(payload["details"]["retryable"])
 
     def test_mcp_produce_maps_top_level_policy_fields(self):
         captured = {}

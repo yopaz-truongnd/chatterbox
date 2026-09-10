@@ -1,108 +1,101 @@
-# Chatterbox Voice Director — Workflow & Integration Guide (Phases 11–15)
+# Voice Director Production Guide
 
-## 1. Architecture Overview
-
-```text
-  AI Agent (Director / Orchestrator)
-        │                         │
-  (MCP Tools)               (REST API)
-        │                         │
-        └────────────►◄───────────┘
-                      │
-           FastAPI Server Runtime
-                      │
-            VoiceProjectService
-     ┌────────────────┼────────────────┐
-     ▼                ▼                ▼
- Planning & QC   Mix & Master   Deliverable Export
-(Whisper Critic) (Pure Python)   (FINAL.wav + YAML)
-```
-
-## 2. End-to-End Autonomous Pipeline
+## Architecture
 
 ```text
-User Script
-  │
-  ├─► POST /api/v1/voice-workflows (or chatterbox_voice_produce)
-  │
-  ├─► Step 1: CREATE_PROJECT -> Initializes workspace in projects/{id}/
-  │
-  ├─► Step 2: PLAN           -> Analyzes story beats, voice plan, sound direction & critic
-  │
-  ├─► Step 3: CHECK_RESOURCES-> Resolves SFX/Ambience and pronunciation overrides
-  │     │
-  │     └─► [HUMAN ACTION GATE]: if missing required proper nouns -> pauses with WAITING_FOR_HUMAN
-  │
-  ├─► Step 4: RENDER         -> Per-beat synthesis via DefaultJobManagerGateway & Voice QC
-  │     │
-  │     └─► [HUMAN ACTION GATE]: if audio fails QC -> pauses for human review
-  │
-  ├─► Step 5: PREPARE_MIX    -> Computes deterministic MixPlan with exact WAV durations & beat pauses
-  │
-  ├─► Step 6: MIX            -> Pure Python 16-bit PCM multi-track audio mix to mix/premaster.wav
-  │
-  ├─► Step 7: MASTER         -> LUFS loudness normalization & dynamics peak limiter to mix/master.wav
-  │
-  ├─► Step 8: EXPORT         -> Packages exports/FINAL.wav and writes export-manifest.yaml
-  │
-  └─► Workflow State = COMPLETED
+Human / AI Agent
+  ├─ Director Console → REST
+  └─ Voice Director Skill → MCP
+                         ↓
+VoiceProjectWorkflowService / VoiceProjectService
+DirectorReviewService / DirectorRevisionService
+                         ↓
+Shared audio domain → local Chatterbox runtime
 ```
 
-## 3. REST API Reference
+REST, MCP, CLI, and the browser are adapters. Project, workflow, operation,
+revision, approval, and artifact state remain authoritative in application
+services and persisted stores. Server services never call their own REST API.
 
-### Voice Projects (`/api/v1/voice-projects`)
-- `POST /api/v1/voice-projects` — Create project workspace.
-- `GET /api/v1/voice-projects/{project_id}` — Get agent-friendly summary.
-- `PUT /api/v1/voice-projects/{project_id}/script` — Update script text (invalidates downstream artifacts).
-- `POST /api/v1/voice-projects/{project_id}/plan` — Trigger story analysis and planning (202 Accepted).
-- `POST /api/v1/voice-projects/{project_id}/resources/check` — Check audio assets and pronunciations (202 Accepted).
-- `POST /api/v1/voice-projects/{project_id}/render` — Trigger narration synthesis and Voice QC (202 Accepted, strict gate).
-- `POST /api/v1/voice-projects/{project_id}/beats/{beat_id}/render` — Rerender single beat (202 Accepted).
-- `POST /api/v1/voice-projects/{project_id}/evaluate` — Rerun QC evaluations (202 Accepted).
-- `POST /api/v1/voice-projects/{project_id}/mix/prepare` — Build MixPlan (202 Accepted).
-- `GET /api/v1/voice-projects/{project_id}/mix-plan` — Get MixPlan artifact.
-- `POST /api/v1/voice-projects/{project_id}/mix` — Execute multi-track audio mixing (202 Accepted).
-- `POST /api/v1/voice-projects/{project_id}/master` — Execute dynamics mastering (202 Accepted).
-- `POST /api/v1/voice-projects/{project_id}/export` — Package deliverables and manifest (202 Accepted).
-- `POST /api/v1/voice-projects/{project_id}/finalize` — Combined pipeline: prepare -> mix -> master -> export (202 Accepted).
-- `GET /api/v1/voice-projects/{project_id}/artifacts` — List all deliverables and artifacts.
-- `GET /api/v1/voice-projects/{project_id}/artifacts/{artifact_id}` — Download audio or plan artifact.
+## Production lifecycle
 
-### Asynchronous Operations (`/api/v1/voice-project-jobs`)
-- `GET /api/v1/voice-project-jobs/{job_id}` — Get operation status and progress.
-- `POST /api/v1/voice-project-jobs/{job_id}/cancel` — Cancel active operation.
+The workflow progresses through create, plan, resource check, render, evaluate,
+prepare mix, mix, master, approval, and export. Render, rerender, reproduce,
+mix, master, and export return operation IDs and run asynchronously. Poll the
+operation until `completed`, `failed`, `cancelled`, or `interrupted`; do not
+submit an equivalent operation while one is queued or running.
 
-### Autonomous Workflows (`/api/v1/voice-workflows`)
-- `POST /api/v1/voice-workflows` — Start autonomous produce workflow.
-- `GET /api/v1/voice-workflows/{workflow_id}` — Get workflow status, steps, and human gates.
-- `POST /api/v1/voice-workflows/{workflow_id}/resume` — Resume after human intervention.
-- `POST /api/v1/voice-workflows/{workflow_id}/cancel` — Cancel autonomous workflow.
+Default production TTS is local Chatterbox. Gemini is optional. The fake
+provider is accepted only in tests and explicit validation runs.
 
-## 4. MCP Tools Catalog (35 Tools Total)
+## Human gates
 
-### Voice & Project Tools (16 Tools)
-- `chatterbox_list_characters`, `chatterbox_generate_tts`, `chatterbox_get_job_status`, `chatterbox_download_audio`, `chatterbox_voice_conversion`, `chatterbox_evaluate_voice`
-- `chatterbox_prepare_project`, `chatterbox_answer_project_questions`, `chatterbox_confirm_requirements`, `chatterbox_generate_script`, `chatterbox_confirm_script`, `chatterbox_get_project`, `chatterbox_list_projects`, `chatterbox_confirm_project`, `chatterbox_render_project`, `chatterbox_get_events`
+Required resources stop the workflow until real pronunciations or managed asset
+IDs are supplied. Narration acceptance and final master approval cannot be
+bypassed with generic resume. Agents may summarize and recommend but must wait
+for an explicit current human decision.
 
-### Voice Project & Post-Production Tools (15 Tools)
-- `chatterbox_voice_project_create`
-- `chatterbox_voice_project_get`
-- `chatterbox_voice_plan`
-- `chatterbox_voice_check_resources`
-- `chatterbox_voice_render` (Strict: no public bypass)
-- `chatterbox_voice_render_beat`
-- `chatterbox_voice_qc`
-- `chatterbox_voice_job_status`
-- `chatterbox_voice_job_cancel`
-- `chatterbox_voice_prepare_mix`
-- `chatterbox_voice_mix`
-- `chatterbox_voice_master`
-- `chatterbox_voice_export`
-- `chatterbox_voice_finalize`
-- `chatterbox_voice_artifacts`
+Final approval sends `approve_final_audio`, `artifact_id=master_wav`, and the
+exact SHA-256 from the current `human_action`. The approved artifact ID and SHA
+are persisted on the master workflow step. A changed or rebuilt master no longer
+matches that approval and must be reviewed again. MCP additionally requires
+`human_confirmed=true`, which is an attestation of the current human decision,
+not a replacement for the server SHA check.
 
-### Autonomous Workflow Tools (4 Tools)
-- `chatterbox_voice_produce`
-- `chatterbox_voice_workflow_status`
-- `chatterbox_voice_workflow_resume`
-- `chatterbox_voice_workflow_cancel`
+## Recovery
+
+On re-entry, discover persisted projects and workflows, then inspect workflow,
+operations, review, revisions, and `chatterbox_voice_next_action`. A queued or
+running operation is monitored rather than duplicated. An interrupted workflow
+can be explicitly resumed. Pending revisions retain the server-computed
+`required_reproduction_steps`; timing-only revisions do not rerender narration
+unless those authoritative steps say otherwise.
+
+Browser refresh reconstructs Director Console state from REST. The console does
+not own stage, approval, revision impact, or artifact validity.
+
+## Artifact lineage and delivery
+
+`VoiceProjectService.verify_delivery_lineage()` is the canonical delivery gate.
+A final artifact is deliverable only when:
+
+- the MixPlan still matches selected attempts and resources;
+- premaster and master lineage files match their current inputs;
+- the export manifest references the current master SHA;
+- every exported file exists and matches its manifest SHA;
+- no pending revision invalidates exports; and
+- any required final approval matches the current master ID and SHA.
+
+Final artifact listing, download, Director Review, Director Console, and Agent
+delivery decisions use this rule. File existence alone is never sufficient.
+
+## Agent workflow
+
+Use the Voice Director skill loop: inspect → decide → act through MCP → observe.
+Start with `chatterbox_voice_projects`, `chatterbox_voice_workflows`, and
+`chatterbox_voice_jobs` when recovering context. Use
+`chatterbox_voice_next_action` before consequential actions. If its response has
+`requires_human=true`, stop and present `waiting_for`, `blocking_issue`, and the
+requested items.
+
+Review resources with `chatterbox_voice_missing_resources`, production state
+with `chatterbox_voice_review`, beats with `chatterbox_voice_review_beat`, and
+pending work with `chatterbox_voice_revisions`. Submit artistic changes only
+through revision tools and reproduce only the returned dependency path.
+
+## Director Console workflow
+
+The console supports project discovery, persisted operation polling, beat and
+attempt review, direction/timing revisions, resource resolution, human gates,
+mix/master inspection, and verified delivery. Download controls remain disabled
+for stale or unverified final artifacts. Interrupted workflows expose Resume;
+approval gates expose their specific review action instead.
+
+## Known limitations
+
+- Human confirmation is enforced by workflow state, exact artifact SHA, and MCP
+  attestation; identity and multi-user authorization are outside the local
+  single-user runtime.
+- Real local inference speed and memory use depend on the selected model and
+  hardware. Run the opt-in local production smoke test before release.
+- MP3 delivery requires FFmpeg; WAV remains available without it.

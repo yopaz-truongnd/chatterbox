@@ -1,6 +1,7 @@
 """Unit tests for Unified Autonomous Voice Workflow (Phase 15)."""
 
 import os
+import json
 from pathlib import Path
 import tempfile
 import threading
@@ -11,12 +12,14 @@ import yaml
 
 from services.voice_project_workflow import VoiceProjectWorkflowService
 from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
-from services.voice_project_models import InvalidProjectStateError
+from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError, LineageInvalidError, ProjectStatus
 from services.voice_project_models import MixPlanStaleError
 from services.tts.fake import FakeTTSProvider
 from services.tts.base import CancellationToken
 from services.voice_project_service import VoiceProjectService
 from services.voice_project_workflow_store import VoiceProjectWorkflowStore
+from services.voice_project_operations import VoiceProjectOperationManager
+from services.voice_project_store import VoiceProjectStore
 from services.production_event_store import ProductionEventStore
 
 
@@ -48,6 +51,9 @@ class TestVoiceWorkflow(unittest.TestCase):
         # Wait for background orchestration thread to complete all steps
         final_state = self._wait_for_workflow(state.workflow_id)
         self.assertEqual(final_state.status, WorkflowStatus.COMPLETED)
+        self.assertEqual(self.service.project_store.get_project_state("wf_happy_01").stage, ProjectStatus.COMPLETED)
+        summary = VoiceProjectService(store=self.service.project_store, provider_name="fake").get_project("wf_happy_01")
+        self.assertIn("verified deliverables", summary.suggested_action)
         self.assertIsNotNone(final_state.result)
         self.assertIn("artifacts", final_state.result)
         self.assertTrue(any(a["id"] == "final_wav" for a in final_state.result["artifacts"]))
@@ -74,6 +80,35 @@ class TestVoiceWorkflow(unittest.TestCase):
         self.assertTrue(self.service.project_store.project_exists(state.project_id))
         events = event_store.load_project_events(state.project_id)
         self.assertEqual(events[0]["event_type"], "workflow_started")
+
+    def test_delete_production_removes_workspace_workflows_and_operation_history(self):
+        root = Path(self.temp_dir.name)
+        project_store = VoiceProjectStore(root / "projects")
+        operation_manager = VoiceProjectOperationManager(operations_dir=root / "operations")
+        workflow_store = VoiceProjectWorkflowStore(root / "workflows")
+        service = VoiceProjectWorkflowService(
+            store=workflow_store,
+            project_store=project_store,
+            op_manager=operation_manager,
+        )
+        project_store.create_workspace("delete_me", "A short production.")
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_delete_me",
+            project_id="delete_me",
+            status=WorkflowStatus.COMPLETED,
+        ))
+        operation = operation_manager.submit("delete_me", "plan", lambda: {"ok": True})
+        for _ in range(100):
+            if operation_manager.get_operation(operation.id).status.value == "completed":
+                break
+            time.sleep(0.01)
+
+        result = service.delete_production("vwf_delete_me")
+
+        self.assertTrue(result["deleted"])
+        self.assertFalse(project_store.get_project_dir("delete_me").exists())
+        self.assertIsNone(workflow_store.get_workflow("vwf_delete_me"))
+        self.assertIsNone(operation_manager.get_operation(operation.id))
 
     def test_workflow_pauses_at_required_resource_human_gate(self):
         script = "Long ago the mysterious beast Qiongqi walked Mount Zhong."
@@ -134,6 +169,22 @@ class TestVoiceWorkflow(unittest.TestCase):
         completed_state = self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.COMPLETED,))
         self.assertEqual(completed_state.status, WorkflowStatus.COMPLETED)
         self.assertTrue(any(a["id"] == "final_wav" for a in completed_state.result["artifacts"]))
+        master_step = next(step for step in completed_state.steps if step.name == "master")
+        self.assertEqual(master_step.result_summary["approved_artifact_id"], "master_wav")
+        self.assertEqual(master_step.result_summary["approved_artifact_sha256"], approval_item["sha256"])
+        self.assertEqual(self.service.next_action(state.workflow_id).next_action, "deliver")
+
+        master_path.write_bytes(master_path.read_bytes() + b"changed-after-approval")
+        project_service = VoiceProjectService(store=self.service.project_store)
+        with self.assertRaises(LineageInvalidError):
+            project_service.verify_delivery_lineage(
+                state.project_id, workflow_state=self.service.get_workflow(state.workflow_id)
+            )
+        self.assertFalse(any(
+            item["id"] == "final_wav"
+            for item in project_service.list_artifacts(state.project_id)
+        ))
+        self.assertNotEqual(self.service.next_action(state.workflow_id).next_action, "deliver")
 
     def test_qc_always_runs_when_narration_requires_manual_acceptance(self):
         state = self.service.start_workflow(
@@ -176,7 +227,7 @@ class TestVoiceWorkflow(unittest.TestCase):
         master_path = self.service.project_store.get_project_dir("wf_changed_master") / "mix" / "master.wav"
         master_path.write_bytes(master_path.read_bytes() + b"changed")
 
-        with self.assertRaises(InvalidProjectStateError):
+        with self.assertRaises(InvalidArtifactShaError):
             self.service.approve_workflow(
                 state.workflow_id,
                 action="approve_final_audio",
@@ -186,6 +237,47 @@ class TestVoiceWorkflow(unittest.TestCase):
             )
 
         self.assertEqual(self.service.get_workflow(state.workflow_id).status, WorkflowStatus.WAITING_FOR_HUMAN)
+
+    def test_final_download_uses_canonical_lineage_gate(self):
+        from routers.voice_projects import download_project_artifact
+
+        state = self.service.start_workflow(
+            script_text="The morning sun rose gently over the calm green valley.",
+            project_id="wf_download_gate",
+            policy=WorkflowPolicy(provider="fake", require_final_approval=True),
+        )
+        waiting = self._wait_for_workflow(
+            state.workflow_id, target_statuses=(WorkflowStatus.WAITING_FOR_HUMAN,)
+        )
+        item = waiting.human_action["items"][0]
+        self.service.approve_workflow(
+            state.workflow_id,
+            action="approve_final_audio",
+            approved=True,
+            artifact_id=item["artifact_id"],
+            artifact_sha256=item["sha256"],
+        )
+        self._wait_for_workflow(state.workflow_id, target_statuses=(WorkflowStatus.COMPLETED,))
+        project_service = VoiceProjectService(store=self.service.project_store)
+
+        patches = (
+            mock.patch("routers.voice_projects.get_voice_project_store", return_value=self.service.project_store),
+            mock.patch("routers.voice_projects.get_voice_project_service", return_value=project_service),
+            mock.patch(
+                "services.voice_project_dependencies.get_voice_project_workflow_service",
+                return_value=self.service,
+            ),
+        )
+        with patches[0], patches[1], patches[2]:
+            response = download_project_artifact(state.project_id, "final_wav")
+            self.assertEqual(response.status_code, 200)
+
+            master = self.service.project_store.get_project_dir(state.project_id) / "mix" / "master.wav"
+            master.write_bytes(master.read_bytes() + b"stale")
+            rejected = download_project_artifact(state.project_id, "final_wav")
+
+        self.assertEqual(rejected.status_code, 409)
+        self.assertEqual(json.loads(rejected.body)["error"]["code"], "LINEAGE_INVALID")
 
     def test_terminal_state_cannot_be_overwritten(self):
         state = self.service.start_workflow(

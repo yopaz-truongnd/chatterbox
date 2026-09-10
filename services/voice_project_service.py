@@ -57,6 +57,7 @@ from services.voice_project_models import (
     HumanActionRequired,
     HumanActionType,
     InvalidProjectStateError,
+    LineageInvalidError,
     MixPlanStaleError,
     ResourceCheckResult,
     StaleArtifactError,
@@ -164,6 +165,8 @@ class VoiceProjectService:
             suggested_action = "Narration audio passed all QC gates and is ready for sound mixing (Phase 14)"
         elif state.stage == ProjectStatus.MIX_READY:
             suggested_action = "Project mix is fully prepared"
+        elif state.stage == ProjectStatus.COMPLETED:
+            suggested_action = "Production completed; verified deliverables are ready."
         elif state.stage == ProjectStatus.FAILED:
             suggested_action = f"Project failed: {state.error or 'Check error logs and retry'}"
 
@@ -486,6 +489,7 @@ class VoiceProjectService:
                 else:
                     final_stage = ProjectStatus.READY_TO_RENDER
 
+                state = self.store.get_project_state(project_id)
                 state.stage = final_stage
                 state.last_stable_stage = final_stage
                 state.error = None
@@ -575,6 +579,8 @@ class VoiceProjectService:
                     continue
 
                 for attempt in b_state.attempts:
+                    if not attempt.audio_path:
+                        continue
                     audio_path = Path(attempt.audio_path)
                     if not audio_path.is_absolute():
                         audio_path = proj_dir / audio_path
@@ -633,6 +639,7 @@ class VoiceProjectService:
             else:
                 final_stage = ProjectStatus.READY_TO_RENDER
 
+            state = self.store.get_project_state(project_id)
             state.stage = final_stage
             state.last_stable_stage = final_stage
             self.store.save_project_state(state)
@@ -904,6 +911,11 @@ class VoiceProjectService:
                     cancellation_token=cancellation_token,
                 )
 
+                if cancellation_token and cancellation_token.is_cancelled():
+                    state.stage = state.last_stable_stage
+                    self.store.save_project_state(state)
+                    return manifest
+
                 # Preserve reusable-library attribution and usage lineage for every
                 # ambience/SFX source that participated in the current MixPlan.
                 from services.asset_library_store import get_asset_library_store
@@ -927,11 +939,6 @@ class VoiceProjectService:
                     })
                 manifest.asset_licenses = list({item["asset_id"]: item for item in licensed}.values())
                 manifest.save_yaml(export_dir / "export-manifest.yaml")
-
-                if cancellation_token and cancellation_token.is_cancelled():
-                    state.stage = state.last_stable_stage
-                    self.store.save_project_state(state)
-                    return manifest
 
                 state.stage = ProjectStatus.COMPLETED
                 state.last_stable_stage = ProjectStatus.COMPLETED
@@ -1000,13 +1007,22 @@ class VoiceProjectService:
 
         return manifest
 
-    def list_artifacts(self, project_id: str) -> list[dict[str, Any]]:
+    def list_artifacts(
+        self,
+        project_id: str,
+        workflow_state: Any | None = None,
+    ) -> list[dict[str, Any]]:
         """List all generated deliverable audio and plan artifacts for a project."""
         self.store.validate_project_id(project_id)
         proj_dir = self.store.get_project_dir(project_id)
         artifacts: list[dict[str, Any]] = []
 
-        # Check exports directory
+        try:
+            verified = self.verify_delivery_lineage(project_id, workflow_state=workflow_state)
+        except (MixPlanStaleError, StaleArtifactError, InvalidProjectStateError):
+            verified = {}
+
+        # Final artifacts are discoverable only after canonical verification.
         export_manifest_path = proj_dir / "exports" / "export-manifest.yaml"
         if export_manifest_path.exists():
             try:
@@ -1015,7 +1031,7 @@ class VoiceProjectService:
                 manifest = ExportManifest.from_dict(m_data)
                 for art in manifest.artifacts:
                     art_file = proj_dir / art.file_path
-                    if art_file.exists():
+                    if verified.get(art_file.name) == art.sha256:
                         artifacts.append({
                             "id": art.artifact_id,
                             "type": art.artifact_type,
@@ -1027,19 +1043,6 @@ class VoiceProjectService:
                         })
             except Exception as e:
                 logger.warning("Failed to parse export manifest for '%s': %s", project_id, e)
-
-        # Check FINAL.wav directly if manifest wasn't present
-        final_wav = proj_dir / "exports" / "FINAL.wav"
-        if final_wav.exists() and not any(a["id"] == "final_wav" for a in artifacts):
-            artifacts.append({
-                "id": "final_wav",
-                "type": "final_wav",
-                "filename": "FINAL.wav",
-                "size_bytes": final_wav.stat().st_size,
-                "sha256": compute_file_sha256(final_wav),
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "download_url": f"/api/v1/voice-projects/{project_id}/artifacts/final_wav",
-            })
 
         # Check mix-plan.yaml
         mix_plan_path = proj_dir / "mix-plan.yaml"
@@ -1126,3 +1129,61 @@ class VoiceProjectService:
             "artifact_sha256": compute_file_sha256(artifact),
         }:
             raise MixPlanStaleError(f"{label} is stale relative to {source.name}; rebuild it before continuing.")
+
+    def verify_delivery_lineage(self, project_id: str, workflow_state: Any | None = None) -> dict[str, str]:
+        """Verify lineage, revision freshness, and any required SHA-bound approval."""
+        proj_dir = self.store.get_project_dir(project_id)
+        try:
+            if not (proj_dir / "mix-plan.yaml").exists():
+                raise LineageInvalidError("MixPlan is missing from the delivery lineage.")
+            self._load_valid_mix_plan(project_id)
+            mix_plan_path = proj_dir / "mix-plan.yaml"
+            premaster = proj_dir / "mix" / "premaster.wav"
+            master = proj_dir / "mix" / "master.wav"
+            self._verify_lineage(premaster, proj_dir / "mix" / "premaster.lineage", mix_plan_path, "Premaster")
+            self._verify_lineage(master, proj_dir / "mix" / "master.lineage", premaster, "Master")
+
+            manifest_path = proj_dir / "exports" / "export-manifest.yaml"
+            if not manifest_path.exists():
+                raise LineageInvalidError("Export manifest is missing.")
+            manifest = ExportManifest.from_dict(yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {})
+            master_sha = compute_file_sha256(master)
+            if manifest.source_master_sha256 != master_sha:
+                raise LineageInvalidError("Export manifest is stale relative to master.wav.")
+
+            from services.director_revision_store import DirectorRevisionStore
+            revisions = DirectorRevisionStore(self.store).get_state(project_id)
+            if revisions.pending_revision_ids or "exports" in revisions.invalidated_artifacts:
+                raise LineageInvalidError("Final artifacts are invalidated by pending revisions.")
+
+            from services.voice_project_dependencies import get_voice_project_workflow_service
+            workflow = workflow_state
+            if workflow is None:
+                workflows = get_voice_project_workflow_service().list_workflows(limit=200)
+                workflow = max(
+                    (item for item in workflows if item.project_id == project_id),
+                    key=lambda item: item.created_at,
+                    default=None,
+                )
+            if workflow and workflow.policy.require_final_approval:
+                master_step = next((step for step in workflow.steps if step.name == "master"), None)
+                approval = master_step.result_summary if master_step else {}
+                if (
+                    not approval.get("approved")
+                    or approval.get("approved_artifact_id") != "master_wav"
+                    or approval.get("approved_artifact_sha256") != master_sha
+                ):
+                    raise LineageInvalidError("Current master does not have a matching final approval.")
+
+            verified: dict[str, str] = {}
+            for artifact in manifest.artifacts:
+                artifact_path = proj_dir / artifact.file_path
+                if not artifact_path.exists() or compute_file_sha256(artifact_path) != artifact.sha256:
+                    raise LineageInvalidError(f"Export artifact '{artifact.artifact_id}' failed lineage verification.")
+                verified[artifact_path.name] = artifact.sha256
+            verified[manifest_path.name] = compute_file_sha256(manifest_path)
+            return verified
+        except LineageInvalidError:
+            raise
+        except (MixPlanStaleError, ValueError, OSError) as exc:
+            raise LineageInvalidError(str(exc)) from exc

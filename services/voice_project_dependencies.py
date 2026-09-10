@@ -105,10 +105,7 @@ def get_voice_project_service(
     actual_store = store or get_voice_project_store()
     actual_port = execution_port
     if actual_port is None:
-        try:
-            actual_port = resolve_server_tts_provider(provider_name, model=model, voice=voice)
-        except Exception:
-            actual_port = None
+        actual_port = resolve_server_tts_provider(provider_name, model=model, voice=voice)
 
     return VoiceProjectService(
         store=actual_store,
@@ -124,8 +121,14 @@ def get_voice_project_workflow_service() -> Any:
         # Local import avoids a module cycle: the workflow service uses the
         # project dependency functions above for its own composition.
         from services.voice_project_workflow import VoiceProjectWorkflowService
+        from services.voice_project_workflow_store import VoiceProjectWorkflowStore
 
-        _GLOBAL_WORKFLOW_SERVICE = VoiceProjectWorkflowService()
+        project_store = get_voice_project_store()
+        _GLOBAL_WORKFLOW_SERVICE = VoiceProjectWorkflowService(
+            store=VoiceProjectWorkflowStore(project_store.root_dir / "workflows"),
+            project_store=project_store,
+            op_manager=get_voice_project_operation_manager(),
+        )
     return _GLOBAL_WORKFLOW_SERVICE
 
 

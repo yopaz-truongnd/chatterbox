@@ -64,7 +64,9 @@ from services.director_revision_store import DirectorRevisionStore
 from services.voice_project_models import (
     BeatNotFoundError,
     ExportDependencyUnavailableError,
+    InvalidArtifactShaError,
     InvalidProjectStateError,
+    LineageInvalidError,
     MixPlanStaleError,
     ResourceBlockedError,
     StaleArtifactError,
@@ -138,12 +140,18 @@ def _handle_domain_error(exc: Exception, project_id: str | None = None) -> JSONR
     elif isinstance(exc, VoiceProjectAlreadyExists):
         status_code = status.HTTP_409_CONFLICT
         error_code = "PROJECT_ALREADY_EXISTS"
+    elif isinstance(exc, InvalidArtifactShaError):
+        status_code = status.HTTP_409_CONFLICT
+        error_code = "INVALID_ARTIFACT_SHA"
     elif isinstance(exc, InvalidProjectStateError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "INVALID_PROJECT_STATE"
     elif isinstance(exc, StaleArtifactError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "STALE_ARTIFACT"
+    elif isinstance(exc, LineageInvalidError):
+        status_code = status.HTTP_409_CONFLICT
+        error_code = "LINEAGE_INVALID"
     elif isinstance(exc, MixPlanStaleError):
         status_code = status.HTTP_409_CONFLICT
         error_code = "MIX_PLAN_STALE"
@@ -246,6 +254,24 @@ def get_voice_project(project_id: str):
     try:
         summary = service.get_project(project_id)
         return _format_summary_response(summary)
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id=project_id)
+
+
+@router.get(
+    "/api/v1/voice-projects/{project_id}/script",
+    summary="Get Immutable Source Script",
+)
+def get_voice_script(project_id: str):
+    """Return the canonical source text for read-only director presentation."""
+    store = get_voice_project_store()
+    try:
+        state = store.get_project_state(project_id)
+        return {
+            "project_id": project_id,
+            "script_text": store.read_source_script(project_id),
+            "sha256": state.artifacts.source_sha256,
+        }
     except Exception as exc:
         return _handle_domain_error(exc, project_id=project_id)
 
@@ -807,6 +833,8 @@ def download_project_artifact(project_id: str, artifact_id: str):
         if not store.project_exists(project_id):
             raise VoiceProjectNotFound(f"Project '{project_id}' not found.")
         proj_dir = store.get_project_dir(project_id).resolve()
+        if artifact_id in {"final_wav", "final_mp3", "export_manifest"}:
+            get_voice_project_service(store=store).verify_delivery_lineage(project_id)
 
         # Map known artifact IDs to relative paths
         artifact_map = {
@@ -861,6 +889,28 @@ def download_project_artifact(project_id: str, artifact_id: str):
 # =========================================================
 
 
+def _format_operation(op) -> VoiceProjectJobResponse:
+    return VoiceProjectJobResponse(
+        id=op.id, project_id=op.project_id, operation=op.operation,
+        status=op.status.value if hasattr(op.status, "value") else str(op.status),
+        stage=op.stage, beat_id=op.beat_id, child_job_id=op.child_job_id,
+        progress_percent=op.progress_percent, message=op.message,
+        created_at=op.created_at, updated_at=op.updated_at,
+        result=op.result, error=op.error,
+    )
+
+
+@router.get(
+    "/api/v1/voice-project-jobs",
+    response_model=list[VoiceProjectJobResponse],
+    summary="List Operation Jobs",
+)
+def list_voice_project_jobs(project_id: str | None = None, limit: int = Query(default=20, ge=1, le=100)):
+    """List persisted operations for refresh-safe orchestration clients."""
+    operations = get_voice_project_operation_manager().list_operations(project_id=project_id, limit=limit)
+    return [_format_operation(op) for op in operations]
+
+
 @router.get(
     "/api/v1/voice-project-jobs/{job_id}",
     response_model=VoiceProjectJobResponse,
@@ -876,21 +926,7 @@ def get_voice_project_job(job_id: str):
             detail=f"Voice project operation job '{job_id}' not found.",
         )
 
-    return VoiceProjectJobResponse(
-        id=op.id,
-        project_id=op.project_id,
-        operation=op.operation,
-        status=op.status.value if hasattr(op.status, "value") else str(op.status),
-        stage=op.stage,
-        beat_id=op.beat_id,
-        child_job_id=op.child_job_id,
-        progress_percent=op.progress_percent,
-        message=op.message,
-        created_at=op.created_at,
-        updated_at=op.updated_at,
-        result=op.result,
-        error=op.error,
-    )
+    return _format_operation(op)
 
 
 @router.post(

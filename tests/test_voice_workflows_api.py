@@ -12,9 +12,31 @@ from services.voice_project_workflow_models import (
     WorkflowStatus,
     WorkflowStep,
 )
+from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError
 
 
 class TestVoiceWorkflowsAPI(TestCase):
+    def test_list_returns_persisted_workflows_for_console(self):
+        states = [
+            VoiceWorkflowState(
+                workflow_id="vwf_console",
+                project_id="console_project",
+                status=WorkflowStatus.WAITING_FOR_HUMAN,
+                policy=WorkflowPolicy(provider="local", model="turbo"),
+                human_action={"action_type": "narration_acceptance"},
+            )
+        ]
+        with patch("routers.voice_workflows.get_voice_project_workflow_service") as get_service:
+            get_service.return_value.list_workflows.return_value = states
+            with TestClient(api_app.app) as client:
+                response = client.get("/api/v1/voice-workflows?limit=25")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()[0]["workflow_id"], "vwf_console")
+        self.assertEqual(response.json()[0]["policy"]["model"], "turbo")
+        self.assertEqual(response.json()[0]["human_action"]["action_type"], "narration_acceptance")
+        get_service.return_value.list_workflows.assert_called_once_with(limit=25)
+
     def test_create_preserves_policy_and_step_operation_progress(self):
         policy = WorkflowPolicy(
             provider="fake",
@@ -76,6 +98,25 @@ class TestVoiceWorkflowsAPI(TestCase):
 
         self.assertTrue(all(response.status_code == 200 for response in responses))
         self.assertTrue(all(response.json()["status"] == "running" for response in responses))
+
+    def test_workflow_errors_keep_stable_rest_semantics(self):
+        with patch("routers.voice_workflows.get_voice_project_workflow_service") as get_service:
+            get_service.return_value.approve_workflow.side_effect = InvalidArtifactShaError("changed")
+            get_service.return_value.resume_workflow.side_effect = InvalidProjectStateError(
+                "requires an explicit approval decision"
+            )
+            with TestClient(api_app.app) as client:
+                approval = client.post(
+                    "/api/v1/voice-workflows/wf_error/approve",
+                    json={"action": "approve_final_audio", "approved": True},
+                )
+                resume = client.post("/api/v1/voice-workflows/wf_error/resume")
+
+        self.assertEqual(approval.status_code, 409)
+        self.assertEqual(approval.json()["error"]["code"], "INVALID_ARTIFACT_SHA")
+        self.assertEqual(approval.json()["error"]["workflow_id"], "wf_error")
+        self.assertFalse(approval.json()["error"]["retryable"])
+        self.assertEqual(resume.json()["error"]["code"], "HUMAN_APPROVAL_REQUIRED")
 
 
 if __name__ == "__main__":

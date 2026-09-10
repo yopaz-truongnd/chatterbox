@@ -6,7 +6,7 @@ Provides autonomous multi-step orchestration endpoints for end-to-end audio prod
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
 from schemas.voice_workflows import (
@@ -17,12 +17,29 @@ from schemas.voice_workflows import (
     WorkflowStepSchema,
 )
 from services.voice_project_dependencies import get_voice_project_workflow_service
-from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy
-from services.voice_project_models import InvalidProjectStateError
+from services.voice_project_workflow_models import (
+    VoiceOrchestrationDecision,
+    VoiceWorkflowState,
+    WorkflowPolicy,
+)
+from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["voice-workflows"])
+
+
+def _workflow_error(code: str, message: str, workflow_id: str, status_code: int = 409) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": {
+            "code": code,
+            "message": message,
+            "workflow_id": workflow_id,
+            "retryable": False,
+            "details": {},
+        }},
+    )
 
 
 def _format_workflow_response(state: VoiceWorkflowState) -> VoiceWorkflowResponse:
@@ -76,6 +93,17 @@ def create_voice_workflow(req: CreateVoiceWorkflowRequest):
 
 
 @router.get(
+    "/api/v1/voice-workflows",
+    response_model=list[VoiceWorkflowResponse],
+    summary="List Voice Workflows",
+)
+def list_voice_workflows(limit: int = Query(default=50, ge=1, le=200)):
+    """List persisted workflows so consoles can recover their server state."""
+    service = get_voice_project_workflow_service()
+    return [_format_workflow_response(item) for item in service.list_workflows(limit=limit)]
+
+
+@router.get(
     "/api/v1/voice-workflows/{workflow_id}",
     response_model=VoiceWorkflowResponse,
     summary="Get Voice Workflow Status",
@@ -92,6 +120,33 @@ def get_voice_workflow(workflow_id: str):
     return _format_workflow_response(state)
 
 
+@router.delete(
+    "/api/v1/voice-workflows/{workflow_id}",
+    summary="Delete Voice Production",
+)
+def delete_voice_workflow(workflow_id: str):
+    """Delete a production workspace, artifacts, workflows, and operation history."""
+    try:
+        return get_voice_project_workflow_service().delete_production(workflow_id)
+    except InvalidProjectStateError as exc:
+        return _workflow_error("OPERATION_ALREADY_RUNNING", str(exc), workflow_id)
+    except ValueError as exc:
+        return _workflow_error("WORKFLOW_NOT_FOUND", str(exc), workflow_id, status.HTTP_404_NOT_FOUND)
+
+
+@router.get(
+    "/api/v1/voice-workflows/{workflow_id}/next-action",
+    response_model=VoiceOrchestrationDecision,
+    summary="Inspect Authoritative Agent Next Action",
+)
+def get_voice_workflow_next_action(workflow_id: str):
+    """Return the next safe orchestration action without advancing workflow state."""
+    try:
+        return get_voice_project_workflow_service().next_action(workflow_id)
+    except ValueError as exc:
+        return _workflow_error("WORKFLOW_NOT_FOUND", str(exc), workflow_id, status.HTTP_404_NOT_FOUND)
+
+
 @router.post(
     "/api/v1/voice-workflows/{workflow_id}/resume",
     response_model=VoiceWorkflowResponse,
@@ -104,10 +159,8 @@ def resume_voice_workflow(workflow_id: str):
         state = service.resume_workflow(workflow_id)
         return _format_workflow_response(state)
     except InvalidProjectStateError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot resume workflow: {str(exc)}",
-        )
+        code = "HUMAN_APPROVAL_REQUIRED" if "explicit approval" in str(exc) else "INVALID_WORKFLOW_STATE"
+        return _workflow_error(code, f"Cannot resume workflow: {str(exc)}", workflow_id)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -132,8 +185,10 @@ def approve_voice_workflow(workflow_id: str, req: ApproveVoiceWorkflowRequest):
             artifact_sha256=req.artifact_sha256,
         )
         return _format_workflow_response(state)
+    except InvalidArtifactShaError as exc:
+        return _workflow_error("INVALID_ARTIFACT_SHA", str(exc), workflow_id)
     except InvalidProjectStateError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        return _workflow_error("HUMAN_APPROVAL_REQUIRED", str(exc), workflow_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 

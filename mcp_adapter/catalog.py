@@ -292,6 +292,18 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
     # Core Lifecycle Tools (Phase 13)
     # ---------------------------------------------------------
     {
+        "name": "chatterbox_voice_projects",
+        "description": "List authoritative Voice Project summaries for discovery and session recovery.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                "language": {"type": "string"},
+                "stage": {"type": "string"},
+            },
+        },
+    },
+    {
         "name": "chatterbox_voice_project_create",
         "description": "Create a new Voice Narration project with source script and configuration.",
         "inputSchema": {
@@ -439,6 +451,18 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "items": {"type": "string"},
                     "description": "Optional subset of beat IDs to re-evaluate.",
                 },
+            },
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_jobs",
+        "description": "List persisted operations for a project so an agent can recover active and recent work.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
             },
             "required": ["project_id"],
         },
@@ -644,6 +668,16 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "chatterbox_voice_workflows",
+        "description": "List persisted workflow state for discovery and interrupted-session recovery.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+            },
+        },
+    },
+    {
         "name": "chatterbox_voice_workflow_status",
         "description": "Check status, current step, human action gates, and results of an autonomous production workflow.",
         "inputSchema": {
@@ -653,6 +687,17 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                     "type": "string",
                     "description": "The workflow ID (e.g. 'vwf_xxx').",
                 },
+            },
+            "required": ["workflow_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_next_action",
+        "description": "Inspect the authoritative next safe Agent action for a persisted workflow without advancing it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string"},
             },
             "required": ["workflow_id"],
         },
@@ -699,8 +744,12 @@ VOICE_PROJECT_TOOL_SCHEMAS: list[dict] = [
                 "approved": {"type": "boolean"},
                 "artifact_id": {"type": "string"},
                 "artifact_sha256": {"type": "string"},
+                "human_confirmed": {
+                    "type": "boolean",
+                    "description": "Must be true only after the human explicitly approved this current gate.",
+                },
             },
-            "required": ["workflow_id", "action", "approved"],
+            "required": ["workflow_id", "action", "approved", "human_confirmed"],
         },
     },
 ]
@@ -866,6 +915,57 @@ RUNTIME_TOOL_SCHEMAS: list[dict] = [
                 "requested_formats": {"type": "array", "items": {"type": "string"}, "description": "Requested output audio formats."},
             },
             "required": ["project_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validate_runtime",
+        "description": "Launch full real-runtime production validation against local Chatterbox TTS.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "description": "TTS Provider ('local', 'gemini', 'fake')."},
+                "model": {"type": "string", "description": "TTS Model (e.g. 'nano', 'turbo')."},
+                "language": {"type": "string", "description": "Language code (default 'en')."},
+                "script_text": {"type": "string", "description": "Optional inline story script."},
+                "profile": {"type": "string", "description": "Optional managed validation profile ID."},
+                "output_formats": {"type": "array", "items": {"type": "string"}, "description": "Deliverable formats (wav, mp3)."},
+                "require_final_approval": {"type": "boolean", "description": "Whether final master approval is required."},
+                "require_narration_acceptance": {"type": "boolean", "description": "Whether narration review gate is required."},
+                "run_incremental_reproduction": {"type": "boolean", "description": "Test one-beat incremental reproduction."},
+            },
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_status",
+        "description": "Query progress and execution status of a production validation run.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_report",
+        "description": "Retrieve full sanitized diagnostics and metrics report for a production validation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
+        },
+    },
+    {
+        "name": "chatterbox_voice_validation_cancel",
+        "description": "Cancel an active production validation execution.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "validation_id": {"type": "string", "description": "Target validation ID."},
+            },
+            "required": ["validation_id"],
         },
     },
 ]

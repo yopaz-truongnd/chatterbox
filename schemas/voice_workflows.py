@@ -17,6 +17,10 @@ class WorkflowPolicySchema(BaseModel):
         default="local",
         description="Target TTS provider ('local', 'gemini', 'fake').",
     )
+    model: str | None = Field(
+        default=None,
+        description="Optional provider model override.",
+    )
     retry_budget: int = Field(
         default=2,
         ge=1,
