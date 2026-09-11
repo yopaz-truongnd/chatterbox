@@ -99,8 +99,9 @@ def handle_series_produce(args: dict[str, Any], request_fn: Callable | None = No
     if not series_id:
         return _error("series_id is required", code="INVALID_ARGUMENTS")
     try:
-        from services.voice_series_operations import SeriesPreflightError, VoiceSeriesOperations
-        ops = VoiceSeriesOperations()
+        from services.voice_series_operations import SeriesPreflightError
+        from services.voice_project_dependencies import get_voice_series_operations
+        ops = get_voice_series_operations()
         try:
             operation = ops.submit_series(
                 series_id=series_id,
@@ -138,8 +139,8 @@ def handle_series_cancel(args: dict[str, Any], request_fn: Callable | None = Non
     if not series_id:
         return _error("series_id is required", code="INVALID_ARGUMENTS")
     try:
-        from services.voice_series_operations import VoiceSeriesOperations
-        cancelled = VoiceSeriesOperations().cancel_series(series_id)
+        from services.voice_project_dependencies import get_voice_series_operations
+        cancelled = get_voice_series_operations().cancel_series(series_id)
         return _success({
             "series_id": series_id,
             "status": "cancelling" if cancelled else "idle",

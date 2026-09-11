@@ -158,3 +158,23 @@ def get_director_resource_service(store: VoiceProjectStore | None = None) -> Any
         get_voice_project_service(store=actual_store),
         workflow_store=get_voice_project_workflow_service().store,
     )
+
+
+def get_voice_series_operations(service: Any | None = None) -> Any:
+    from services.local_runtime_service import LocalRuntimeService
+    from services.production_event_store import get_production_event_store
+    from services.voice_series_operations import VoiceSeriesOperations
+    from services.voice_series_service import VoiceSeriesService
+    from services.voice_series_store import get_voice_series_store
+
+    project_store = get_voice_project_store()
+    series_store = get_voice_series_store()
+    return VoiceSeriesOperations(
+        service=service or VoiceSeriesService(store=series_store),
+        store=series_store,
+        proj_store=project_store,
+        wf_service=get_voice_project_workflow_service(),
+        event_store=get_production_event_store(),
+        operation_manager=get_voice_project_operation_manager(),
+        runtime_service=LocalRuntimeService(store=project_store),
+    )

@@ -7,15 +7,22 @@ startup recovery logic for interrupted operations and stale artifacts.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 from pathlib import Path
+import shutil
 from typing import Any
+
+import yaml
 
 from services.production_event_models import (
     ProjectProductionHealth,
     SeriesProductionHealth,
 )
+from services.render_models import ProjectStatus
+from services.voice_project_models import compute_file_sha256
+from services.voice_project_operations import OperationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +42,9 @@ def get_project_health(
 
     Gracefully degrades if individual sources are unavailable (e.g., no workflow yet).
     """
-    from services.voice_project_dependencies import (
-        get_voice_project_store,
-        get_voice_project_operation_manager,
-    )
-
-    store = project_store or get_voice_project_store()
-    op_manager = operation_manager or get_voice_project_operation_manager()
+    if project_store is None:
+        raise ValueError("project_store is required")
+    store = project_store
 
     # --- Project state ---
     project_status = "unknown"
@@ -60,7 +63,6 @@ def get_project_health(
             last_error = {"message": state.error, "code": "INTERNAL_ERROR"}
 
         # Artifact freshness: compare stored sha256 against disk reality
-        from services.voice_project_models import compute_file_sha256
         proj_dir = store.get_project_dir(project_id)
 
         artifacts_map = {
@@ -95,10 +97,9 @@ def get_project_health(
     # --- Active operation ---
     active_operation: str | None = None
     try:
-        ops = op_manager.list_operations(project_id=project_id, limit=10)
+        ops = operation_manager.list_operations(project_id=project_id, limit=10) if operation_manager else []
         if ops:
             latest = ops[0]
-            from services.voice_project_operations import OperationStatus
             if latest.status in (
                 OperationStatus.QUEUED,
                 OperationStatus.RUNNING,
@@ -125,12 +126,7 @@ def get_project_health(
 
     # --- Workflow state ---
     try:
-        if workflow_service is None:
-            from services.voice_project_dependencies import get_voice_project_workflow_service
-            workflow_service = get_voice_project_workflow_service()
-
-        from services.voice_project_workflow_models import WorkflowStatus
-        wf_list = workflow_service.list_workflows(project_id=project_id)
+        wf_list = workflow_service.list_workflows(project_id=project_id) if workflow_service else []
         if wf_list:
             # Most recent workflow first
             wf = wf_list[0]
@@ -171,12 +167,10 @@ def get_series_health(
     series_store: Any | None = None,
 ) -> SeriesProductionHealth:
     """Build a SeriesProductionHealth by aggregating health across all member episodes."""
-    from services.voice_project_dependencies import get_voice_project_store
-    from services.voice_series_store import get_voice_series_store
-    from services.render_models import ProjectStatus
-
-    p_store = project_store or get_voice_project_store()
-    s_store = series_store or get_voice_series_store()
+    if project_store is None or series_store is None:
+        raise ValueError("project_store and series_store are required")
+    p_store = project_store
+    s_store = series_store
 
     # Discover member episodes from series store if available
     episodes = []
@@ -262,6 +256,7 @@ def get_series_health(
 def recover_on_startup(
     project_store: Any,
     series_store: Any | None = None,
+    operation_manager: Any | None = None,
 ) -> dict[str, Any]:
     """Scan all projects at startup and recover inconsistent state.
 
@@ -293,9 +288,6 @@ def recover_on_startup(
         return report
 
     report["projects_scanned"] = len(all_projects)
-
-    from services.voice_project_models import compute_file_sha256
-    from services.render_models import ProjectStatus
 
     for project_id in all_projects:
         try:
@@ -358,7 +350,6 @@ def recover_on_startup(
                 manifest_entries: set[str] = set()
                 if manifest_path.exists():
                     try:
-                        import yaml
                         with open(manifest_path, "r", encoding="utf-8") as f:
                             manifest_data = yaml.safe_load(f) or {}
                         beats = manifest_data.get("beats", {})
@@ -396,10 +387,8 @@ def recover_on_startup(
     # 3. Mark stale running operations — handled by VoiceProjectOperationManager on init
     #    We log the report entries that were already marked INTERRUPTED.
     try:
-        from services.voice_project_dependencies import get_voice_project_operation_manager
-        op_manager = get_voice_project_operation_manager()
-        from services.voice_project_operations import OperationStatus
-        for op in op_manager.list_operations(limit=500):
+        operations = operation_manager.list_operations(limit=500) if operation_manager else []
+        for op in operations:
             if op.status == OperationStatus.INTERRUPTED:
                 report["operations_interrupted"].append(
                     {"operation_id": op.id, "project_id": op.project_id, "operation": op.operation}
@@ -425,7 +414,6 @@ def recover_on_startup(
 
 def _stage_to_progress(stage: Any) -> float:
     """Map a ProjectStatus stage to an approximate progress percentage."""
-    from services.render_models import ProjectStatus
     _STAGE_PROGRESS: dict[str, float] = {
         ProjectStatus.NEW.value: 0.0,
         ProjectStatus.PLANNING.value: 10.0,
@@ -455,7 +443,6 @@ def _collect_runtime_health() -> dict[str, Any]:
     """Collect non-sensitive runtime capability flags."""
     health: dict[str, Any] = {}
     try:
-        import shutil
         health["ffmpeg_available"] = shutil.which("ffmpeg") is not None
         health["whisper_available"] = _check_import("whisper")
         health["torch_available"] = _check_import("torch")
@@ -466,7 +453,6 @@ def _collect_runtime_health() -> dict[str, Any]:
 
 def _check_import(module_name: str) -> bool:
     """Check whether a Python module can be imported without loading it fully."""
-    import importlib.util
     return importlib.util.find_spec(module_name) is not None
 
 

@@ -35,7 +35,17 @@ def handle_voice_health(args: dict[str, Any], request_fn: Callable | None = None
         return _error("project_id is required", code="INVALID_ARGUMENTS")
     try:
         from services.production_health_service import get_project_health
-        health = get_project_health(project_id)
+        from services.voice_project_dependencies import (
+            get_voice_project_operation_manager,
+            get_voice_project_store,
+            get_voice_project_workflow_service,
+        )
+        health = get_project_health(
+            project_id,
+            project_store=get_voice_project_store(),
+            operation_manager=get_voice_project_operation_manager(),
+            workflow_service=get_voice_project_workflow_service(),
+        )
         return _success(health.to_dict())
     except Exception as exc:
         return _error(f"Failed to get health: {exc}", code="HEALTH_CHECK_FAILED")
@@ -78,7 +88,13 @@ def handle_voice_series_health(args: dict[str, Any], request_fn: Callable | None
         return _error("series_id is required", code="INVALID_ARGUMENTS")
     try:
         from services.production_health_service import get_series_health
-        health = get_series_health(series_id)
+        from services.voice_project_dependencies import get_voice_project_store
+        from services.voice_series_store import get_voice_series_store
+        health = get_series_health(
+            series_id,
+            project_store=get_voice_project_store(),
+            series_store=get_voice_series_store(),
+        )
         return _success(health.to_dict())
     except Exception as exc:
         return _error(f"Failed to get series health: {exc}", code="HEALTH_CHECK_FAILED")

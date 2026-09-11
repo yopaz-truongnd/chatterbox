@@ -13,12 +13,17 @@ from __future__ import annotations
 import concurrent.futures
 import os
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 import uuid
 import yaml
 
+from services.atomic_io import atomic_write_yaml
+from services.local_runtime_service import LocalRuntimeService
+from services.production_event_models import ProductionEvent, ProductionEventType
+from services.production_event_store import get_production_event_store
 from services.voice_project_models import InvalidProjectStateError, compute_file_sha256
 from services.voice_project_operations import (
     CancellationToken,
@@ -70,6 +75,7 @@ class VoiceSeriesOperations:
         wf_service: Any | None = None,
         event_store: Any | None = None,
         operation_manager: VoiceProjectOperationManager | None = None,
+        runtime_service: LocalRuntimeService | None = None,
     ) -> None:
         self.store = store or get_voice_series_store()
         self.service = service or VoiceSeriesService(store=self.store)
@@ -78,6 +84,7 @@ class VoiceSeriesOperations:
         self._wf_service = wf_service
         self._event_store = event_store
         self._operation_manager = operation_manager
+        self._runtime_service = runtime_service or LocalRuntimeService(store=proj_store)
 
     @staticmethod
     def _operation_scope(series_id: str) -> str:
@@ -85,8 +92,7 @@ class VoiceSeriesOperations:
 
     def _operations(self) -> VoiceProjectOperationManager:
         if self._operation_manager is None:
-            from services.voice_project_dependencies import get_voice_project_operation_manager
-            self._operation_manager = get_voice_project_operation_manager()
+            raise RuntimeError("operation_manager is required for submitted series operations")
         return self._operation_manager
 
     @staticmethod
@@ -111,14 +117,12 @@ class VoiceSeriesOperations:
         ]
         if not episodes:
             raise InvalidProjectStateError(f"No matching episodes to produce for series '{series_id}'.")
-        from services.local_runtime_service import LocalRuntimeService
-        runtime = LocalRuntimeService()
         errors = []
         for episode in episodes:
             if episode.status == EpisodeStatus.COMPLETED:
                 continue
             voice_bible, _, sound_bible, _ = self._episode_settings(series, episode)
-            errors.extend(issue for issue in runtime.run_production_preflight(
+            errors.extend(issue for issue in self._runtime_service.run_production_preflight(
                 episode.project_id,
                 provider=voice_bible.provider,
                 requested_formats=sound_bible.output_formats,
@@ -152,9 +156,9 @@ class VoiceSeriesOperations:
         cancellation_token: CancellationToken,
     ) -> dict[str, str]:
         """Verify and atomically publish one episode deliverable directory."""
-        from services.voice_project_dependencies import get_voice_project_store
-        proj_store = self._proj_store or get_voice_project_store()
-        proj_dir = proj_store.get_project_dir(episode.project_id)
+        if self._proj_store is None:
+            raise RuntimeError("proj_store is required for series packaging")
+        proj_dir = self._proj_store.get_project_dir(episode.project_id)
         exp_src_dir = proj_dir / "exports"
         if not exp_src_dir.exists():
             exp_src_dir = proj_dir / "output"
@@ -221,14 +225,7 @@ class VoiceSeriesOperations:
             "pronunciation-bible.yaml": series.pronunciation_bible.model_dump(),
         }
         for filename, document in documents.items():
-            target = series_dir / filename
-            temporary = series_dir / f".{filename}.{uuid.uuid4().hex}.tmp"
-            try:
-                temporary.write_text(yaml.safe_dump(document), encoding="utf-8")
-                os.replace(temporary, target)
-            finally:
-                if temporary.exists():
-                    temporary.unlink()
+            atomic_write_yaml(series_dir / filename, document)
 
     def produce_series(
         self,
@@ -260,21 +257,11 @@ class VoiceSeriesOperations:
         max_workers = min(series.production_policy.max_parallel_episodes, len(target_episodes))
         exp_root = Path(export_root or "exports")
 
-        from services.voice_project_dependencies import (
-            get_voice_project_service,
-            get_voice_project_store,
-            get_voice_project_workflow_service,
-        )
-        from services.production_event_models import ProductionEvent, ProductionEventType
-        from services.production_event_store import get_production_event_store
-        from services.local_runtime_service import LocalRuntimeService
-
         evt_store = self._event_store or get_production_event_store()
-        runtime_svc = LocalRuntimeService()
-
-        wf_service = self._wf_service or get_voice_project_workflow_service()
-        proj_service = self._proj_service or get_voice_project_service(provider_name=series.voice_bible.provider)
-        proj_store = self._proj_store or get_voice_project_store()
+        if self._wf_service is None or self._proj_store is None:
+            raise RuntimeError("proj_store and wf_service are required for series production")
+        wf_service = self._wf_service
+        proj_store = self._proj_store
 
         evt_store.append_series_event(ProductionEvent(
             series_id=series_id,
@@ -317,7 +304,7 @@ class VoiceSeriesOperations:
             )
 
             # 1. Mandatory Preflight Gate before scheduling
-            preflight_issues = runtime_svc.run_production_preflight(
+            preflight_issues = self._runtime_service.run_production_preflight(
                 ep.project_id,
                 provider=voice_bible.provider,
                 requested_formats=sound_bible.output_formats,
@@ -428,7 +415,6 @@ class VoiceSeriesOperations:
                         ))
                         return {"episode_id": ep.episode_id, "status": ep.status.value, "error": st.error}
 
-                    import time
                     time.sleep(0.05)
 
                 ep.status = EpisodeStatus.FAILED

@@ -149,6 +149,10 @@ class TestPhase17to20E2E(unittest.TestCase):
         proj_health = get_project_health(ep1_pid, project_store=self.proj_store)
         self.assertEqual(proj_health.project_id, ep1_pid)
 
-        series_health = get_series_health(series.series_id, series_store=self.series_store)
+        series_health = get_series_health(
+            series.series_id,
+            project_store=self.proj_store,
+            series_store=self.series_store,
+        )
         self.assertEqual(series_health.episode_count, 2)
         self.assertEqual(series_health.completed_count, 2)
