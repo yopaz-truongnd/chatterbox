@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from datetime import datetime, timezone
 import threading
-import uuid
 import yaml
 
+from services.atomic_io import atomic_write_yaml
 from services.director_review_models import DirectorRevisionEvent, DirectorRevisionState
 from services.voice_project_store import VoiceProjectStore
 
@@ -23,13 +23,7 @@ class DirectorRevisionStore:
 
     @staticmethod
     def _atomic_yaml(path: Path, data: dict) -> None:
-        pending = path.with_suffix(f".tmp_{uuid.uuid4().hex[:8]}.yaml")
-        try:
-            pending.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
-            pending.replace(path)
-        finally:
-            if pending.exists():
-                pending.unlink()
+        atomic_write_yaml(path, data)
 
     def list_events(self, project_id: str) -> list[DirectorRevisionEvent]:
         history_path, _ = self._paths(project_id)

@@ -18,9 +18,9 @@ import re
 import shutil
 import threading
 from typing import Any
-import uuid
 import yaml
 
+from services.atomic_io import atomic_write_text, atomic_write_yaml
 from services.director_critic import DirectorCritiqueResult
 from services.render_models import (
     ProjectArtifacts,
@@ -82,19 +82,12 @@ class VoiceProjectStore:
     @staticmethod
     def _atomic_write_text(file_path: Path, content: str) -> None:
         """Write string content atomically via temporary file and rename."""
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = file_path.with_name(f".tmp_{file_path.name}_{uuid.uuid4().hex[:8]}")
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        tmp_path.replace(file_path)
+        atomic_write_text(file_path, content)
 
     @staticmethod
     def _atomic_write_yaml(file_path: Path, data: dict[str, Any]) -> None:
         """Write dictionary as YAML atomically."""
-        yaml_content = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
-        VoiceProjectStore._atomic_write_text(file_path, yaml_content)
+        atomic_write_yaml(file_path, data)
 
     def project_exists(self, project_id: str) -> bool:
         """Check if a project workspace and state file exists."""

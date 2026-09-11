@@ -7,7 +7,6 @@ Provides SHA-256 deduplication and all CRUD operations for LibraryAsset records.
 from __future__ import annotations
 
 import os
-import tempfile
 import threading
 import fcntl
 from datetime import datetime, timezone
@@ -16,6 +15,7 @@ from typing import Any
 
 import yaml
 
+from services.atomic_io import atomic_write_yaml
 from services.asset_library_models import AssetCategory, LibraryAsset
 
 # Default index file location
@@ -45,20 +45,7 @@ def _load_index(index_path: Path) -> dict[str, Any]:
 
 def _save_index(index_path: Path, data: dict[str, Any]) -> None:
     """Atomically write the library index to YAML."""
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=str(index_path.parent), suffix=".tmp", prefix="library-index-"
-    )
-    try:
-        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-            yaml.safe_dump(data, fh, sort_keys=False, allow_unicode=True)
-        os.replace(tmp_path, str(index_path))
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    atomic_write_yaml(index_path, data)
 
 
 def _asset_to_dict(asset: LibraryAsset) -> dict[str, Any]:
