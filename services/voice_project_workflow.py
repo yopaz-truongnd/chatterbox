@@ -23,6 +23,12 @@ import time
 from typing import Any, Callable
 import uuid
 
+from services.director_resource_service import DirectorResourceService
+from services.director_review_service import DirectorReviewService
+from services.director_revision_store import DirectorRevisionStore
+from services.production_event_models import ProductionEvent, ProductionEventType
+from services.production_event_store import ProductionEventStore
+import services.production_event_store as production_event_store
 from services.render_models import ProjectStatus, RenderStatus
 from services.voice_project_dependencies import (
     get_voice_project_operation_manager,
@@ -35,6 +41,7 @@ from services.voice_project_models import (
     compute_file_sha256,
 )
 from services.voice_project_operations import OperationStatus, VoiceProjectOperationManager
+from services.voice_project_service import VoiceProjectService
 from services.voice_project_store import VoiceProjectStore
 from services.voice_project_workflow_models import (
     VoiceOrchestrationDecision,
@@ -66,11 +73,13 @@ class VoiceProjectWorkflowService:
         project_store: VoiceProjectStore | None = None,
         op_manager: VoiceProjectOperationManager | None = None,
         project_service: Any | None = None,
+        event_store: ProductionEventStore | None = None,
     ) -> None:
         self.store = store or VoiceProjectWorkflowStore()
         self.project_store = project_store or get_voice_project_store()
         self.op_manager = op_manager or get_voice_project_operation_manager()
         self.project_service = project_service
+        self.event_store = event_store
 
     def list_workflows(self, limit: int = 50) -> list[VoiceWorkflowState]:
         """Return persisted workflows for human-facing orchestration clients."""
@@ -210,7 +219,6 @@ class VoiceProjectWorkflowService:
         if state.status == WorkflowStatus.CANCELLED:
             return decision("stop", "The workflow was cancelled.", blocking_issue="workflow_cancelled")
 
-        from services.director_revision_store import DirectorRevisionStore
         revision_state = DirectorRevisionStore(self.project_store).get_state(state.project_id)
         if revision_state.pending_revision_ids:
             return decision(
@@ -223,8 +231,7 @@ class VoiceProjectWorkflowService:
             )
 
         try:
-            from services.director_review_service import DirectorReviewService
-            service = self.project_service or get_voice_project_service(store=self.project_store)
+            service = self.project_service or VoiceProjectService(store=self.project_store)
             review = DirectorReviewService(
                 self.project_store,
                 workflow_store=self.store,
@@ -681,7 +688,6 @@ class VoiceProjectWorkflowService:
                 if state.policy.pronunciation_overrides:
                     source_text = self.project_store.read_source_script(project_id).casefold()
                     current_plan = self.project_store.load_voice_plan(project_id)
-                    from services.director_resource_service import DirectorResourceService
                     resources = DirectorResourceService(service, workflow_store=self.store)
                     for term, phonetic in state.policy.pronunciation_overrides.items():
                         affected = [
@@ -972,7 +978,6 @@ class VoiceProjectWorkflowService:
 
             master_step = next((s for s in state.steps if s.name == WorkflowStepName.MASTER.value), None)
             revision_ids = (master_step.result_summary.get("revision_ids", []) if master_step else [])
-            from services.director_revision_store import DirectorRevisionStore
             revision_store = DirectorRevisionStore(self.project_store)
             pending_revision_ids = revision_store.get_state(project_id).pending_revision_ids
             satisfied_revision_ids = list(dict.fromkeys([*revision_ids, *pending_revision_ids]))
@@ -1034,9 +1039,7 @@ class VoiceProjectWorkflowService:
         self, state: VoiceWorkflowState, event_type: str, message: str, **details: Any
     ) -> None:
         try:
-            from services.production_event_models import ProductionEvent, ProductionEventType
-            from services.production_event_store import get_production_event_store
-            get_production_event_store().append_project_event(ProductionEvent(
+            (self.event_store or production_event_store.get_production_event_store()).append_project_event(ProductionEvent(
                 project_id=state.project_id,
                 workflow_id=state.workflow_id,
                 operation_id=details.pop("operation_id", None),

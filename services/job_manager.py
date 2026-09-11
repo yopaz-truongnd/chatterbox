@@ -17,6 +17,7 @@ from job_store import AudioJob, JobPhase, JobStatus, JobStore, JobType, delete_j
 from services.audio import load_and_resample_audio, merge_speech_segments, mix_background_music, save_audio_wav
 from services.inference import execute_model_inference, run_isolated_subprocess
 from services.batch_runner import BatchRunner
+from services.event_bus import event_bus
 from utils.platform_tools import clear_accelerator_cache
 
 logger = logging.getLogger("chatterbox.job_manager")
@@ -232,7 +233,6 @@ class JobManager:
 
                 # Emit lightweight event for listeners
                 try:
-                    from services.event_bus import event_bus
                     project_id = job.params.get("project_id") if isinstance(job.params, dict) else None
                     new_progress = getattr(job, "progress_percent", 0) or 0
                     new_phase = getattr(job, "phase", None)

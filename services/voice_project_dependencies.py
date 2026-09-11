@@ -171,8 +171,13 @@ def get_voice_series_service() -> Any:
     )
 
 
-def get_voice_series_operations(service: Any | None = None) -> Any:
+def get_local_runtime_service() -> Any:
     from services.local_runtime_service import LocalRuntimeService
+
+    return LocalRuntimeService(store=get_voice_project_store())
+
+
+def get_voice_series_operations(service: Any | None = None) -> Any:
     from services.production_event_store import get_production_event_store
     from services.voice_series_operations import VoiceSeriesOperations
     from services.voice_series_store import get_voice_series_store
@@ -186,5 +191,5 @@ def get_voice_series_operations(service: Any | None = None) -> Any:
         wf_service=get_voice_project_workflow_service(),
         event_store=get_production_event_store(),
         operation_manager=get_voice_project_operation_manager(),
-        runtime_service=LocalRuntimeService(store=project_store),
+        runtime_service=get_local_runtime_service(),
     )

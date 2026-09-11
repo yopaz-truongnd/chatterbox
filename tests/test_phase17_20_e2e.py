@@ -75,7 +75,7 @@ class TestPhase17to20E2E(unittest.TestCase):
             proj_service=self.proj_service,
             wf_service=self.wf_service,
         )
-        self.runtime_service = LocalRuntimeService()
+        self.runtime_service = LocalRuntimeService(store=self.proj_store)
 
     def tearDown(self):
         self.tmp.cleanup()

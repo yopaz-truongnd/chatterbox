@@ -33,6 +33,7 @@ from services.exceptions import (
     ProjectStateError,
     ValidationError,
 )
+from services.narration_planner import scan_pronunciation_candidates
 
 logger = logging.getLogger("chatterbox.project_planner")
 
@@ -361,8 +362,6 @@ def prepare_project(
         else "awaiting_answers"
     )
 
-    from services.narration_planner import scan_pronunciation_candidates
-
     questions = generate_question_batch(missing_req, missing_rec)
     pron_candidates = scan_pronunciation_candidates(cleaned_topic)
 
@@ -545,8 +544,6 @@ def confirm_requirements(project_id: str, confirmed: bool = True) -> dict[str, A
         topic=project.get("topic", ""),
         requirements=project["requirements"],
     )
-    from services.narration_planner import scan_pronunciation_candidates
-
     project["outline"] = outline
     project["script"] = script_obj
     project["pronunciation_candidates"] = scan_pronunciation_candidates(script_obj.get("full_text", ""))
@@ -595,8 +592,6 @@ def generate_script(
         custom_prompt=custom_prompt,
         script_text=script_text,
     )
-    from services.narration_planner import scan_pronunciation_candidates
-
     project["outline"] = outline
     project["script"] = script_obj
     project["pronunciation_candidates"] = scan_pronunciation_candidates(script_obj.get("full_text", ""))

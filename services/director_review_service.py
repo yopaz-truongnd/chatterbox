@@ -15,7 +15,7 @@ from services.director_review_models import (
 )
 from services.render_models import RenderStatus
 from services.resource_models import RequirementPriority, ResourceGap
-from services.voice_project_models import InvalidProjectStateError, compute_file_sha256
+from services.voice_project_models import BeatNotFoundError, InvalidProjectStateError, compute_file_sha256
 from services.voice_project_store import VoiceProjectStore
 from services.director_revision_store import DirectorRevisionStore
 
@@ -219,7 +219,6 @@ class DirectorReviewService:
         for beat in review.beats:
             if beat.beat_id == beat_id:
                 return beat
-        from services.voice_project_models import BeatNotFoundError
         raise BeatNotFoundError(f"Beat '{beat_id}' does not exist in project '{project_id}'.")
 
     def shopping_list(self, project_id: str) -> DirectorResourceShoppingList:

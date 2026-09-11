@@ -25,7 +25,7 @@ class TestRealLocalProduction(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.store = VoiceProjectStore(Path(self.tmp.name) / "projects")
-        self.runtime_service = LocalRuntimeService()
+        self.runtime_service = LocalRuntimeService(store=self.store)
 
     def tearDown(self):
         self.tmp.cleanup()

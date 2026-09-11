@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from services.narration_planner import compile_narration_plan
+
 
 def generate_english_outline_and_script(
     topic: str,
@@ -134,8 +136,6 @@ def segment_script_text(
     pronunciation_dict: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Segment an English script into semantic chunks of 1-3 sentences (8-25s each) and attach Narration Plans."""
-    from services.narration_planner import compile_narration_plan
-
     raw_scenes = re.split(r"(?=\[(?:Scene\s*\d+|Introduction|Deep Dive|Key Takeaways|Summary|Conclusion)[^\]]*\])", script_text.strip())
     if len(raw_scenes) == 1 and not raw_scenes[0].startswith("["):
         raw_scenes = [script_text]

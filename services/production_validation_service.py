@@ -53,6 +53,7 @@ from services.production_validation_metrics import (
 )
 from services.render_models import RenderStatus
 from services.tts.base import CancellationToken, ProgressCallback, TTSExecutionPort
+from services.tts.fake import FakeTTSProvider
 from services.voice_project_dependencies import (
     get_voice_project_operation_manager,
     get_voice_project_service,
@@ -419,7 +420,6 @@ class ProductionValidationService:
                 exec_port = resolve_server_tts_provider(provider_name, model=model_name, voice=reference_voice)
             except Exception as exc:
                 if provider_name in ("fake", "test"):
-                    from services.tts.fake import FakeTTSProvider
                     exec_port = FakeTTSProvider()
                 else:
                     logger.warning("Could not resolve server TTS provider: %s", exc)
