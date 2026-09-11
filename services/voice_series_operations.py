@@ -478,7 +478,11 @@ class VoiceSeriesOperations:
         total = len(ep_states)
         progress = (completed_count / total * 100.0) if total > 0 else 0.0
 
-        human_actions = self.service.get_review_queue(series_id)
+        human_actions = self.service.get_review_queue(
+            series_id,
+            wf_service=self._wf_service,
+            proj_store=self._proj_store,
+        )
 
         # The series is complete only when every episode, not merely the requested subset, is complete.
         all_current_episodes = self.store.list_episodes(series_id)

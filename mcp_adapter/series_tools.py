@@ -35,10 +35,10 @@ def handle_series_create(args: dict[str, Any], request_fn: Callable | None = Non
         return _error("title is required", code="INVALID_ARGUMENTS")
 
     try:
-        from services.voice_series_service import VoiceSeriesService
+        from services.voice_project_dependencies import get_voice_series_service
         from services.voice_series_models import SeriesVoiceBible, SeriesPronunciationBible, SeriesSoundBible
 
-        service = VoiceSeriesService()
+        service = get_voice_series_service()
         vb = SeriesVoiceBible(**args["voice_bible"]) if "voice_bible" in args else None
         pb = SeriesPronunciationBible(**args["pronunciation_bible"]) if "pronunciation_bible" in args else None
         sb = SeriesSoundBible(**args["sound_bible"]) if "sound_bible" in args else None
@@ -62,8 +62,8 @@ def handle_series_get(args: dict[str, Any], request_fn: Callable | None = None) 
     if not series_id:
         return _error("series_id is required", code="INVALID_ARGUMENTS")
     try:
-        from services.voice_series_service import VoiceSeriesService
-        service = VoiceSeriesService()
+        from services.voice_project_dependencies import get_voice_series_service
+        service = get_voice_series_service()
         series = service.get_series(series_id)
         episodes = service.list_episodes(series_id)
         data = series.model_dump(mode="json")
@@ -80,8 +80,8 @@ def handle_series_add_episode(args: dict[str, Any], request_fn: Callable | None 
     if not series_id or not project_id or not title:
         return _error("series_id, project_id, and title are required", code="INVALID_ARGUMENTS")
     try:
-        from services.voice_series_service import VoiceSeriesService
-        service = VoiceSeriesService()
+        from services.voice_project_dependencies import get_voice_series_service
+        service = get_voice_series_service()
         ep = service.add_episode(
             series_id=series_id,
             project_id=project_id,
@@ -126,8 +126,8 @@ def handle_series_review_queue(args: dict[str, Any], request_fn: Callable | None
     if not series_id:
         return _error("series_id is required", code="INVALID_ARGUMENTS")
     try:
-        from services.voice_series_service import VoiceSeriesService
-        service = VoiceSeriesService()
+        from services.voice_project_dependencies import get_voice_series_service
+        service = get_voice_series_service()
         actions = service.get_review_queue(series_id)
         return _success([a.model_dump(mode="json") for a in actions])
     except Exception as exc:
