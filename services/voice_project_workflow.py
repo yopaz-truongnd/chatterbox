@@ -224,7 +224,12 @@ class VoiceProjectWorkflowService:
 
         try:
             from services.director_review_service import DirectorReviewService
-            review = DirectorReviewService(self.project_store).get_review(state.project_id)
+            service = self.project_service or get_voice_project_service(store=self.project_store)
+            review = DirectorReviewService(
+                self.project_store,
+                workflow_store=self.store,
+                project_service=service,
+            ).get_review(state.project_id)
             requested = {f"final_{fmt}" for fmt in state.policy.output_formats}
             deliverables = [
                 item for item in review.artifact_status
@@ -241,7 +246,6 @@ class VoiceProjectWorkflowService:
                     waiting_for="valid_deliverable",
                     blocking_issue="stale_or_unverified_artifact",
                 )
-            service = self.project_service or get_voice_project_service(store=self.project_store)
             verified = service.verify_delivery_lineage(state.project_id, workflow_state=state)
             if any(
                 verified.get("FINAL." + item.artifact_id.removeprefix("final_")) != item.sha256
@@ -678,7 +682,7 @@ class VoiceProjectWorkflowService:
                     source_text = self.project_store.read_source_script(project_id).casefold()
                     current_plan = self.project_store.load_voice_plan(project_id)
                     from services.director_resource_service import DirectorResourceService
-                    resources = DirectorResourceService(service)
+                    resources = DirectorResourceService(service, workflow_store=self.store)
                     for term, phonetic in state.policy.pronunciation_overrides.items():
                         affected = [
                             beat for beat in current_plan.beats

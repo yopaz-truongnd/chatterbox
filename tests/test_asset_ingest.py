@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 import wave
 
 from services.resource_models import (
@@ -28,6 +29,7 @@ from services.resource_models import (
     ResourceUsage,
 )
 from services.asset_ingest import (
+    _read_audio_metadata,
     inspect_asset,
     ingest_asset,
     record_resource_usage,
@@ -81,6 +83,22 @@ class TestAssetIngestPhase6(unittest.TestCase):
         self.assertIn("ancient_temple_drone", inspection.suggested_intents)
         self.assertIn("temple", inspection.suggested_tags)
         self.assertTrue(len(inspection.hash_sha256) == 64)
+
+    def test_metadata_fallback_logs_failed_probes(self):
+        broken_wav = self.dir_path / "broken.wav"
+        broken_wav.write_bytes(b"not-a-wave" * 10)
+        audioread = mock.Mock()
+        audioread.audio_open.side_effect = RuntimeError("decoder failed")
+
+        with mock.patch("services.asset_ingest.wave.open", side_effect=wave.Error("bad header")), \
+             mock.patch.dict("sys.modules", {"audioread": audioread}), \
+             self.assertLogs("services.asset_ingest", level="DEBUG") as logs:
+            duration, sample_rate, channels = _read_audio_metadata(broken_wav)
+
+        self.assertGreaterEqual(duration, 0.5)
+        self.assertEqual((sample_rate, channels), (44100, 2))
+        self.assertIn("WAV metadata probe failed", logs.output[0])
+        self.assertIn("Audioread metadata probe failed", logs.output[1])
 
     def test_ingest_asset_success(self):
         meta = IngestMetadata(

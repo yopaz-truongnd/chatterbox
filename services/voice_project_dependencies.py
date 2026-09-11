@@ -134,7 +134,13 @@ def get_voice_project_workflow_service() -> Any:
 
 def get_director_review_service(store: VoiceProjectStore | None = None) -> Any:
     from services.director_review_service import DirectorReviewService
-    return DirectorReviewService(store or get_voice_project_store())
+    actual_store = store or get_voice_project_store()
+    workflow_service = get_voice_project_workflow_service()
+    return DirectorReviewService(
+        actual_store,
+        workflow_store=workflow_service.store,
+        project_service=get_voice_project_service(store=actual_store),
+    )
 
 
 def get_director_revision_service(
@@ -148,4 +154,7 @@ def get_director_revision_service(
 def get_director_resource_service(store: VoiceProjectStore | None = None) -> Any:
     from services.director_resource_service import DirectorResourceService
     actual_store = store or get_voice_project_store()
-    return DirectorResourceService(get_voice_project_service(store=actual_store))
+    return DirectorResourceService(
+        get_voice_project_service(store=actual_store),
+        workflow_store=get_voice_project_workflow_service().store,
+    )

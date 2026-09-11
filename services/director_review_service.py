@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from services.director_review_models import (
     DirectorArtifactStatus,
     DirectorAudioCandidate,
@@ -17,11 +19,20 @@ from services.voice_project_models import InvalidProjectStateError, compute_file
 from services.voice_project_store import VoiceProjectStore
 from services.director_revision_store import DirectorRevisionStore
 
+logger = logging.getLogger(__name__)
 
 class DirectorReviewService:
-    def __init__(self, store: VoiceProjectStore, revision_store: DirectorRevisionStore | None = None):
+    def __init__(
+        self,
+        store: VoiceProjectStore,
+        revision_store: DirectorRevisionStore | None = None,
+        workflow_store=None,
+        project_service=None,
+    ):
         self.store = store
         self.revisions = revision_store or DirectorRevisionStore(store)
+        self.workflow_store = workflow_store
+        self.project_service = project_service
 
     @staticmethod
     def _gap(gap: ResourceGap) -> DirectorResourceGap:
@@ -128,8 +139,7 @@ class DirectorReviewService:
         workflow_id = workflow_status = None
         workflow = None
         try:
-            from services.voice_project_dependencies import get_voice_project_workflow_service
-            workflows = get_voice_project_workflow_service().store.list_workflows(limit=200)
+            workflows = self.workflow_store.list_workflows(limit=200) if self.workflow_store else []
             workflow = max(
                 (item for item in workflows if item.project_id == project_id),
                 key=lambda item: item.created_at,
@@ -138,19 +148,19 @@ class DirectorReviewService:
             if workflow:
                 workflow_id = workflow.workflow_id
                 workflow_status = workflow.status.value
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Could not load workflow state for director review '%s': %s", project_id, exc)
 
         required = [self._gap(g) for g in (report.missing if report else []) if g.priority == RequirementPriority.REQUIRED]
         recommended = [self._gap(g) for g in (report.missing if report else []) if g.priority == RequirementPriority.RECOMMENDED]
         verified_delivery = {}
-        try:
-            from services.voice_project_service import VoiceProjectService
-            verified_delivery = VoiceProjectService(store=self.store).verify_delivery_lineage(
-                project_id, workflow_state=workflow
-            )
-        except Exception:
-            pass
+        if self.project_service:
+            try:
+                verified_delivery = self.project_service.verify_delivery_lineage(
+                    project_id, workflow_state=workflow
+                )
+            except Exception as exc:
+                logger.warning("Could not verify delivery lineage for director review '%s': %s", project_id, exc)
 
         artifacts = []
         for artifact_id, relative, url in (

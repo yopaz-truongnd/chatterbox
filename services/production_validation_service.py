@@ -435,7 +435,11 @@ class ProductionValidationService:
             op_manager=self.operation_manager,
             project_service=project_service,
         )
-        review_service = DirectorReviewService(self.store)
+        review_service = DirectorReviewService(
+            self.store,
+            workflow_store=workflow_service.store,
+            project_service=project_service,
+        )
         revision_service = DirectorRevisionService(
             project_service,
             workflow_service=workflow_service,
