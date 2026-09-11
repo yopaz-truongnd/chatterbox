@@ -113,6 +113,21 @@ class NarrationPlanTestCase(unittest.TestCase):
         self.assertEqual(len(result["repeated_words"]), 0)
         self.assertGreaterEqual(result["score"], 90.0)
 
+    @patch("services.critic.transcribe_audio_whisper", return_value="[Whisper unavailable]")
+    def test_unverified_content_blocks_production_qc(self, mock_transcribe):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"CHATTERBOX_TEST_DUMMY_INFERENCE": ""}):
+            result = evaluate_speech_content(
+                torch.zeros((1, 24000), dtype=torch.float32),
+                sr=24000,
+                reference_text="The phoenix rises from the ashes.",
+            )
+
+        self.assertFalse(result["passed"])
+        self.assertIn("could not be verified", result["issues"][0])
+
     @patch("services.job_manager.execute_model_inference")
     @patch("services.critic.transcribe_audio_whisper")
     def test_batch_runner_selective_candidates_and_ranking(self, mock_transcribe, mock_infer):
@@ -175,5 +190,4 @@ class NarrationPlanTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
 

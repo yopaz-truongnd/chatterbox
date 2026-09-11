@@ -259,8 +259,24 @@ def evaluate_speech_content(
     issues: list[str] = []
     warnings: list[str] = []
 
+    if is_stub and ref_words and os.environ.get("CHATTERBOX_TEST_DUMMY_INFERENCE") != "1":
+        # Never approve unverified content in production; a truncated/noisy file
+        # must stop at the human QC gate when STT is unavailable.
+        return {
+            "passed": False,
+            "score": 0.0,
+            "transcription": transcription,
+            "accuracy_percent": 0.0,
+            "missing_words": [],
+            "repeated_words": [],
+            "actual_wpm": 0.0,
+            "target_wpm": target_wpm,
+            "issues": ["Speech content could not be verified because Whisper/STT is unavailable"],
+            "warnings": [transcription],
+        }
+
     if is_stub or not ref_words:
-        # Fallback if whisper library is not present or prompt is empty
+        # Test fallback when Whisper is intentionally disabled, or no script was supplied.
         return {
             "passed": True,
             "score": 100.0,
@@ -333,4 +349,3 @@ def evaluate_speech_content(
         "issues": issues,
         "warnings": warnings,
     }
-

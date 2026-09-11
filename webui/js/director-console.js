@@ -103,8 +103,12 @@ function renderDirectorShell() {
   const actions = document.getElementById('directorGateActions');
   const gate = workflow.human_action?.action_type;
   if (workflow.status === 'waiting_for_human' && gate) {
-    const label = gate === 'narration_acceptance' ? 'Duyệt toàn bộ giọng đọc & tiếp tục' : gate === 'final_audio_approval' ? 'Duyệt bản master này & xuất file' : 'Tiếp tục';
-    actions.innerHTML = `<button data-director-gate onclick="approveDirectorGate(true)" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">${label}</button><button data-director-gate onclick="approveDirectorGate(false)" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Từ chối</button>`;
+    if (gate === 'audio_quality_review') {
+      actions.innerHTML = '<button onclick="showDirectorView(\'review\')" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Mở đánh giá chất lượng</button><button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Hủy</button>';
+    } else {
+      const label = gate === 'narration_acceptance' ? 'Duyệt toàn bộ giọng đọc & tiếp tục' : gate === 'final_audio_approval' ? 'Duyệt bản master này & xuất file' : 'Tiếp tục';
+      actions.innerHTML = `<button data-director-gate onclick="approveDirectorGate(true)" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">${label}</button><button data-director-gate onclick="approveDirectorGate(false)" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Từ chối</button>`;
+    }
   } else if (['queued', 'running', 'cancelling'].includes(workflow.status)) {
     actions.innerHTML = '<button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Hủy</button>';
   } else if (workflow.status === 'interrupted') {
@@ -112,7 +116,7 @@ function renderDirectorShell() {
   } else actions.innerHTML = '';
   renderDirectorOperations();
   renderDirectorPendingRevisions();
-  if (workflow.status === 'waiting_for_human' && gate === 'narration_acceptance') directorView = 'review';
+  if (workflow.status === 'waiting_for_human' && ['audio_quality_review', 'narration_acceptance'].includes(gate)) directorView = 'review';
   if (workflow.status === 'waiting_for_human' && gate === 'final_audio_approval') directorView = 'delivery';
   showDirectorView(directorView);
 }
@@ -122,6 +126,7 @@ function renderDirectorFlowGuide(workflow) {
   let title = 'Hệ thống đang tự xử lý';
   let detail = 'Bạn có thể rời trang này. Tiến độ được lưu trên máy chủ và sẽ khôi phục khi quay lại.';
   if (gate === 'resource_required') { title = 'Cần bạn bổ sung tài nguyên'; detail = 'Cung cấp cách đọc hoặc tệp âm thanh còn thiếu, sau đó tiếp tục. Hệ thống không tự bịa tài nguyên.'; }
+  else if (gate === 'audio_quality_review') { title = 'Cần đánh giá chất lượng giọng đọc'; detail = 'Mở mục duyệt để nghe các đoạn cần xem xét và chọn bản phù hợp hoặc tạo lại đoạn lỗi.'; }
   else if (gate === 'narration_acceptance') { title = 'Bước 1/2 cần bạn duyệt: giọng đọc'; detail = 'Nghe các attempt đã chọn bên dưới. Nút xanh duyệt TOÀN BỘ narration một lần, sau đó hệ thống tự phối âm và tạo master.'; }
   else if (gate === 'final_audio_approval') { title = 'Bước 2/2 cần bạn duyệt: bản master'; detail = 'Nghe bản master và kiểm tra SHA-256. Nút xanh chỉ duyệt đúng file hiện tại, rồi hệ thống mới xuất WAV/MP3.'; }
   else if (workflow.status === 'completed') { title = 'Sản xuất đã hoàn tất'; detail = 'Chỉ tải file có nhãn ĐÃ XÁC MINH. Khi sửa giọng hoặc timing, approval cũ sẽ mất hiệu lực và cần duyệt master mới.'; }
