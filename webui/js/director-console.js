@@ -171,10 +171,12 @@ function renderDirectorWorkspace() {
 
 function renderDirectorGap(gap) {
   const required = gap.priority === 'required';
+  const wanted = gap.wanted || {};
+  const sfxDetails = gap.resource_type === 'knowledge' ? '' : `<div class="mt-2 text-[10px] text-slate-300"><p><b>Cần:</b> ${escapeHtml(gap.intent || gap.description || 'hiệu ứng âm thanh phù hợp')}</p>${wanted.duration ? `<p><b>Thời lượng:</b> ${escapeHtml(String(wanted.duration))}</p>` : ''}${wanted.intensity ? `<p><b>Cường độ:</b> ${escapeHtml(String(wanted.intensity) )}/5</p>` : ''}${gap.narrative_context?.text ? `<p class="mt-1"><b>Ngữ cảnh:</b> ${escapeHtml(gap.narrative_context.text)}</p>` : ''}${gap.suggested_search?.length ? `<p class="mt-1"><b>Từ khóa:</b> ${escapeHtml(gap.suggested_search.slice(0, 3).join(' · '))}</p>` : ''}</div>`;
   const action = gap.resource_type === 'knowledge'
     ? gap.term ? `<div class="flex gap-1 mt-2"><input class="director-input flex-1" placeholder="Cách phát âm đã xác nhận"><button onclick="resolveDirectorPronunciation('${escapeHtml(gap.term)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Xác nhận</button></div>` : '<p class="text-[10px] text-slate-500 mt-2">Chưa có từ cần xác nhận phát âm.</p>'
-    : `<div class="flex gap-1 mt-2"><input class="director-input flex-1" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button></div>`;
-  return `<div class="p-2 mb-2 rounded ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} border text-xs text-amber-200"><div class="flex justify-between"><span>${escapeHtml(gap.resource_type)}: ${escapeHtml(gap.description)}</span><b class="text-[9px] uppercase">${escapeHtml(gap.priority)}</b></div>${action}</div>`;
+    : `<div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button>${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-[#231F2A] text-[10px]">Bỏ qua</button>`}</div>`;
+  return `<div class="p-2 mb-2 rounded ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} border text-xs text-amber-200"><div class="flex justify-between"><span>${escapeHtml(gap.resource_type)}: ${escapeHtml(gap.description)}</span><b class="text-[9px] uppercase">${escapeHtml(gap.priority)}</b></div>${sfxDetails}${action}</div>`;
 }
 
 function renderDirectorReview() {
@@ -261,6 +263,10 @@ async function bindDirectorResource(resourceId, button) {
   const assetId = button.parentElement.querySelector('input').value.trim();
   if (!assetId) return showToast('warning', 'Vui lòng nhập mã tài nguyên hiện có.');
   await directorMutation(`/api/v1/voice-projects/${directorActive.project_id}/resources/bind`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resource_id:resourceId,asset_id:assetId,actor_id:'director-console',allow_substitution:true})});
+}
+
+async function omitDirectorResource(resourceId) {
+  await directorMutation(`/api/v1/voice-projects/${directorActive.project_id}/resources/omit`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resource_id:resourceId,actor_id:'director-console',reason:'Optional resource omitted by director'})});
 }
 
 function openDirectorBeat(beatId) {
