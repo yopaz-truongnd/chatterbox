@@ -1,7 +1,7 @@
 """Production Event Store (Phase 20).
 
 Append-only JSONL event log per project/series with:
-- Atomic appends via fcntl.flock file locking
+- Atomic appends via cross-platform file locking
 - Bounded retention (rotate when > 1000 events, keep latest 1000)
 - Corruption-tolerant loading (skip malformed lines)
 - All timestamps UTC
@@ -9,9 +9,8 @@ Append-only JSONL event log per project/series with:
 
 from __future__ import annotations
 
-import fcntl
-
 from services.atomic_io import atomic_write_text
+from services.file_lock import exclusive_file_lock
 import json
 import logging
 import os
@@ -94,8 +93,7 @@ def _atomic_append_and_rotate(path: Path, record: dict[str, Any]) -> None:
     with file_lock:
         lock_path = path.with_suffix(path.suffix + ".lock")
         with open(lock_path, "a", encoding="utf-8") as lock_fh:
-            fcntl.flock(lock_fh, fcntl.LOCK_EX)
-            try:
+            with exclusive_file_lock(lock_fh):
                 with open(path, "a", encoding="utf-8") as fh:
                     fh.write(json.dumps(record, ensure_ascii=False) + "\n")
                     fh.flush()
@@ -109,8 +107,6 @@ def _atomic_append_and_rotate(path: Path, record: dict[str, Any]) -> None:
                         "".join(json.dumps(evt, ensure_ascii=False) + "\n" for evt in kept),
                     )
                     logger.info("Rotated event log %s: kept %d / %d events", path, len(kept), len(events))
-            finally:
-                fcntl.flock(lock_fh, fcntl.LOCK_UN)
 
 
 # ==========================================

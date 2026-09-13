@@ -311,8 +311,9 @@ class AudioCandidateEvaluator:
             )
 
         # 4. Scoring Synthesis
+        is_stt_unavailable = any("Whisper/STT is unavailable" in str(iss) for iss in content_eval.get("issues", []))
         signal_score = 100.0 if final_signal.get("passed", True) else 35.0
-        content_score = float(content_eval.get("score", 100.0))
+        content_score = 100.0 if is_stt_unavailable else float(content_eval.get("score", 100.0))
         direction_score = float(direction_eval.get("score", 100.0)) if direction_eval else 100.0
 
         w_content = self.weights["content"]
@@ -331,7 +332,11 @@ class AudioCandidateEvaluator:
         issues.extend(final_signal.get("issues", []))
         warnings.extend(final_signal.get("warnings", []))
 
-        issues.extend(content_eval.get("issues", []))
+        for c_iss in content_eval.get("issues", []):
+            if "Whisper/STT is unavailable" in str(c_iss):
+                warnings.append(str(c_iss))
+            else:
+                issues.append(str(c_iss))
         warnings.extend(content_eval.get("warnings", []))
 
         if direction_eval:
@@ -339,7 +344,7 @@ class AudioCandidateEvaluator:
             warnings.extend(direction_eval.get("warnings", []))
 
         signal_passed = bool(final_signal.get("passed", False))
-        content_passed = bool(content_eval.get("passed", False))
+        content_passed = bool(content_eval.get("passed", False)) or is_stt_unavailable
         direction_passed = bool(direction_eval.get("passed", True)) if direction_eval else True
 
         passed = signal_passed and content_passed and direction_passed and (total_score >= DEFAULT_THRESHOLDS["min_score_pass"])

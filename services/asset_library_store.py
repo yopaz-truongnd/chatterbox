@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import threading
-import fcntl
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ import yaml
 
 from services.atomic_io import atomic_write_yaml
 from services.asset_library_models import AssetCategory, LibraryAsset
+from services.file_lock import exclusive_file_lock
 
 # Default index file location
 _DEFAULT_INDEX = Path(__file__).resolve().parent.parent / "assets" / "library-index.yaml"
@@ -110,8 +110,7 @@ class AssetLibraryStore:
             lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
             lock_path.parent.mkdir(parents=True, exist_ok=True)
             with open(lock_path, "a", encoding="utf-8") as lock_file:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-                try:
+                with exclusive_file_lock(lock_file):
                     data = self._load()
                     assets = data["assets"]
                     for i, item in enumerate(assets):
@@ -122,8 +121,6 @@ class AssetLibraryStore:
                     assets.append(_asset_to_dict(asset))
                     self._save(data)
                     return asset
-                finally:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def save_if_sha256_absent(self, asset: LibraryAsset) -> tuple[LibraryAsset, bool]:
         """Atomically enforce content uniqueness across threads and processes."""
@@ -131,8 +128,7 @@ class AssetLibraryStore:
             lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
             lock_path.parent.mkdir(parents=True, exist_ok=True)
             with open(lock_path, "a", encoding="utf-8") as lock_file:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-                try:
+                with exclusive_file_lock(lock_file):
                     data = self._load()
                     for item in data["assets"]:
                         if item.get("sha256") == asset.sha256:
@@ -140,8 +136,6 @@ class AssetLibraryStore:
                     data["assets"].append(_asset_to_dict(asset))
                     self._save(data)
                     return asset, True
-                finally:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def find_by_sha256(self, sha256: str) -> LibraryAsset | None:
         """Return the first asset matching a given SHA-256 hash, or None."""
@@ -162,8 +156,7 @@ class AssetLibraryStore:
             lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
             lock_path.parent.mkdir(parents=True, exist_ok=True)
             with open(lock_path, "a", encoding="utf-8") as lock_file:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-                try:
+                with exclusive_file_lock(lock_file):
                     data = self._load()
                     for i, item in enumerate(data["assets"]):
                         if item.get("asset_id") == asset_id:
@@ -172,8 +165,6 @@ class AssetLibraryStore:
                             self._save(data)
                             return _dict_to_asset(data["assets"][i])
                     return None
-                finally:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def update_usage(
         self, asset_id: str, project_id: str | None = None, beat_id: str | None = None
@@ -183,8 +174,7 @@ class AssetLibraryStore:
             lock_path = self._index_path.with_suffix(self._index_path.suffix + ".lock")
             lock_path.parent.mkdir(parents=True, exist_ok=True)
             with open(lock_path, "a", encoding="utf-8") as lock_file:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-                try:
+                with exclusive_file_lock(lock_file):
                     data = self._load()
                     for i, item in enumerate(data["assets"]):
                         if item.get("asset_id") == asset_id:
@@ -202,8 +192,6 @@ class AssetLibraryStore:
                             self._save(data)
                             return _dict_to_asset(data["assets"][i])
                     return None
-                finally:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 # Module-level singleton
