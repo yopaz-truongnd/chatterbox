@@ -231,8 +231,13 @@ class BatchRunner:
                     for ca in candidate_attempts:
                         ca["selected"] = (ca is selected_meta)
 
+                    if selected_wav is None or selected_wav.numel() == 0:
+                        raise RuntimeError("Audio synthesis produced empty or zero-length audio")
+
                     if not selected_meta.get("passed", False):
                         issues_list = []
+                        if selected_meta.get("issues"):
+                            issues_list.extend(selected_meta["issues"])
                         if selected_meta.get("signal", {}).get("final", {}).get("issues"):
                             issues_list.extend(selected_meta["signal"]["final"]["issues"])
                         if selected_meta.get("content", {}).get("issues"):

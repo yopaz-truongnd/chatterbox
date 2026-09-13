@@ -182,6 +182,8 @@ if WEBUI_DIR.exists():
 @app.get("/connect-mcp", response_class=FileResponse, tags=["gui"])
 @app.get("/projects", response_class=FileResponse, tags=["gui"])
 @app.get("/projects-studio", response_class=FileResponse, tags=["gui"])
+@app.get("/director", response_class=FileResponse, tags=["gui"])
+@app.get("/director-console", response_class=FileResponse, tags=["gui"])
 def get_web_gui():
     """Phục vụ giao diện Material Design 3 Web Dashboard trực tiếp trên trình duyệt."""
     index_file = WEBUI_DIR / "material_dashboard.html"
@@ -191,3 +193,20 @@ def get_web_gui():
             status_code=404,
         )
     return FileResponse(index_file)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def get_favicon_ico():
+    favicon_file = WEBUI_DIR / "favicon.ico"
+    if not favicon_file.exists():
+        return HTMLResponse(status_code=404)
+    return FileResponse(favicon_file, media_type="image/x-icon")
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def get_favicon_svg():
+    favicon_file = WEBUI_DIR / "favicon.svg"
+    if not favicon_file.exists():
+        return HTMLResponse(status_code=404)
+    return FileResponse(favicon_file, media_type="image/svg+xml")
+

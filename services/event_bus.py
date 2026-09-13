@@ -9,6 +9,7 @@ import collections
 import logging
 import threading
 import time
+import uuid
 from typing import Any
 
 logger = logging.getLogger("chatterbox.event_bus")
@@ -22,6 +23,12 @@ class LocalEventBus:
         self._condition = threading.Condition(self._lock)
         self._events: collections.deque[dict[str, Any]] = collections.deque(maxlen=maxlen)
         self._next_id = 1
+        self._boot_id = uuid.uuid4().hex
+
+    @property
+    def boot_id(self) -> str:
+        return self._boot_id
+
 
     def emit(
         self,
@@ -93,10 +100,25 @@ class LocalEventBus:
         return res
 
     def clear(self) -> None:
-        """Clear all events (used for test teardown)."""
+        """Clear all events (used for test teardown and cleanup)."""
         with self._condition:
             self._events.clear()
             self._next_id = 1
+            self._boot_id = uuid.uuid4().hex
+            self._condition.notify_all()
+
+    def clear_project_events(self, project_id: str) -> int:
+        """Clear events belonging to a specific project."""
+        with self._condition:
+            initial_count = len(self._events)
+            self._events = collections.deque(
+                [ev for ev in self._events if ev.get("project_id") != project_id],
+                maxlen=self._events.maxlen,
+            )
+            cleared = initial_count - len(self._events)
+            self._condition.notify_all()
+            return cleared
+
 
 
 # Singleton Event Bus instance
