@@ -102,3 +102,42 @@ terms:
     source: manual
     notes: "Immortal celestial bird symbolizing grace, virtue, and eternal rebirth."
 
+  kunlun:
+    display: Kunlun
+    aliases:
+      - Mount Kunlun
+      - Kunlun Mountains
+    language: zh
+    pronunciation:
+      tts_hint: "Koon-loon"
+      ipa: "kʰwən˥ lwən˧˥"
+    status: verified
+    source: manual
+    notes: "Sacred mythical mountain dwelling of deities and celestial beings."
+
+  paulownia:
+    display: Paulownia
+    aliases:
+      - Wutong
+      - Paulownia Tree
+    language: en
+    pronunciation:
+      tts_hint: "Paw-loh-nee-uh"
+      ipa: "pɔːˈloʊniə"
+    status: verified
+    source: manual
+    notes: "The sacred Chinese Empress tree upon which the Fenghuang exclusively alights."
+
+  asian:
+    display: Asian
+    aliases:
+      - Asia
+    language: en
+    pronunciation:
+      tts_hint: "Ay-zhun"
+      ipa: "ˈeɪʒən"
+    status: verified
+    source: manual
+    notes: "Relating to Asia or its people, customs, or languages."
+
+
