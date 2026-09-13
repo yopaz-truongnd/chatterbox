@@ -87,3 +87,18 @@ terms:
     status: verified
     source: manual
     notes: "Cultural hero credited with inventing the Bagua and writing."
+
+  fenghuang:
+    display: Fenghuang
+    aliases:
+      - Feng Huang
+      - Celestial Phoenix
+      - Vermilion Phoenix
+    language: zh
+    pronunciation:
+      tts_hint: "Fung-hwahng"
+      ipa: "fɤŋ˥ xwaŋ˧˥"
+    status: verified
+    source: manual
+    notes: "Immortal celestial bird symbolizing grace, virtue, and eternal rebirth."
+
