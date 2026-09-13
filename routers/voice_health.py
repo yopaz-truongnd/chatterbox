@@ -16,6 +16,12 @@ from services.production_event_models import (
 from services.production_event_store import get_production_event_store
 from services.production_health_service import get_project_health, get_series_health
 from services.voice_project_models import VoiceProjectNotFound
+from services.voice_project_dependencies import (
+    get_voice_project_operation_manager,
+    get_voice_project_store,
+    get_voice_project_workflow_service,
+)
+from services.voice_series_store import get_voice_series_store
 
 router = APIRouter(prefix="/api/v1", tags=["voice-observability"])
 
@@ -30,7 +36,12 @@ _diag_service = DiagnosticsService()
 
 @router.get("/voice-projects/{project_id}/health", response_model=ProjectProductionHealth)
 def get_voice_project_health(project_id: str) -> ProjectProductionHealth:
-    return get_project_health(project_id)
+    return get_project_health(
+        project_id,
+        project_store=get_voice_project_store(),
+        operation_manager=get_voice_project_operation_manager(),
+        workflow_service=get_voice_project_workflow_service(),
+    )
 
 
 @router.get("/voice-projects/{project_id}/events")
@@ -53,7 +64,11 @@ def create_voice_project_diagnostics(project_id: str) -> dict[str, Any]:
 
 @router.get("/voice-series/{series_id}/health", response_model=SeriesProductionHealth)
 def get_voice_series_health(series_id: str) -> SeriesProductionHealth:
-    return get_series_health(series_id)
+    return get_series_health(
+        series_id,
+        project_store=get_voice_project_store(),
+        series_store=get_voice_series_store(),
+    )
 
 
 @router.get("/voice-series/{series_id}/events")

@@ -134,7 +134,13 @@ def get_voice_project_workflow_service() -> Any:
 
 def get_director_review_service(store: VoiceProjectStore | None = None) -> Any:
     from services.director_review_service import DirectorReviewService
-    return DirectorReviewService(store or get_voice_project_store())
+    actual_store = store or get_voice_project_store()
+    workflow_service = get_voice_project_workflow_service()
+    return DirectorReviewService(
+        actual_store,
+        workflow_store=workflow_service.store,
+        project_service=get_voice_project_service(store=actual_store),
+    )
 
 
 def get_director_revision_service(
@@ -148,4 +154,42 @@ def get_director_revision_service(
 def get_director_resource_service(store: VoiceProjectStore | None = None) -> Any:
     from services.director_resource_service import DirectorResourceService
     actual_store = store or get_voice_project_store()
-    return DirectorResourceService(get_voice_project_service(store=actual_store))
+    return DirectorResourceService(
+        get_voice_project_service(store=actual_store),
+        workflow_store=get_voice_project_workflow_service().store,
+    )
+
+
+def get_voice_series_service() -> Any:
+    from services.voice_series_service import VoiceSeriesService
+    from services.voice_series_store import get_voice_series_store
+
+    return VoiceSeriesService(
+        store=get_voice_series_store(),
+        wf_service=get_voice_project_workflow_service(),
+        proj_store=get_voice_project_store(),
+    )
+
+
+def get_local_runtime_service() -> Any:
+    from services.local_runtime_service import LocalRuntimeService
+
+    return LocalRuntimeService(store=get_voice_project_store())
+
+
+def get_voice_series_operations(service: Any | None = None) -> Any:
+    from services.production_event_store import get_production_event_store
+    from services.voice_series_operations import VoiceSeriesOperations
+    from services.voice_series_store import get_voice_series_store
+
+    project_store = get_voice_project_store()
+    series_store = get_voice_series_store()
+    return VoiceSeriesOperations(
+        service=service or get_voice_series_service(),
+        store=series_store,
+        proj_store=project_store,
+        wf_service=get_voice_project_workflow_service(),
+        event_store=get_production_event_store(),
+        operation_manager=get_voice_project_operation_manager(),
+        runtime_service=get_local_runtime_service(),
+    )

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from services.voice_project_models import InvalidProjectStateError, VoiceProjectNotFound
 from services.voice_project_operations import OperationAlreadyRunningError
+from services.voice_project_dependencies import get_voice_series_operations, get_voice_series_service
 from services.voice_series_models import (
     SeriesHumanAction,
     SeriesProductionSummary,
@@ -21,13 +22,12 @@ from services.voice_series_models import (
     VoiceSeries,
     VoiceSeriesEpisode,
 )
-from services.voice_series_operations import SeriesPreflightError, VoiceSeriesOperations
-from services.voice_series_service import VoiceSeriesService
+from services.voice_series_operations import SeriesPreflightError
 
 router = APIRouter(prefix="/api/v1/voice-series", tags=["voice-series"])
 
-_series_service = VoiceSeriesService()
-_series_ops = VoiceSeriesOperations(service=_series_service)
+_series_service = get_voice_series_service()
+_series_ops = get_voice_series_operations(service=_series_service)
 
 
 class CreateSeriesRequest(BaseModel):

@@ -45,7 +45,11 @@ class TestProductionHealth(unittest.TestCase):
         series = self.series_service.create_series(title="Epic Chronicle")
         ep1 = self.series_service.add_episode(series.series_id, "proj_ep1", "Chapter 1", 1)
 
-        health = get_series_health(series.series_id, series_store=self.series_store)
+        health = get_series_health(
+            series.series_id,
+            project_store=self.proj_store,
+            series_store=self.series_store,
+        )
         self.assertIsInstance(health, SeriesProductionHealth)
         self.assertEqual(health.series_id, series.series_id)
         self.assertEqual(health.episode_count, 1)

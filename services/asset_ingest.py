@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import hashlib
+import logging
 import os
 from pathlib import Path
 import re
@@ -31,6 +32,7 @@ from services.resource_models import (
 )
 
 SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".aiff"}
+logger = logging.getLogger(__name__)
 
 
 def _compute_sha256(file_path: Path) -> str:
@@ -61,8 +63,8 @@ def _read_audio_metadata(file_path: Path) -> tuple[float, int, int]:
                 if sample_rate > 0:
                     duration = round(frames / float(sample_rate), 2)
                 return duration, sample_rate, channels
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("WAV metadata probe failed for %s; trying audioread: %s", file_path, exc)
 
     # Try audioread or soundfile if available
     try:
@@ -72,8 +74,8 @@ def _read_audio_metadata(file_path: Path) -> tuple[float, int, int]:
             sample_rate = f.samplerate
             channels = f.channels
             return duration, sample_rate, channels
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Audioread metadata probe failed for %s; estimating from file size: %s", file_path, exc)
 
     # Fallback estimate based on file size if 16-bit 44.1kHz stereo WAV
     size = file_path.stat().st_size if file_path.exists() else 0

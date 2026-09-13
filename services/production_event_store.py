@@ -10,6 +10,8 @@ Append-only JSONL event log per project/series with:
 from __future__ import annotations
 
 import fcntl
+
+from services.atomic_io import atomic_write_text
 import json
 import logging
 import os
@@ -102,13 +104,10 @@ def _atomic_append_and_rotate(path: Path, record: dict[str, Any]) -> None:
                 events = _load_events_from_file(path)
                 if len(events) > _ROTATE_THRESHOLD:
                     kept = events[-_MAX_EVENTS:]
-                    tmp_path = path.with_suffix(".tmp_rotate")
-                    with open(tmp_path, "w", encoding="utf-8") as fh:
-                        for evt in kept:
-                            fh.write(json.dumps(evt, ensure_ascii=False) + "\n")
-                        fh.flush()
-                        os.fsync(fh.fileno())
-                    tmp_path.replace(path)
+                    atomic_write_text(
+                        path,
+                        "".join(json.dumps(evt, ensure_ascii=False) + "\n" for evt in kept),
+                    )
                     logger.info("Rotated event log %s: kept %d / %d events", path, len(kept), len(events))
             finally:
                 fcntl.flock(lock_fh, fcntl.LOCK_UN)

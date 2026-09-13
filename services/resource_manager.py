@@ -309,7 +309,9 @@ def extract_resource_requirements(plan: VoicePlan) -> list[ResourceRequirement]:
                 elif "riser" in sfx_item.intent:
                     d_min, d_max = 2.5, 5.0
 
-                sfx_tags = [b_context.role] if b_context.role else []
+                # Beat roles such as "description" are routing metadata, not useful
+                # asset-search terms. Keep only acoustic descriptors below.
+                sfx_tags = []
                 if "dark" in sfx_item.intent:
                     sfx_tags.append("dark")
                 if "supernatural" in sfx_item.intent:
@@ -471,6 +473,24 @@ def generate_suggested_search(
 ) -> list[str]:
     """Generate clean, cinematic search queries deterministically from intent, tags, and properties."""
     clean_intent = intent.replace("_", " ").strip()
+    intent_hints = {
+        "cinematic_sub_boom": [
+            "cinematic supernatural impact boom sound effect",
+            "deep low boom hit sound effect",
+            "fantasy magic explosion impact wav",
+        ],
+        "supernatural_reveal_riser": [
+            "mystical tension riser sound effect",
+            "fantasy reveal build up riser wav",
+        ],
+        "subtle_narrative_drone": [
+            "subtle cinematic atmosphere drone",
+            "fantasy ambient underscore wav",
+        ],
+    }
+    mapped = intent_hints.get(intent)
+    if mapped:
+        return list(dict.fromkeys([f"{clean_intent} sound effect", *mapped]))
     tag_str = " ".join(t.replace("_", " ").strip() for t in tags[:2] if t)
 
     searches = []

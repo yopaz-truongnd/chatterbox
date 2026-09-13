@@ -32,9 +32,9 @@ def _error(msg: str, code: str = "ERROR") -> dict:
 def handle_runtime_capabilities(args: dict[str, Any], request_fn: Callable | None = None) -> dict[str, Any]:
     """Inspect local runtime capabilities (models, device, formats, concurrent capacity)."""
     try:
-        from services.local_runtime_service import LocalRuntimeService
+        from services.voice_project_dependencies import get_local_runtime_service
 
-        service = LocalRuntimeService()
+        service = get_local_runtime_service()
         caps = service.get_capabilities()
         return _success(caps.model_dump(mode="json"))
     except Exception as exc:
@@ -51,9 +51,9 @@ def handle_runtime_preflight(args: dict[str, Any], request_fn: Callable | None =
     requested_formats = args.get("requested_formats", ["wav"])
 
     try:
-        from services.local_runtime_service import LocalRuntimeService
+        from services.voice_project_dependencies import get_local_runtime_service
 
-        service = LocalRuntimeService()
+        service = get_local_runtime_service()
         issues = service.run_production_preflight(
             project_id=project_id,
             provider=provider,

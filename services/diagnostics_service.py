@@ -88,15 +88,24 @@ class DiagnosticsService:
         series_store: Any | None = None,
         event_store: Any | None = None,
         runtime_service: Any | None = None,
+        operation_manager: Any | None = None,
+        workflow_service: Any | None = None,
     ) -> None:
         self.project_store = project_store or get_voice_project_store()
         self.series_store = series_store or get_voice_series_store()
         self.event_store = event_store or get_production_event_store()
         self.runtime_service = runtime_service or LocalRuntimeService()
+        self.operation_manager = operation_manager or get_voice_project_operation_manager()
+        self.workflow_service = workflow_service or get_voice_project_workflow_service()
 
     def create_project_diagnostics(self, project_id: str) -> dict[str, Any]:
         """Build sanitized diagnostic report for a single project."""
-        health = get_project_health(project_id, project_store=self.project_store)
+        health = get_project_health(
+            project_id,
+            project_store=self.project_store,
+            operation_manager=self.operation_manager,
+            workflow_service=self.workflow_service,
+        )
         events = self.event_store.load_project_events(project_id, limit=100)
         caps = self.runtime_service.get_capabilities()
 
@@ -107,8 +116,7 @@ class DiagnosticsService:
             project_state = state.model_dump(mode="json")
 
         # Operations
-        op_mgr = get_voice_project_operation_manager()
-        ops = op_mgr.list_operations(project_id=project_id, limit=10)
+        ops = self.operation_manager.list_operations(project_id=project_id, limit=10)
 
         # Artifacts
         artifacts = {}
@@ -130,7 +138,11 @@ class DiagnosticsService:
 
     def create_series_diagnostics(self, series_id: str) -> dict[str, Any]:
         """Build sanitized diagnostic report for an entire series."""
-        health = get_series_health(series_id, series_store=self.series_store)
+        health = get_series_health(
+            series_id,
+            project_store=self.project_store,
+            series_store=self.series_store,
+        )
         events = self.event_store.load_series_events(series_id, limit=100)
         caps = self.runtime_service.get_capabilities()
 

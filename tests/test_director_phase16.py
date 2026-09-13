@@ -161,6 +161,55 @@ class TestDirectorPhase16(unittest.TestCase):
         rechecked = self.project_service.check_resources("persistent_binding")
         self.assertNotIn(gap.id, [item.id for item in rechecked.report.missing])
 
+    def test_substitution_is_denied_when_policy_lookup_fails(self):
+        self._rendered_project("policy_lookup_failure")
+        beat_id = next(iter(self.store.load_manifest("policy_lookup_failure").beats))
+        DirectorRevisionService(self.project_service).update_resources(
+            "policy_lookup_failure", beat_id,
+            BeatResourcePatch(ambience_intent="unique_policy_wind"), "tester",
+        )
+        gap = next(
+            item for item in self.store.load_resource_report("policy_lookup_failure").missing
+            if item.intent == "unique_policy_wind"
+        )
+        asset_path = self.store.get_project_dir("policy_lookup_failure") / "assets" / "substitute.wav"
+        asset_path.parent.mkdir(parents=True, exist_ok=True)
+        asset_path.write_bytes(b"RIFF-test")
+        asset = mock.Mock(category=gap.type, intents=[])
+        workflow_store = mock.Mock()
+        workflow_store.list_workflows.side_effect = OSError("workflow store unavailable")
+
+        with mock.patch("services.director_resource_service.load_manifest") as manifest, \
+             mock.patch("services.director_resource_service.resolve_asset_file_path", return_value=asset_path), \
+             self.assertLogs("services.director_resource_service", level="WARNING") as logs:
+            manifest.return_value.find_by_id.return_value = asset
+            with self.assertRaisesRegex(InvalidProjectStateError, "substitution is not allowed"):
+                DirectorResourceService(
+                    self.project_service, workflow_store=workflow_store
+                ).bind_asset(
+                    "policy_lookup_failure", gap.id, "substitute", "tester"
+                )
+
+        self.assertIn("denying substitution", logs.output[0])
+
+    def test_review_logs_workflow_and_lineage_lookup_failures(self):
+        self._rendered_project("review_lookup_failure")
+        workflow_store = mock.Mock()
+        workflow_store.list_workflows.side_effect = OSError("workflow store unavailable")
+        project_service = mock.Mock()
+        project_service.verify_delivery_lineage.side_effect = OSError("lineage store unavailable")
+        with self.assertLogs("services.director_review_service", level="WARNING") as logs:
+            review = DirectorReviewService(
+                self.store,
+                workflow_store=workflow_store,
+                project_service=project_service,
+            ).get_review("review_lookup_failure")
+
+        self.assertIsNone(review.workflow_status)
+        self.assertEqual(len(logs.output), 2)
+        self.assertIn("workflow state", logs.output[0])
+        self.assertIn("delivery lineage", logs.output[1])
+
     def test_mcp_phase16_routes_to_rest_without_polling(self):
         from mcp_adapter.voice_project_tools import handle_voice_project_tool
         calls = []

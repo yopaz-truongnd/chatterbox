@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 import yaml
 
+from services.atomic_io import atomic_write_text
 from services.voice_series_models import VoiceSeries, VoiceSeriesEpisode
 
 _ID_RE = re.compile(r'^[a-zA-Z0-9_-]{1,128}$')
@@ -49,11 +50,7 @@ class VoiceSeriesStore:
         series_dir = self._get_series_dir(series.series_id)
         series_dir.mkdir(parents=True, exist_ok=True)
         file_path = series_dir / "series.yaml"
-        tmp_path = series_dir / "series.yaml.tmp"
-
-        with open(tmp_path, "w", encoding="utf-8") as fh:
-            fh.write(series.to_yaml())
-        tmp_path.replace(file_path)
+        atomic_write_text(file_path, series.to_yaml())
 
     def get_series(self, series_id: str) -> VoiceSeries | None:
         file_path = self._get_series_dir(series_id) / "series.yaml"
@@ -81,11 +78,7 @@ class VoiceSeriesStore:
         ep_dir = self._get_episodes_dir(episode.series_id)
         ep_dir.mkdir(parents=True, exist_ok=True)
         file_path = ep_dir / f"{episode.episode_id}.yaml"
-        tmp_path = ep_dir / f"{episode.episode_id}.yaml.tmp"
-
-        with open(tmp_path, "w", encoding="utf-8") as fh:
-            fh.write(episode.to_yaml())
-        tmp_path.replace(file_path)
+        atomic_write_text(file_path, episode.to_yaml())
 
     def get_episode(self, series_id: str, episode_id: str) -> VoiceSeriesEpisode | None:
         _validate_id(series_id, "series_id")

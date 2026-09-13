@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from services.local_runtime_models import LocalRuntimeCapabilities, PreflightIssue
 from services.local_runtime_service import LocalRuntimeService
+from services.voice_project_dependencies import get_local_runtime_service
 from services.production_validation_models import (
     ProductionValidationReport,
     ProductionValidationRequest,
@@ -85,7 +86,7 @@ def run_production_preflight(
     body: PreflightRequest = Body(default_factory=PreflightRequest),
 ) -> PreflightResponse:
     """Validate all runtime preconditions before scheduling or executing a workflow."""
-    issues = _runtime_service.run_production_preflight(
+    issues = get_local_runtime_service().run_production_preflight(
         project_id=project_id,
         provider=body.provider,
         requested_formats=body.requested_formats,

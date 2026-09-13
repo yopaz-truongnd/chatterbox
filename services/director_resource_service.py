@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 import uuid
 
 from services.director_review_models import DirectorRevisionEvent, ResourceResolutionResult
+from services.atomic_io import atomic_write_yaml
 from services.director_revision_store import DirectorRevisionStore
 from services.render_models import RenderStatus
 from services.resource_manager import load_manifest, resolve_asset_file_path
@@ -21,13 +23,20 @@ from services.voice_project_service import VoiceProjectService
 
 
 MIX_ARTIFACTS = ["mix_plan", "premaster_wav", "master_wav", "exports", "final_approval"]
+logger = logging.getLogger(__name__)
 
 
 class DirectorResourceService:
-    def __init__(self, project_service: VoiceProjectService, revision_store: DirectorRevisionStore | None = None):
+    def __init__(
+        self,
+        project_service: VoiceProjectService,
+        revision_store: DirectorRevisionStore | None = None,
+        workflow_store=None,
+    ):
         self.project_service = project_service
         self.store = project_service.store
         self.revisions = revision_store or DirectorRevisionStore(self.store)
+        self.workflow_store = workflow_store
 
     def _require_project(self, project_id: str) -> None:
         self.store.get_project_state(project_id)
@@ -37,13 +46,7 @@ class DirectorResourceService:
         path = self.store.get_project_dir(project_id) / "director-resource-overrides.yaml"
         data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {"version": 1, "overrides": {}}
         data.setdefault("overrides", {})[resource_id] = decision
-        pending = path.with_suffix(".pending")
-        try:
-            pending.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
-            pending.replace(path)
-        finally:
-            if pending.exists():
-                pending.unlink()
+        atomic_write_yaml(path, data)
 
     @staticmethod
     def _public_report(report) -> dict:
@@ -136,15 +139,19 @@ class DirectorResourceService:
         is_substitute = gap.intent not in asset.intents
         if is_substitute:
             try:
-                from services.voice_project_dependencies import get_voice_project_workflow_service
                 workflow = next(
-                    (item for item in get_voice_project_workflow_service().store.list_workflows(limit=200)
+                    (item for item in self.workflow_store.list_workflows(limit=200)
                      if item.project_id == project_id), None
                 )
                 if workflow and not workflow.policy.allow_resource_substitute:
                     allow_substitution = False
-            except Exception:
-                pass
+            except Exception as exc:
+                allow_substitution = False
+                logger.warning(
+                    "Could not resolve resource substitution policy for project '%s'; denying substitution: %s",
+                    project_id,
+                    exc,
+                )
         if is_substitute and not allow_substitution:
             raise InvalidProjectStateError("Resource substitution is not allowed by policy.")
         self._persist_override(project_id, resource_id, {"action": "bind", "asset_id": asset_id})
@@ -195,13 +202,7 @@ class DirectorResourceService:
         data = yaml.safe_load(registry.read_text(encoding="utf-8")) if registry.exists() else {"resources": []}
         asset_id = f"project_{project_id}_{uuid.uuid4().hex[:8]}"
         data["resources"].append({"id": asset_id, "path": str(source), "category": category, "intent": intent})
-        pending = registry.with_suffix(".pending")
-        try:
-            pending.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-            pending.replace(registry)
-        finally:
-            if pending.exists():
-                pending.unlink()
+        atomic_write_yaml(registry, data)
 
         entry = ResourceEntry.model_validate({
             "id": asset_id, "file": {"path": str(source), "format": source.suffix.lstrip(".")},

@@ -6,13 +6,13 @@ and human review queues.
 
 from __future__ import annotations
 
-import os
+import logging
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from services.voice_project_models import InvalidProjectStateError, VoiceProjectNotFound
+from services.voice_project_service import compute_file_sha256
 from services.voice_series_models import (
     EpisodeStatus,
     SeriesHumanAction,
@@ -24,6 +24,8 @@ from services.voice_series_models import (
     VoiceSeriesEpisode,
 )
 from services.voice_series_store import VoiceSeriesStore, get_voice_series_store
+
+logger = logging.getLogger(__name__)
 
 
 class VoiceSeriesService:
@@ -149,19 +151,22 @@ class VoiceSeriesService:
         self.get_series(series_id)
         return self.store.list_episodes(series_id)
 
-    def get_review_queue(self, series_id: str) -> list[SeriesHumanAction]:
+    def get_review_queue(
+        self,
+        series_id: str,
+        *,
+        wf_service: Any | None = None,
+        proj_store: Any | None = None,
+    ) -> list[SeriesHumanAction]:
         """Aggregate pending human action gates across all episodes in the series."""
         self.get_series(series_id)
         episodes = self.store.list_episodes(series_id)
         actions: list[SeriesHumanAction] = []
 
-        from services.voice_project_dependencies import (
-            get_voice_project_store,
-            get_voice_project_workflow_service,
-        )
-
-        wf_service = self._wf_service or get_voice_project_workflow_service()
-        proj_store = self._proj_store or get_voice_project_store()
+        wf_service = wf_service or self._wf_service
+        proj_store = proj_store or self._proj_store
+        if wf_service is None or proj_store is None:
+            raise RuntimeError("wf_service and proj_store are required to build the review queue")
 
         for ep in episodes:
             if ep.workflow_id:
@@ -176,7 +181,6 @@ class VoiceSeriesService:
                         if not item_sha:
                             master_path = proj_store.get_project_dir(ep.project_id) / "mix" / "master.wav"
                             if master_path.exists():
-                                from services.voice_project_service import compute_file_sha256
                                 item_sha = compute_file_sha256(master_path)
 
                         actions.append(
@@ -191,7 +195,12 @@ class VoiceSeriesService:
                                 artifact_sha256=item_sha,
                             )
                         )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(
+                        "Could not inspect review state for series '%s' episode '%s': %s",
+                        series_id,
+                        ep.episode_id,
+                        exc,
+                    )
 
         return actions

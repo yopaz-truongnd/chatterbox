@@ -20,6 +20,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from services.asset_library_service import _make_permitted_roots, _resolve_and_validate_path
 from services.local_runtime_models import LocalRuntimeCapabilities, PreflightIssue
 from services.model_registry import (
     MODEL_REGISTRY,
@@ -196,8 +199,7 @@ class LocalRuntimeService:
         # 1. Project directory existence
         active_store = store or self._store
         if active_store is None:
-            from services.voice_project_dependencies import get_voice_project_store
-            active_store = get_voice_project_store()
+            raise RuntimeError("store is required for production preflight")
         try:
             if not active_store.project_exists(project_id):
                 issues.append(PreflightIssue(
@@ -299,7 +301,6 @@ class LocalRuntimeService:
 
         if reference_voice:
             try:
-                from services.asset_library_service import _make_permitted_roots, _resolve_and_validate_path
                 ref_path = _resolve_and_validate_path(reference_voice, _make_permitted_roots())
             except (ValueError, PermissionError) as exc:
                 issues.append(PreflightIssue(
@@ -324,10 +325,9 @@ class LocalRuntimeService:
 
         # Check character / voice reference files if project state has characters
         try:
-            state = store.get_project_state(project_id)
-            plan_path = store.get_project_dir(project_id) / state.artifacts.voice_plan
+            state = active_store.get_project_state(project_id)
+            plan_path = active_store.get_project_dir(project_id) / state.artifacts.voice_plan
             if plan_path.exists():
-                import yaml
                 with open(plan_path, "r", encoding="utf-8") as pf:
                     pdata = yaml.safe_load(pf) or {}
                 # Check character voice reference files
@@ -336,7 +336,7 @@ class LocalRuntimeService:
                     if ref_audio:
                         ref_p = Path(ref_audio)
                         if not ref_p.is_absolute():
-                            ref_p = store.get_project_dir(project_id) / ref_p
+                            ref_p = active_store.get_project_dir(project_id) / ref_p
                         if not ref_p.exists():
                             issues.append(PreflightIssue(
                                 severity="warning",

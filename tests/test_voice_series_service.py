@@ -3,6 +3,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 from services.voice_project_models import InvalidProjectStateError, VoiceProjectNotFound
 from services.voice_series_models import (
@@ -73,3 +74,19 @@ class TestVoiceSeriesService(unittest.TestCase):
         ep_after = self.service.get_episode(series.series_id, ep.episode_id)
         self.assertEqual(ep_after.status, EpisodeStatus.COMPLETED)
         self.assertEqual(ep_after.title, "Osiris Legend")
+
+    def test_review_queue_logs_workflow_lookup_failure(self):
+        series = self.service.create_series(title="Broken review")
+        episode = self.service.add_episode(series.series_id, "proj_broken", "Episode")
+        episode.workflow_id = "wf_broken"
+        self.store.save_episode(episode)
+        workflow_store = SimpleNamespace(get_workflow=lambda _workflow_id: 1 / 0)
+
+        with self.assertLogs("services.voice_series_service", level="WARNING"):
+            actions = self.service.get_review_queue(
+                series.series_id,
+                wf_service=SimpleNamespace(store=workflow_store),
+                proj_store=object(),
+            )
+
+        self.assertEqual(actions, [])
