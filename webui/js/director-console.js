@@ -87,6 +87,204 @@ async function startDirectorWorkflow() {
   } catch (error) { showToast('error', escapeHtml(error.message)); }
 }
 
+// ==================== IDEA-TO-SCRIPT WIZARD ====================
+// Embeds the two-gate /api/v1/projects planner (topic -> clarifying questions ->
+// Gate 1 requirements -> Gate 2 script) so a workflow can be created straight
+// from an idea instead of requiring an already-written script.
+let directorIdeaProjectId = null;
+let directorIdeaData = null;
+
+function setDirectorCreateMode(mode) {
+  const manualBtn = document.getElementById('directorModeManualBtn');
+  const ideaBtn = document.getElementById('directorModeIdeaBtn');
+  const manualPanel = document.getElementById('directorManualPanel');
+  const ideaPanel = document.getElementById('directorIdeaPanel');
+  if (!manualBtn || !ideaBtn || !manualPanel || !ideaPanel) return;
+  const isIdea = mode === 'idea';
+  manualPanel.classList.toggle('hidden', isIdea);
+  ideaPanel.classList.toggle('hidden', !isIdea);
+  manualBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'text-slate-300 font-medium' : 'bg-purple-600 text-white'}`;
+  ideaBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'bg-purple-600 text-white' : 'text-slate-300 font-medium'}`;
+}
+
+function directorIdeaStepVisibility(step) {
+  ['step1', 'step2', 'step3'].forEach(s => {
+    document.getElementById(`directorIdea${s.charAt(0).toUpperCase() + s.slice(1)}`)?.classList.toggle('hidden', s !== step);
+  });
+}
+
+function directorIdeaSummaryMarkdown(summary) {
+  if (!summary) return 'Chưa có cấu hình tóm tắt.';
+  return escapeHtml(summary)
+    .replace(/^### (.+)$/gm, '<h3 class="text-xs font-bold text-white mb-2">$1</h3>')
+    .replace(/^\* \*\*([^*]+)\*\*: (.*)$/gm, '<div class="text-xs text-slate-200 py-0.5"><strong class="text-purple-400">$1:</strong> $2</div>')
+    .replace(/^\* (.*)$/gm, '<div class="text-xs text-slate-300 py-0.5">• $1</div>')
+    .replace(/\n/g, '<br/>');
+}
+
+function directorIdeaRenderQuestions(questions) {
+  const container = document.getElementById('directorIdeaQuestions');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!questions || questions.length === 0) {
+    container.innerHTML = '<div class="text-slate-400 text-xs italic">Tất cả thông số cơ bản đã đầy đủ. Vui lòng bấm tiếp tục!</div>';
+    return;
+  }
+  questions.forEach((q, idx) => {
+    const qCard = document.createElement('div');
+    qCard.className = 'p-3 rounded-xl bg-[#0E0C12] border border-[#3F3A46]/60 space-y-2';
+    let optionsHtml = '';
+    if (q.options && q.options.length > 0) {
+      optionsHtml = `<div class="flex flex-wrap gap-1.5 pt-1">${q.options.map(opt =>
+        `<button type="button" onclick="selectDirectorIdeaOption('${q.id}', '${opt.replace(/'/g, "\\'")}')" class="director-idea-opt-${q.id} px-2.5 py-1 rounded-md text-[11px] border border-[#3F3A46] bg-[#18151E] hover:bg-purple-900/30 text-slate-300 cursor-pointer">${escapeHtml(opt)}</button>`
+      ).join('')}</div>`;
+    }
+    qCard.innerHTML = `
+      <div class="flex items-start justify-between gap-2">
+        <label class="text-xs font-semibold text-white flex items-center gap-1.5">
+          <span class="w-4 h-4 rounded-full bg-amber-600 text-white font-mono text-[10px] flex items-center justify-center">${idx + 1}</span>
+          <span>${escapeHtml(q.question || q.id)}</span>
+          ${q.required ? '<span class="text-red-400 font-bold">*</span>' : '<span class="text-slate-500 text-[10px]">(Khuyến nghị)</span>'}
+        </label>
+      </div>
+      ${optionsHtml}
+      <input type="text" id="director_idea_q_${q.id}" data-qid="${q.id}" placeholder="Hoặc nhập câu trả lời tùy chỉnh..." class="director-input w-full">
+    `;
+    container.appendChild(qCard);
+  });
+}
+
+function selectDirectorIdeaOption(qid, val) {
+  const input = document.getElementById(`director_idea_q_${qid}`);
+  if (input) input.value = val;
+  document.querySelectorAll(`.director-idea-opt-${qid}`).forEach(btn => {
+    const active = btn.textContent.trim() === val;
+    btn.className = `director-idea-opt-${qid} px-2.5 py-1 rounded-md text-[11px] border cursor-pointer ${active ? 'border-amber-500 bg-amber-600 text-white font-bold' : 'border-[#3F3A46] bg-[#18151E] hover:bg-amber-900/30 text-slate-300'}`;
+  });
+}
+
+function directorIdeaExtractScript(data) {
+  if (data.script && typeof data.script === 'object' && data.script.full_text) return data.script.full_text;
+  if (typeof data.script === 'string') return data.script;
+  if (data.script_text) return data.script_text;
+  return '';
+}
+
+function directorIdeaScriptReady(data) {
+  const scriptEl = document.getElementById('directorScript');
+  const titleEl = document.getElementById('directorTitle');
+  if (scriptEl) scriptEl.value = directorIdeaExtractScript(data);
+  if (titleEl && !titleEl.value.trim()) titleEl.value = data.topic || '';
+  setDirectorCreateMode('manual');
+  directorIdeaStepVisibility('step1');
+  const topicEl = document.getElementById('directorIdeaTopic');
+  if (topicEl) topicEl.value = '';
+  directorIdeaProjectId = null;
+  directorIdeaData = null;
+  showToast('success', 'Kịch bản đã sẵn sàng — kiểm tra rồi bấm "Bắt đầu sản xuất".');
+}
+
+function directorIdeaRenderState(data) {
+  directorIdeaData = data;
+  directorIdeaProjectId = data.id || data.project_id || directorIdeaProjectId;
+  const status = data.status;
+
+  if (status === 'awaiting_answers') {
+    directorIdeaStepVisibility('step2');
+    const tagsBox = document.getElementById('directorIdeaTags');
+    if (tagsBox) {
+      const entries = Object.entries(data.requirements || {}).filter(([, v]) => Boolean(v));
+      tagsBox.innerHTML = entries.length
+        ? entries.map(([k, v]) => `<span class="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-[10px]">✓ ${escapeHtml(k)}: ${escapeHtml(Array.isArray(v) ? v.join(', ') : String(v))}</span>`).join('')
+        : '<span class="text-slate-500 text-[11px]">Chưa nhận diện được thông số</span>';
+    }
+    directorIdeaRenderQuestions(data.questions || []);
+  } else if (status === 'awaiting_requirements_confirmation' || status === 'awaiting_confirmation' || status === 'awaiting_script_confirmation') {
+    directorIdeaStepVisibility('step3');
+    const isGate2 = status === 'awaiting_script_confirmation';
+    const gateLabel = document.getElementById('directorIdeaGateLabel');
+    if (gateLabel) {
+      gateLabel.textContent = isGate2 ? 'Gate 2: Xác nhận kịch bản' : 'Gate 1: Xác nhận yêu cầu';
+      gateLabel.className = `px-2 py-0.5 rounded text-[10px] font-bold border ${isGate2 ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/30' : 'bg-blue-600/20 text-blue-300 border-blue-500/30'}`;
+    }
+    const summaryBox = document.getElementById('directorIdeaSummaryBox');
+    if (summaryBox) summaryBox.innerHTML = directorIdeaSummaryMarkdown(data.summary);
+  } else if (status === 'approved') {
+    // The "approved" confirm response doesn't carry the script body — re-fetch
+    // the canonical project record so the generated text is never lost.
+    directorFetch(`/api/v1/projects/${directorIdeaProjectId}`)
+      .then(full => directorIdeaScriptReady(full))
+      .catch(() => directorIdeaScriptReady(data));
+  } else {
+    directorIdeaStepVisibility('step1');
+  }
+}
+
+async function directorIdeaPrepare() {
+  const btn = document.getElementById('directorIdeaPrepareBtn');
+  const topic = document.getElementById('directorIdeaTopic')?.value.trim();
+  if (!topic) return showToast('warning', 'Vui lòng nhập chủ đề dự án âm thanh.');
+  const autoDefaults = document.getElementById('directorIdeaAutoDefaults')?.checked ?? true;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang phân tích...</span>'; }
+  try {
+    const data = await directorFetch('/api/v1/projects/prepare', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ topic, auto_defaults: autoDefaults }),
+    });
+    directorIdeaRenderState(data);
+  } catch (error) {
+    showToast('error', escapeHtml(error.message));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">psychology</span><span>Phân tích & Khởi tạo</span>'; }
+  }
+}
+
+async function directorIdeaSubmitAnswers() {
+  if (!directorIdeaProjectId) return showToast('warning', 'Chưa có dự án nào được chọn.');
+  const btn = document.getElementById('directorIdeaAnswersBtn');
+  const answers = {};
+  document.querySelectorAll('#directorIdeaQuestions input[data-qid]').forEach(input => {
+    const val = input.value.trim();
+    if (val) answers[input.getAttribute('data-qid')] = val;
+  });
+  const freeform = document.getElementById('directorIdeaFreeform')?.value.trim();
+  const autoDefaults = document.getElementById('directorIdeaAnswersAutoDefaults')?.checked ?? true;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang cập nhật...</span>'; }
+  try {
+    const data = await directorFetch(`/api/v1/projects/${directorIdeaProjectId}/answer`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ answers: freeform || answers, auto_defaults: autoDefaults }),
+    });
+    directorIdeaRenderState(data);
+  } catch (error) {
+    showToast('error', escapeHtml(error.message));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">send</span><span>Gửi câu trả lời & Tóm tắt</span>'; }
+  }
+}
+
+async function directorIdeaConfirm(approve) {
+  if (!directorIdeaProjectId) return showToast('warning', 'Chưa có dự án nào.');
+  try {
+    const data = await directorFetch(`/api/v1/projects/${directorIdeaProjectId}/confirm`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ confirmed: approve }),
+    });
+    if (!approve) {
+      directorIdeaProjectId = null;
+      directorIdeaData = null;
+      directorIdeaStepVisibility('step1');
+      const topicEl = document.getElementById('directorIdeaTopic');
+      if (topicEl) topicEl.value = '';
+      showToast('info', 'Đã hủy ý tưởng dự án.');
+      return;
+    }
+    directorIdeaRenderState(data);
+  } catch (error) {
+    showToast('error', escapeHtml(error.message));
+  }
+}
+
 async function loadDirectorWorkflows(syncActive = false) {
   const list = document.getElementById('directorWorkflowList');
   if (!list) return;

@@ -42,7 +42,6 @@ const TAB_URL_MAP = {
   'batch': 'batch-studio',
   'multilingual': 'multilingual-tts',
   'vc': 'voice-clone',
-  'projects': 'projects-studio',
   'director': 'director-console',
   'characters': 'characters',
   'history': 'history',
@@ -59,8 +58,10 @@ const URL_TAB_MAP = {
   'multilingual': 'multilingual',
   'voice-clone': 'vc',
   'vc': 'vc',
-  'projects-studio': 'projects',
-  'projects': 'projects',
+  // The standalone "Dự án âm thanh" planner was absorbed into Director
+  // Console's "Tạo từ ý tưởng" create-mode; keep old links working.
+  'projects-studio': 'director',
+  'projects': 'director',
   'director-console': 'director',
   'director': 'director',
   'characters': 'characters',
@@ -186,7 +187,6 @@ function switchTab(tabId, updateUrl = true) {
   }
 
   // Tab specific initializers
-  if (tabId === 'projects' && typeof loadProjects === 'function') loadProjects();
   if (tabId === 'director' && typeof loadDirectorWorkflows === 'function') loadDirectorWorkflows();
   if (tabId === 'characters' && typeof loadCharacters === 'function') loadCharacters();
   if (tabId === 'history' && typeof refreshHistory === 'function') refreshHistory();

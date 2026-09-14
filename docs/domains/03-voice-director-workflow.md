@@ -37,8 +37,7 @@ Tài liệu hướng dẫn kiến trúc sản xuất âm thanh tự động (Aut
 | **Sửa đổi kịch bản** | `services/director_revision_service.py`| Tiếp nhận revision, audit trail, tái tạo tối thiểu an toàn |
 | **API Routers** | `routers/voice_projects.py` | REST API dự án, revisions, review, reproduce |
 | | `routers/voice_workflows.py` | REST API quy trình workflow, step execution, next action |
-| **Giao diện WebUI** | `webui/js/director-console.js` | Tab 6: Director Console (Điều khiển 25 Phase) |
-| | `webui/js/projects.js` | Tab 5: Dự án âm thanh (Basic Planner) |
+| **Giao diện WebUI** | `webui/js/director-console.js` | Director Console (Điều khiển 25 Phase). Panel "Tạo bản thu mới" có 2 chế độ: dán kịch bản có sẵn, hoặc "Tạo từ ý tưởng" (nhúng lại luồng 2-gate `/api/v1/projects/*` bên dưới để tự sinh kịch bản trước khi vào workflow). |
 | **MCP Tools** | `mcp_adapter/voice_project_tools.py` | 35+ công cụ MCP điều phối từ xa cho AI IDE |
 | **Kiểm thử** | `tests/test_voice_orchestration_phase24.py`| Test xác định authoritative next-action |
 | | `tests/test_director_phase16.py` | Test snapshot review, audit revisions, reproduce |
