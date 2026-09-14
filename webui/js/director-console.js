@@ -861,12 +861,28 @@ async function directorMutation(url, options = {}) {
   catch (error) { showToast('error', escapeHtml(error.message)); return null; }
 }
 
+function directorBeatQcPassed(beat) {
+  const qcScore = beat.qc_summary?.qc_score ?? beat.qc_summary?.score ?? beat.qc_summary?.overall_score;
+  return beat.qc_summary?.qc_verdict === 'pass' || (typeof qcScore === 'number' && qcScore >= 80);
+}
+
 async function approveDirectorGate(approved) {
   if (directorGateSubmitting) return;
   const gate = directorActive.human_action;
   if (!gate) return;
   const action = {narration_acceptance:'approve_narration', final_audio_approval:'approve_final_audio'}[gate.action_type];
   if (!action) return showToast('error', `Bước duyệt chưa được hỗ trợ: ${escapeHtml(gate.action_type)}`);
+
+  if (approved && gate.action_type === 'narration_acceptance') {
+    const problems = (directorReview?.beats || []).filter(b => !b.selected_attempt || !directorBeatQcPassed(b));
+    if (problems.length) {
+      const names = problems.slice(0, 5).map(b => b.beat_id).join(', ');
+      const more = problems.length > 5 ? ` và ${problems.length - 5} đoạn khác` : '';
+      const proceed = confirm(`Có ${problems.length} đoạn cần chú ý trước khi duyệt toàn bộ: ${names}${more}.\n\nLý do: chưa chọn bản thu, hoặc điểm QC dưới 80.\n\nBạn vẫn muốn duyệt TOÀN BỘ giọng đọc ngay bây giờ?`);
+      if (!proceed) return;
+    }
+  }
+
   const artifact = gate.action_type === 'final_audio_approval' ? gate.items?.[0] || {} : {};
   directorGateSubmitting = true;
   document.querySelectorAll('[data-director-gate]').forEach(button => { button.disabled = true; button.classList.add('opacity-50'); });
