@@ -491,7 +491,7 @@ function renderDirectorWorkspace() {
   if (!directorReview) return '<p class="text-xs text-slate-500">Nội dung duyệt sẽ xuất hiện sau khi tạo dự án.</p>';
   const gaps = [...directorReview.required_resource_gaps, ...directorReview.recommended_resource_gaps];
   return `<h4 class="text-xs font-bold text-white mb-1">Kịch bản gốc (không thể sửa)</h4><p class="text-[9px] text-slate-500 font-mono mb-3">SHA-256 ${escapeHtml(directorSource?.sha256 || directorReview.source_script_sha256)}</p><div class="p-3 rounded bg-[#0E0C12] text-xs text-slate-300 whitespace-pre-wrap">${escapeHtml(directorSource?.script_text || directorReview.script_excerpt)}</div>
-    <div class="grid md:grid-cols-2 gap-3 mt-4"><div><h4 class="text-xs font-bold text-white mb-2">Các đoạn giọng đọc</h4>${directorReview.beats.map(b => `<button onclick="openDirectorBeat('${escapeHtml(b.beat_id)}')" class="block w-full text-left p-2 mb-1 rounded bg-[#0E0C12] text-xs"><b class="text-white">${escapeHtml(b.beat_id)}</b> <span class="text-slate-400">${escapeHtml(b.emotion)} · năng lượng ${b.energy} · ${escapeHtml(directorStatusLabel(b.render_status))}</span></button>`).join('')}</div><div>${renderDirectorResourceReadiness(directorReview.resource_readiness, gaps)}</div></div>`;
+    <div class="grid md:grid-cols-2 gap-3 mt-4"><div><h4 class="text-xs font-bold text-white mb-2">Các đoạn giọng đọc</h4>${sortDirectorBeatsByAttention(directorReview.beats).map(b => `<button onclick="openDirectorBeat('${escapeHtml(b.beat_id)}')" class="block w-full text-left p-2 mb-1 rounded bg-[#0E0C12] text-xs ${directorBeatNeedsAttention(b) ? 'border border-amber-700/50' : ''}"><b class="text-white">${escapeHtml(b.beat_id)}</b> <span class="text-slate-400">${escapeHtml(b.emotion)} · năng lượng ${b.energy} · ${escapeHtml(directorStatusLabel(b.render_status))}</span>${directorBeatNeedsAttention(b) ? ' <span class="text-amber-400 text-[10px]">● cần chú ý</span>' : ''}</button>`).join('')}</div><div>${renderDirectorResourceReadiness(directorReview.resource_readiness, gaps)}</div></div>`;
 }
 
 function renderDirectorResourceReadiness(readiness, gaps) {
@@ -610,7 +610,7 @@ async function directorFindAssetSuggestions(resourceId, button) {
 function renderDirectorReview() {
   if (!directorReview?.beats?.length) return '<p class="text-xs text-slate-500">Chưa có đoạn giọng đọc nào.</p>';
   const gated = directorActive.status === 'waiting_for_human' && directorActive.human_action?.action_type === 'narration_acceptance';
-  return `${gated ? '<div class="mb-3 p-3 rounded-lg border border-amber-500/50 bg-amber-950/30 text-xs text-amber-200"><b>Cần duyệt giọng đọc:</b> nghe các bản đã chọn. Nút xanh phía trên duyệt toàn bộ một lần.</div>' : ''}<div class="space-y-3">${directorReview.beats.map(beat => `<article class="p-3 rounded-lg bg-[#0E0C12] border ${beat.selected_attempt ? 'border-emerald-700/50' : 'border-[#3F3A46]'}"><div class="flex flex-wrap justify-between gap-2"><div><b class="text-white text-xs">${escapeHtml(beat.beat_id)} · ${escapeHtml(beat.emotion)}</b><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(beat.source_text)}</p></div><span class="text-[10px] text-slate-400">bản đã chọn ${beat.selected_attempt ?? 'chưa có'} · QC ${beat.qc_summary?.qc_score ?? beat.qc_summary?.score ?? beat.qc_summary?.overall_score ?? '—'}</span></div>
+  return `${gated ? '<div class="mb-3 p-3 rounded-lg border border-amber-500/50 bg-amber-950/30 text-xs text-amber-200"><b>Cần duyệt giọng đọc:</b> nghe các bản đã chọn. Nút xanh phía trên duyệt toàn bộ một lần.</div>' : ''}<div class="space-y-3">${sortDirectorBeatsByAttention(directorReview.beats).map(beat => `<article class="p-3 rounded-lg bg-[#0E0C12] border ${directorBeatNeedsAttention(beat) ? 'border-amber-600/60' : 'border-emerald-700/50'}"><div class="flex flex-wrap justify-between gap-2"><div><b class="text-white text-xs">${escapeHtml(beat.beat_id)} · ${escapeHtml(beat.emotion)}</b><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(beat.source_text)}</p></div><span class="text-[10px] text-slate-400">bản đã chọn ${beat.selected_attempt ?? 'chưa có'} · QC ${beat.qc_summary?.qc_score ?? beat.qc_summary?.score ?? beat.qc_summary?.overall_score ?? '—'}</span></div>
     <div class="flex flex-wrap gap-2 mt-3">${beat.available_attempts.map(a => `<div class="flex items-center gap-1"><audio controls preload="none" class="h-8 w-44" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.artifact_id)}"></audio><button onclick="selectDirectorAttempt('${escapeHtml(beat.beat_id)}',${a.attempt_id})" class="px-2 py-1 rounded ${a.selected ? 'bg-emerald-700' : 'bg-[#231F2A]'} text-[10px] text-white">Bản ${a.attempt_id}${a.selected ? ' · đã chọn' : ''}</button></div>`).join('')}</div>
     <div class="flex gap-2 mt-3"><button onclick="openDirectorBeat('${escapeHtml(beat.beat_id)}')" class="px-3 py-1 rounded bg-purple-600 text-white text-[10px]">Mở chi tiết đoạn</button></div></article>`).join('')}</div>`;
 }
@@ -864,6 +864,14 @@ async function directorMutation(url, options = {}) {
 function directorBeatQcPassed(beat) {
   const qcScore = beat.qc_summary?.qc_score ?? beat.qc_summary?.score ?? beat.qc_summary?.overall_score;
   return beat.qc_summary?.qc_verdict === 'pass' || (typeof qcScore === 'number' && qcScore >= 80);
+}
+
+function directorBeatNeedsAttention(beat) {
+  return ['failed', 'needs_review', 'error'].includes(beat.render_status) || !beat.selected_attempt || !directorBeatQcPassed(beat);
+}
+
+function sortDirectorBeatsByAttention(beats) {
+  return [...beats].sort((a, b) => Number(!directorBeatNeedsAttention(a)) - Number(!directorBeatNeedsAttention(b)));
 }
 
 async function approveDirectorGate(approved) {
