@@ -226,6 +226,7 @@ def render_project_narration(
 
     for beat in target_beats:
         beat_state = manifest.get_or_create_beat(beat.id)
+        beat_voice_profile = beat.character_id or voice_profile
 
         # Idempotency: Skip if already passed and not forcing rerender
         if not force_rerender and beat_state.status == RenderStatus.PASSED and beat_state.selected_attempt is not None:
@@ -245,7 +246,7 @@ def render_project_narration(
                 beat=beat,
                 provider=provider,
                 attempt_id=current_attempt_id,
-                voice_profile=voice_profile,
+                voice_profile=beat_voice_profile,
                 pronunciation_overrides=pronunciation_overrides,
                 retry_adjustment=retry_adjustment,
                 progress_callback=progress_callback,

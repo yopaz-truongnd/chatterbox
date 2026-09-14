@@ -6,7 +6,7 @@ import time
 import unittest
 from unittest import mock
 
-from services.director_review_models import BeatResourcePatch, BeatTimingPatch
+from services.director_review_models import BeatResourcePatch, BeatTimingPatch, BeatVoicePatch
 from services.director_review_service import DirectorReviewService
 from services.director_resource_service import DirectorResourceService
 from services.director_revision_service import DirectorRevisionService
@@ -64,6 +64,30 @@ class TestDirectorPhase16(unittest.TestCase):
         self.assertNotIn("render_beat", impact.required_reproduction_steps)
         self.assertIn("mix_plan", impact.invalidated_artifacts)
         self.assertTrue(impact.final_approval_invalidated)
+
+    def test_voice_revision_requires_rerender_and_supports_reset_to_default(self):
+        self._rendered_project("voice_revision")
+        manifest = self.store.load_manifest("voice_revision")
+        beat_id = next(iter(manifest.beats))
+        selected = manifest.beats[beat_id].selected_attempt
+        self.assertIsNotNone(selected)
+        service = DirectorRevisionService(self.project_service)
+
+        impact = service.update_voice(
+            "voice_revision", beat_id, BeatVoicePatch(character_id="char_custom"), "tester"
+        )
+        plan = self.store.load_voice_plan("voice_revision")
+        self.assertEqual(next(b for b in plan.beats if b.id == beat_id).character_id, "char_custom")
+        self.assertIsNone(self.store.load_manifest("voice_revision").beats[beat_id].selected_attempt)
+        self.assertIn("render_beat", impact.required_reproduction_steps)
+        self.assertEqual(impact.rerender_beats, [beat_id])
+        self.assertTrue(impact.final_approval_invalidated)
+
+        # Resetting to the empty string ("Mặc định") must clear back to None,
+        # not leave the previous override in place.
+        service.update_voice("voice_revision", beat_id, BeatVoicePatch(character_id=""), "tester")
+        plan_after_reset = self.store.load_voice_plan("voice_revision")
+        self.assertIsNone(next(b for b in plan_after_reset.beats if b.id == beat_id).character_id)
 
     def test_select_existing_attempt_does_not_rerender(self):
         self._rendered_project("select_attempt")

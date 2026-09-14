@@ -118,6 +118,7 @@ class DirectorReviewService:
                 source_end=end,
                 role=beat.role.value,
                 voice_direction=beat.voice.model_dump(mode="json"),
+                character_id=beat.character_id,
                 emotion=beat.voice.emotion,
                 energy=beat.voice.energy,
                 pace=beat.voice.pace,

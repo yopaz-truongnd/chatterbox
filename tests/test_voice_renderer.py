@@ -107,6 +107,22 @@ class TestVoiceRendererPhase8(unittest.TestCase):
         # Invariant: input VoicePlan is unchanged
         self.assertEqual(self.plan, plan_copy)
 
+    def test_beat_character_id_overrides_project_voice_profile(self):
+        """A beat with character_id set must render with that voice; a beat
+        without one must still fall back to the project's global profile."""
+        plan_copy = copy.deepcopy(self.plan)
+        plan_copy.beats[0].character_id = "char_custom_narrator"
+
+        render_project_narration(
+            plan=plan_copy,
+            project_dir=self.temp_dir,
+            provider=self.provider,
+        )
+
+        requests_by_beat = {req.beat_id: req for req in self.provider.rendered_requests}
+        self.assertEqual(requests_by_beat["B01"].voice_profile, "char_custom_narrator")
+        self.assertEqual(requests_by_beat["B02"].voice_profile, plan_copy.voice.profile)
+
     def test_render_blocked_if_resource_report_blocked(self):
         blocked_report = ResourceReport(
             project_id="proj_torch",
