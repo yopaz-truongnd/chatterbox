@@ -90,6 +90,23 @@ class TestDirectorPhase16(unittest.TestCase):
         self.assertFalse(result.remaining_required_gaps)
         self.assertEqual((self.store.get_project_dir(project_id) / "source" / "script.txt").read_bytes(), before)
 
+    def test_resource_gap_description_shows_specific_term_not_generic_category(self):
+        """description must surface the specific term/intent, not the generic reason code.
+
+        Every proper-noun pronunciation gap previously shared the exact same
+        "mythological_proper_noun" reason string, and description prioritized
+        that reason over the actual term — making every gap card in the
+        Director Console indistinguishable from the others.
+        """
+        project_id = "gap_description_specificity"
+        self.project_service.create_project("The Zhong crossed the silent mountain at dusk.", project_id=project_id)
+        self.project_service.plan(project_id)
+        self.project_service.check_resources(project_id)
+        review = DirectorReviewService(self.store).get_review(project_id)
+        gap = next(g for g in review.required_resource_gaps if g.term == "Zhong")
+        self.assertEqual(gap.description, "Zhong")
+        self.assertNotIn("mythological_proper_noun", gap.description)
+
     def test_required_resource_cannot_be_omitted(self):
         project_id = "required_omit"
         self.project_service.create_project("The Zhong waited.", project_id=project_id)

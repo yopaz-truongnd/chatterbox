@@ -491,17 +491,52 @@ function renderDirectorWorkspace() {
   if (!directorReview) return '<p class="text-xs text-slate-500">Nội dung duyệt sẽ xuất hiện sau khi tạo dự án.</p>';
   const gaps = [...directorReview.required_resource_gaps, ...directorReview.recommended_resource_gaps];
   return `<h4 class="text-xs font-bold text-white mb-1">Kịch bản gốc (không thể sửa)</h4><p class="text-[9px] text-slate-500 font-mono mb-3">SHA-256 ${escapeHtml(directorSource?.sha256 || directorReview.source_script_sha256)}</p><div class="p-3 rounded bg-[#0E0C12] text-xs text-slate-300 whitespace-pre-wrap">${escapeHtml(directorSource?.script_text || directorReview.script_excerpt)}</div>
-    <div class="grid md:grid-cols-2 gap-3 mt-4"><div><h4 class="text-xs font-bold text-white mb-2">Các đoạn giọng đọc</h4>${directorReview.beats.map(b => `<button onclick="openDirectorBeat('${escapeHtml(b.beat_id)}')" class="block w-full text-left p-2 mb-1 rounded bg-[#0E0C12] text-xs"><b class="text-white">${escapeHtml(b.beat_id)}</b> <span class="text-slate-400">${escapeHtml(b.emotion)} · năng lượng ${b.energy} · ${escapeHtml(directorStatusLabel(b.render_status))}</span></button>`).join('')}</div><div><h4 class="text-xs font-bold text-white mb-2">Mức sẵn sàng tài nguyên ${directorReview.resource_readiness ?? '—'}%</h4>${gaps.length ? gaps.map(renderDirectorGap).join('') : '<p class="text-xs text-emerald-400">Không thiếu tài nguyên.</p>'}</div></div>`;
+    <div class="grid md:grid-cols-2 gap-3 mt-4"><div><h4 class="text-xs font-bold text-white mb-2">Các đoạn giọng đọc</h4>${directorReview.beats.map(b => `<button onclick="openDirectorBeat('${escapeHtml(b.beat_id)}')" class="block w-full text-left p-2 mb-1 rounded bg-[#0E0C12] text-xs"><b class="text-white">${escapeHtml(b.beat_id)}</b> <span class="text-slate-400">${escapeHtml(b.emotion)} · năng lượng ${b.energy} · ${escapeHtml(directorStatusLabel(b.render_status))}</span></button>`).join('')}</div><div>${renderDirectorResourceReadiness(directorReview.resource_readiness, gaps)}</div></div>`;
 }
 
-function renderDirectorGap(gap) {
+function renderDirectorResourceReadiness(readiness, gaps) {
+  const pct = Math.max(0, Math.min(100, readiness ?? 100));
+  const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-500';
+  const pctColor = pct >= 80 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400';
+  const requiredCount = gaps.filter(g => g.priority === 'required').length;
+
+  const header = `<div class="flex items-center justify-between mb-1"><h4 class="text-xs font-bold text-white">Mức sẵn sàng tài nguyên</h4><span class="text-xs font-mono font-bold ${pctColor}">${readiness ?? '—'}%</span></div>
+    <div class="h-1.5 rounded-full bg-[#231F2A] overflow-hidden mb-2"><div class="h-full ${barColor} rounded-full transition-all" style="width:${pct}%"></div></div>`;
+
+  if (!gaps.length) {
+    return `${header}<p class="text-xs text-emerald-400">✓ Không thiếu tài nguyên nào.</p>`;
+  }
+
+  const pronunciationGaps = gaps.filter(g => g.resource_type === 'knowledge');
+  const assetGaps = gaps.filter(g => g.resource_type !== 'knowledge');
+  const summary = `<p class="text-[10px] text-slate-400 mb-2">${requiredCount ? `<span class="text-red-400 font-bold">${requiredCount} bắt buộc</span> · ` : ''}${gaps.length} mục cần xử lý</p>`;
+
+  const pronSection = pronunciationGaps.length ? `<div class="mb-3"><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Cần xác nhận phát âm (${pronunciationGaps.length})</h5><div class="space-y-1.5">${pronunciationGaps.map(renderDirectorPronunciationGap).join('')}</div></div>` : '';
+  const assetSection = assetGaps.length ? `<div><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Tài nguyên âm thanh còn thiếu (${assetGaps.length})</h5><div class="space-y-2">${assetGaps.map(renderDirectorAssetGap).join('')}</div></div>` : '';
+
+  return `${header}${summary}${pronSection}${assetSection}`;
+}
+
+function renderDirectorPronunciationGap(gap) {
+  const required = gap.priority === 'required';
+  if (!gap.term) return `<p class="text-[10px] text-slate-500">Chưa có từ cần xác nhận phát âm.</p>`;
+  return `<div class="flex items-center gap-1.5 p-1.5 rounded border ${required ? 'bg-red-950/30 border-red-800/60' : 'bg-amber-950/30 border-amber-800/60'}">
+    <b class="text-white text-xs shrink-0" title="Thuật ngữ cần xác nhận phát âm">${escapeHtml(gap.term)}</b>
+    <input class="director-input flex-1 min-w-0" placeholder="Cách phát âm đã xác nhận...">
+    <button onclick="resolveDirectorPronunciation('${escapeHtml(gap.term)}',this)" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Xác nhận</button>
+  </div>`;
+}
+
+function renderDirectorAssetGap(gap) {
   const required = gap.priority === 'required';
   const wanted = gap.wanted || {};
-  const sfxDetails = gap.resource_type === 'knowledge' ? '' : `<div class="mt-2 text-[10px] text-slate-300"><p><b>Cần:</b> ${escapeHtml(gap.intent || gap.description || 'hiệu ứng âm thanh phù hợp')}</p>${wanted.duration ? `<p><b>Thời lượng:</b> ${escapeHtml(String(wanted.duration))}</p>` : ''}${wanted.intensity ? `<p><b>Cường độ:</b> ${escapeHtml(String(wanted.intensity))}/5</p>` : ''}${gap.narrative_context?.text ? `<p class="mt-1"><b>Ngữ cảnh:</b> ${escapeHtml(gap.narrative_context.text)}</p>` : ''}${gap.suggested_search?.length ? `<p class="mt-1"><b>Từ khóa:</b> ${escapeHtml(gap.suggested_search.slice(0, 3).join(' · '))}</p>` : ''}</div>`;
-  const action = gap.resource_type === 'knowledge'
-    ? gap.term ? `<div class="flex gap-1 mt-2"><input class="director-input flex-1" placeholder="Cách phát âm đã xác nhận"><button onclick="resolveDirectorPronunciation('${escapeHtml(gap.term)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Xác nhận</button></div>` : '<p class="text-[10px] text-slate-500 mt-2">Chưa có từ cần xác nhận phát âm.</p>'
-    : `<div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button>${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-[#231F2A] text-[10px]">Bỏ qua</button>`}</div>`;
-  return `<div class="p-2 mb-2 rounded ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} border text-xs text-amber-200"><div class="flex justify-between"><span>${escapeHtml(gap.resource_type)}: ${escapeHtml(gap.description)}</span><b class="text-[9px] uppercase">${escapeHtml(gap.priority)}</b></div>${sfxDetails}${action}</div>`;
+  const label = gap.intent || gap.description || 'hiệu ứng âm thanh phù hợp';
+  const details = `<div class="mt-1.5 text-[10px] text-slate-300 flex flex-wrap gap-x-3">${wanted.duration ? `<span><b>Thời lượng:</b> ${escapeHtml(String(wanted.duration))}</span>` : ''}${wanted.intensity ? `<span><b>Cường độ:</b> ${escapeHtml(String(wanted.intensity))}/5</span>` : ''}</div>${gap.narrative_context?.text ? `<p class="mt-1 text-[10px] text-slate-300"><b>Ngữ cảnh:</b> ${escapeHtml(gap.narrative_context.text)}</p>` : ''}${gap.suggested_search?.length ? `<p class="mt-1 text-[10px] text-slate-300"><b>Từ khóa:</b> ${escapeHtml(gap.suggested_search.slice(0, 3).join(' · '))}</p>` : ''}`;
+  return `<div class="p-2 rounded border ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} text-xs text-amber-200">
+    <div class="flex justify-between items-start gap-2"><b class="text-white">${escapeHtml(label)}</b><b class="text-[9px] uppercase shrink-0">${escapeHtml(gap.priority)}</b></div>
+    ${details}
+    <div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button>${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-[#231F2A] text-[10px]">Bỏ qua</button>`}</div>
+  </div>`;
 }
 
 function renderDirectorReview() {
