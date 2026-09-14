@@ -31,6 +31,34 @@ class NarrationPlanTestCase(unittest.TestCase):
         self.assertIn("1984", words)
         self.assertIn("Elan", words)
 
+    def test_scan_pronunciation_candidates_ignores_bracketed_scene_and_speaker_tags(self):
+        """Scene/speaker markup like "[Narrator]:" is script formatting, not spoken
+        narration, and must never itself be flagged as a proper noun to confirm."""
+        sample_text = (
+            "[Introduction & Overview]\n"
+            "[Narrator]: Welcome to the show. Today we meet Zhong, a wandering scholar."
+        )
+        words = [c["word"] for c in scan_pronunciation_candidates(sample_text)]
+
+        self.assertNotIn("Narrator", words)
+        self.assertNotIn("Overview", words)
+        self.assertNotIn("Introduction", words)
+        self.assertNotIn("Conclusion", words)
+        self.assertIn("Zhong", words)
+
+    def test_scan_pronunciation_candidates_skips_title_case_runs(self):
+        """A run of 2+ consecutive capitalized words looks like a heading/title
+        fragment, not a chain of unrelated proper nouns, and must be skipped
+        wholesale instead of flooding the review with one gap per word."""
+        sample_text = "Welcome to Our Amazing Weekly Science Podcast Show. Enjoy the episode."
+        words = [c["word"] for c in scan_pronunciation_candidates(sample_text)]
+
+        self.assertNotIn("Amazing", words)
+        self.assertNotIn("Weekly", words)
+        self.assertNotIn("Science", words)
+        self.assertNotIn("Podcast", words)
+        self.assertNotIn("Show", words)
+
     def test_apply_pronunciation_dict(self):
         text = "Welcome to NASA. We explore AI frontiers at NASA headquarters."
         pron_dict = {"NASA": "N.A.S.A.", "AI": "A.I."}

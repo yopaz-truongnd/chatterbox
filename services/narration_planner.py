@@ -22,6 +22,11 @@ def scan_pronunciation_candidates(script_text: str) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()
 
+    # Strip bracketed scene/speaker markup (e.g. "[Narrator]:", "[Scene 1: Intro]")
+    # before scanning — it is structural script formatting, not spoken narration,
+    # and its capitalized words are not proper nouns needing pronunciation.
+    script_text = re.sub(r"\[[^\]]*\]", " ", script_text)
+
     # 1. Acronyms / All-caps (2+ uppercase letters)
     acronym_matches = re.findall(r"\b([A-Z]{2,6})\b", script_text)
     for acr in acronym_matches:
@@ -47,23 +52,43 @@ def scan_pronunciation_candidates(script_text: str) -> list[dict[str, Any]]:
                 "suggested_reading": clean_num,
             })
 
-    # 3. Capitalized words occurring mid-sentence (potential proper nouns / character names)
+    # 3. Capitalized words occurring mid-sentence (potential proper nouns / character names).
+    # Runs of 2+ consecutive capitalized words look like a title/heading fragment
+    # rather than a single embedded proper noun, so they are skipped entirely
+    # instead of being flagged as N separate unrelated pronunciation gaps.
+    _COMMON_CAPITALIZED_WORDS = (
+        "the", "this", "that", "there", "then", "when", "what", "where", "how", "and", "but", "so",
+        "welcome", "today", "however", "meanwhile", "finally", "thank", "please",
+    )
     sentences = re.split(r"(?<=[.?!])\s+", script_text)
     for sent in sentences:
         words = sent.strip().split()
-        if len(words) > 1:
-            for w in words[1:]:
-                clean_w = re.sub(r"[^\w]", "", w)
-                if clean_w.istitle() and len(clean_w) > 2 and clean_w not in seen:
-                    # Filter common English words that might be capitalized after quotes
-                    if clean_w.lower() not in ("the", "this", "that", "there", "then", "when", "what", "where", "how", "and", "but", "so"):
-                        seen.add(clean_w)
-                        candidates.append({
-                            "word": clean_w,
-                            "category": "proper_noun",
-                            "reason": "Character name or proper noun may require phonetic spelling for natural inflection",
-                            "suggested_reading": clean_w,
-                        })
+        if len(words) <= 1:
+            continue
+        tail = words[1:]
+        is_title = [
+            len(re.sub(r"[^\w]", "", w)) > 2 and re.sub(r"[^\w]", "", w).istitle()
+            for w in tail
+        ]
+        i = 0
+        while i < len(tail):
+            if not is_title[i]:
+                i += 1
+                continue
+            run_end = i
+            while run_end < len(tail) and is_title[run_end]:
+                run_end += 1
+            if run_end - i == 1:
+                clean_w = re.sub(r"[^\w]", "", tail[i])
+                if clean_w not in seen and clean_w.lower() not in _COMMON_CAPITALIZED_WORDS:
+                    seen.add(clean_w)
+                    candidates.append({
+                        "word": clean_w,
+                        "category": "proper_noun",
+                        "reason": "Character name or proper noun may require phonetic spelling for natural inflection",
+                        "suggested_reading": clean_w,
+                    })
+            i = run_end
 
     return candidates
 
