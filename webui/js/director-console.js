@@ -511,7 +511,8 @@ function renderDirectorResourceReadiness(readiness, gaps) {
   const assetGaps = gaps.filter(g => g.resource_type !== 'knowledge');
   const summary = `<p class="text-[10px] text-slate-400 mb-2">${requiredCount ? `<span class="text-red-400 font-bold">${requiredCount} bắt buộc</span> · ` : ''}${gaps.length} mục cần xử lý</p>`;
 
-  const pronSection = pronunciationGaps.length ? `<div class="mb-3"><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Cần xác nhận phát âm (${pronunciationGaps.length})</h5><div class="space-y-1.5">${pronunciationGaps.map(renderDirectorPronunciationGap).join('')}</div></div>` : '';
+  const pronBulkBtn = pronunciationGaps.length > 1 ? `<button onclick="confirmAllDirectorPronunciations(this)" class="text-[10px] text-purple-300 hover:text-purple-200 underline shrink-0">Xác nhận tất cả theo chính tả gốc</button>` : '';
+  const pronSection = pronunciationGaps.length ? `<div class="mb-3"><div class="flex items-center justify-between gap-2 mb-1.5"><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Cần xác nhận phát âm (${pronunciationGaps.length})</h5>${pronBulkBtn}</div><div class="space-y-1.5 director-pron-list">${pronunciationGaps.map(renderDirectorPronunciationGap).join('')}</div></div>` : '';
   const assetSection = assetGaps.length ? `<div><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Tài nguyên âm thanh còn thiếu (${assetGaps.length})</h5><div class="space-y-2">${assetGaps.map(renderDirectorAssetGap).join('')}</div></div>` : '';
 
   return `${header}${summary}${pronSection}${assetSection}`;
@@ -520,11 +521,36 @@ function renderDirectorResourceReadiness(readiness, gaps) {
 function renderDirectorPronunciationGap(gap) {
   const required = gap.priority === 'required';
   if (!gap.term) return `<p class="text-[10px] text-slate-500">Chưa có từ cần xác nhận phát âm.</p>`;
-  return `<div class="flex items-center gap-1.5 p-1.5 rounded border ${required ? 'bg-red-950/30 border-red-800/60' : 'bg-amber-950/30 border-amber-800/60'}">
+  return `<div class="flex items-center gap-1.5 p-1.5 rounded border ${required ? 'bg-red-950/30 border-red-800/60' : 'bg-amber-950/30 border-amber-800/60'}" data-pron-term="${escapeHtml(gap.term)}">
     <b class="text-white text-xs shrink-0" title="Thuật ngữ cần xác nhận phát âm">${escapeHtml(gap.term)}</b>
-    <input class="director-input flex-1 min-w-0" placeholder="Cách phát âm đã xác nhận...">
+    <input class="director-input flex-1 min-w-0" value="${escapeHtml(gap.term)}" placeholder="Cách phát âm đã xác nhận..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.nextElementSibling.click();}">
     <button onclick="resolveDirectorPronunciation('${escapeHtml(gap.term)}',this)" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Xác nhận</button>
   </div>`;
+}
+
+async function confirmAllDirectorPronunciations(button) {
+  const rows = document.querySelectorAll('.director-pron-list [data-pron-term]');
+  if (!rows.length) return;
+  button.disabled = true;
+  const originalLabel = button.textContent;
+  button.textContent = 'Đang xác nhận...';
+  try {
+    const results = await Promise.allSettled(Array.from(rows).map(row => {
+      const term = row.getAttribute('data-pron-term');
+      const phonetic = row.querySelector('input')?.value.trim() || term;
+      return directorFetch(`/api/v1/voice-projects/${directorActive.project_id}/resources/pronunciations`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ term, phonetic, actor_id: 'director-console' }),
+      });
+    }));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (failed) showToast('warning', `Đã xác nhận ${rows.length - failed}/${rows.length} từ, ${failed} từ bị lỗi.`);
+    else showToast('success', `Đã xác nhận toàn bộ ${rows.length} từ theo chính tả gốc.`);
+    await refreshDirectorActive();
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
 }
 
 function renderDirectorAssetGap(gap) {
