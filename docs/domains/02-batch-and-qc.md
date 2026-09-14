@@ -75,5 +75,5 @@ Tài liệu hướng dẫn xử lý kịch bản nhiều dòng, ghép âm thanh,
 ## 5. Lệnh Kiểm thử Nhanh (Fast Verification)
 
 ```bash
-python -m unittest tests/test_batch_studio_advanced.py tests/test_audio_quality.py
+python -m unittest tests/test_batch_studio_advanced.py tests/test_audio_quality.py tests/test_audio_candidate_evaluator.py
 ```

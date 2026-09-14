@@ -489,6 +489,48 @@ John: Tôi cũng rất vui được tham gia.
         self.assertEqual(meta["completed_lines"], 2)
         self.assertEqual(meta["failed_lines"], 0)
 
+    def test_subprocess_runner_rejects_empty_audio(self):
+        """Zero-length synthesized audio must be marked failed, never silently completed.
+
+        Regression guard for the parity gap between inference_runner.py (subprocess
+        path) and services/batch_runner.py (in-process path): both must reject
+        empty/zero-length tensors per the invariant in docs/domains/02-batch-and-qc.md.
+        """
+        from inference_runner import run_batch_inference
+        from unittest.mock import patch, MagicMock
+
+        mock_model = MagicMock()
+        empty_wav = torch.zeros((1, 0), dtype=torch.float32)
+
+        job_id = "test_subproc_empty_audio"
+        out_wav = self.data_dir / "outputs" / f"{job_id}.wav"
+        meta_json = self.data_dir / "outputs" / f"{job_id}.json"
+        chunks_dir = self.data_dir / "chunks" / job_id
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "type": "batch",
+            "model": "nano",
+            "device": "cpu",
+            "output_path": str(out_wav),
+            "meta_path": str(meta_json),
+            "chunks_dir": str(chunks_dir),
+            "pause_duration": 0.5,
+            "lines": [
+                {"idx": 0, "text": "Line that synthesizes to nothing"},
+            ],
+        }
+
+        with patch("inference_runner.load_model", return_value=(mock_model, 24000)), \
+             patch("inference_runner.generate_with_model", return_value=empty_wav):
+            run_batch_inference(config)
+
+        with open(meta_json, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        self.assertEqual(meta["completed_lines"], 0)
+        self.assertEqual(meta["failed_lines"], 1)
+        self.assertIn("empty or zero-length", meta["lines_results"][0]["error"])
+
     def test_recursive_sanitizer_removes_all_internal_paths(self):
         """Job public_dict must recursively purge any internal paths from top-level params, lines, and lines_results."""
         from job_store import AudioJob

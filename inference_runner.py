@@ -185,9 +185,13 @@ def run_batch_inference(config: dict) -> None:
 
                         is_stt_unavailable = any("Whisper/STT is unavailable" in str(iss) for iss in content_eval.get("issues", []))
                         signal_score = 100.0 if final_eval["passed"] else 30.0
-                        content_score = 100.0 if is_stt_unavailable else content_eval.get("score", 100.0)
+                        # Content could not be verified; fall back to the signal score instead of
+                        # fabricating a perfect score. `content_passed` stays honest so this routes
+                        # to human review rather than silently auto-approving unverified content
+                        # (see the invariant documented in services/critic.py).
+                        content_score = signal_score if is_stt_unavailable else content_eval.get("score", 100.0)
                         combined_score = round(content_score * 0.6 + signal_score * 0.4, 1)
-                        content_passed = content_eval.get("passed", True) or is_stt_unavailable
+                        content_passed = content_eval.get("passed", True)
                         is_passing = final_eval["passed"] and content_passed
 
                         cand_meta = {
@@ -230,6 +234,9 @@ def run_batch_inference(config: dict) -> None:
             selected_wav, selected_sr, selected_meta = best_candidate
             for ca in candidate_attempts:
                 ca["selected"] = (ca is selected_meta)
+
+            if selected_wav is None or selected_wav.numel() == 0:
+                raise RuntimeError("Audio synthesis produced empty or zero-length audio")
 
             if not selected_meta.get("passed", False):
                 issues_list = []
