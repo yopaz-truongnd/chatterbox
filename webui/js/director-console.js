@@ -373,7 +373,7 @@ function renderDirectorShell(force = false) {
     const actions = document.getElementById('directorGateActions');
     if (workflow.status === 'waiting_for_human' && gate) {
       if (gate === 'audio_quality_review') {
-        actions.innerHTML = '<button onclick="showDirectorView(\'review\', true)" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Mở đánh giá chất lượng</button><button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Hủy</button>';
+        actions.innerHTML = '<button onclick="showDirectorView(\'review\', true)" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Mở đánh giá chất lượng</button><button onclick="resumeDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">Đã xử lý xong, tiếp tục</button><button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Hủy</button>';
       } else if (gate === 'narration_acceptance' || gate === 'final_audio_approval') {
         const label = gate === 'narration_acceptance' ? 'Duyệt toàn bộ giọng đọc & tiếp tục' : 'Duyệt bản master này & xuất file';
         actions.innerHTML = `<button data-director-gate onclick="approveDirectorGate(true)" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">${label}</button><button data-director-gate onclick="approveDirectorGate(false)" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Từ chối</button>`;
