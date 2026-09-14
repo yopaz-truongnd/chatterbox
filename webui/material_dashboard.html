@@ -194,12 +194,7 @@
           <span>Voice Clone (VC)</span>
         </button>
 
-        <!-- 5. Projects Planner (Two-Stage Confirmation Flow) -->
-        <button onclick="switchTab('projects')" data-tab="projects" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">assignment_turned_in</span>
-          <span>Dự án âm thanh</span>
-        </button>
-
+        <!-- 5. Director Console (absorbs the former "Dự án âm thanh" idea-to-script planner as a create-mode) -->
         <button onclick="switchTab('director')" data-tab="director" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
           <span class="material-symbols-outlined text-[19px]">movie_edit</span>
           <span>Director Console</span>
@@ -1172,253 +1167,6 @@
       </section>
 
       <!-- ========================================================================= -->
-      <!-- TAB 5: AUDIO PROJECTS PLANNER (TWO-STAGE CONFIRMATION FLOW)               -->
-      <!-- ========================================================================= -->
-      <section id="panel-projects" class="tab-panel space-y-3.5">
-        
-        <!-- Header Card -->
-        <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div class="flex items-center gap-2.5">
-            <div class="p-2 rounded-lg bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-              <span class="material-symbols-outlined text-[22px]">assignment_turned_in</span>
-            </div>
-            <div>
-              <h2 class="text-sm font-bold text-white flex items-center gap-2">
-                <span>Quản lý Dự án & Quy trình Xác nhận 2 Trạng thái</span>
-                <span class="px-2 py-0.5 rounded-full bg-indigo-600/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/20">Two-Stage Flow</span>
-              </h2>
-              <p class="text-[11px] text-slate-400">Phân tích ý tưởng → Gom câu hỏi 1 lượt → Tóm tắt cấu hình → Bắt buộc duyệt (Approved) trước khi Render.</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 self-end sm:self-auto">
-            <button onclick="resetProjectPlannerForm()" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1.5 shadow-m3-1 cursor-pointer transition-all">
-              <span class="material-symbols-outlined text-[16px]">add</span>
-              <span>Dự án mới</span>
-            </button>
-            <button onclick="loadProjects()" class="p-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2C2735] text-slate-300 border border-[#3F3A46] cursor-pointer" title="Làm mới danh sách">
-              <span class="material-symbols-outlined text-[18px]">refresh</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Main Split Workspace -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          
-          <!-- LEFT COLUMN: Active Project Interactive Flow (7 Cols) -->
-          <div class="lg:col-span-7 space-y-4">
-            
-            <!-- STEP 1: PREPARE PROJECT INPUT CARD -->
-            <div id="projectStep1Card" class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-3">
-              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-5 h-5 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center">1</span>
-                  <h3 class="text-xs font-bold text-white uppercase tracking-wider">Khởi tạo Dự án & Ý tưởng</h3>
-                </div>
-                <span class="text-[11px] text-purple-400 font-mono" id="projectActiveIdBadge">Mới</span>
-              </div>
-
-              <div>
-                <label class="block text-xs font-medium text-slate-300 mb-1.5">Chủ đề hoặc mô tả yêu cầu sản phẩm:</label>
-                <textarea id="projectTopicInput" rows="3" class="w-full bg-[#0E0C12] border border-[#3F3A46] focus:border-purple-500 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-hidden transition-all resize-none" placeholder="Ví dụ: Tạo podcast 5 phút bằng tiếng Việt về Lịch sử Trí tuệ Nhân tạo cho người mới tìm hiểu, giọng nữ nhẹ nhàng, có nhạc nền êm dịu, xuất file WAV kèm phụ đề SRT..."></textarea>
-              </div>
-
-              <!-- Quick Prompt Suggestions -->
-              <div class="space-y-1">
-                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Gợi ý chủ đề mẫu:</span>
-                <div class="flex flex-wrap gap-1.5">
-                  <button onclick="setProjectTopicPrompt('Tạo podcast 5 phút bằng tiếng Việt về Lịch sử Trí tuệ Nhân tạo cho người mới, giọng kể nhẹ nhàng, nhạc nền nhẹ')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">🎙️ Podcast 5 phút về AI</button>
-                  <button onclick="setProjectTopicPrompt('Video narration 3 phút giới thiệu sản phẩm công nghệ, giọng nam chuyên nghiệp, kịch tính, kèm nhạc nền')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">🎬 Video thuyết minh 3 phút</button>
-                  <button onclick="setProjectTopicPrompt('Sách nói truyện thiếu nhi 10 phút, giọng đọc ấm áp, không cần hiệu ứng sound effect')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">📖 Audiobook truyện 10 phút</button>
-                  <button onclick="setProjectTopicPrompt('Quảng cáo 1 phút bằng tiếng Việt cho ứng dụng học tập, giọng sôi nổi năng động')" class="px-2.5 py-1 rounded-md bg-[#231F2A] hover:bg-purple-900/30 hover:border-purple-500/40 border border-[#3F3A46] text-[11px] text-slate-300 cursor-pointer transition-all">📢 Quảng cáo ngắn 1 phút</button>
-                </div>
-              </div>
-
-              <div class="pt-2 border-t border-[#3F3A46]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" id="projectAutoDefaultsCheck" class="w-4 h-4 rounded border-[#3F3A46] text-purple-600 focus:ring-purple-500 bg-[#0E0C12]">
-                  <span class="text-xs text-slate-300">Tự động điền mặc định cho mục không quan trọng</span>
-                </label>
-                <button id="projectPrepareBtn" onclick="prepareProjectAction()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-m3-1 cursor-pointer transition-all">
-                  <span class="material-symbols-outlined text-[16px]">psychology</span>
-                  <span>Phân tích & Khởi tạo</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- STEP 2: AWAITING ANSWERS CARD (QUESTIONS BATCH) -->
-            <div id="projectStep2Card" class="hidden bg-[#18151E] rounded-xl p-4 border border-amber-500/40 shadow-m3-2 space-y-3.5">
-              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-5 h-5 rounded-full bg-amber-600 text-white text-[11px] font-bold flex items-center justify-center">2</span>
-                  <h3 class="text-xs font-bold text-amber-300 uppercase tracking-wider">Thu thập thông tin còn thiếu (Gom 1 lượt)</h3>
-                </div>
-                <span class="px-2 py-0.5 rounded bg-amber-600/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">Awaiting Answers</span>
-              </div>
-
-              <!-- Recognized parameters tags -->
-              <div>
-                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Thông tin AI đã nhận diện được:</span>
-                <div id="projectRecognizedTags" class="flex flex-wrap gap-1.5 mt-1.5"></div>
-              </div>
-
-              <!-- Questions dynamic form -->
-              <div id="projectQuestionsContainer" class="space-y-3 pt-2"></div>
-
-              <!-- Freeform answer text input -->
-              <div class="pt-2">
-                <label class="block text-[11px] font-medium text-slate-400 mb-1">Hoặc nhập câu trả lời tổng hợp bằng lời nói tự nhiên:</label>
-                <input type="text" id="projectFreeformAnswersInput" class="w-full bg-[#0E0C12] border border-[#3F3A46] focus:border-purple-500 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-hidden" placeholder="Ví dụ: Podcast, 5 phút, người mới, nhạc nền nhẹ...">
-              </div>
-
-              <div class="pt-2 border-t border-[#3F3A46]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" id="projectAnswersAutoDefaultsCheck" checked class="w-4 h-4 rounded border-[#3F3A46] text-purple-600 focus:ring-purple-500 bg-[#0E0C12]">
-                  <span class="text-xs text-slate-300">Tự động chọn mặc định các mục còn lại</span>
-                </label>
-                <button id="projectSubmitAnswersBtn" onclick="submitProjectAnswersAction()" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-m3-1 cursor-pointer transition-all">
-                  <span class="material-symbols-outlined text-[16px]">send</span>
-                  <span>Gửi câu trả lời & Tóm tắt</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- STEP 3: AWAITING CONFIRMATION SUMMARY CARD -->
-            <div id="projectStep3Card" class="hidden bg-[#18151E] rounded-xl p-4 border border-blue-500/40 shadow-m3-2 space-y-3.5">
-              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">3</span>
-                  <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider">Xác nhận phương án cuối (Final Confirmation)</h3>
-                </div>
-                <span class="px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 text-[10px] font-bold border border-blue-500/30">Awaiting Confirmation</span>
-              </div>
-
-              <!-- Summary Card Content -->
-              <div id="projectSummaryBox" class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] text-xs leading-relaxed text-slate-200 space-y-2"></div>
-
-              <!-- Confirmation Prompt Banner -->
-              <div class="p-3 rounded-lg bg-blue-950/40 border border-blue-500/30 flex items-center justify-between gap-3">
-                <div class="flex items-center gap-2">
-                  <span class="material-symbols-outlined text-blue-400 text-[20px]">help</span>
-                  <span class="text-xs text-blue-200 font-medium">Đây có phải cấu hình bạn muốn triển khai không?</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button onclick="confirmProjectAction(false)" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-red-950/40 text-red-300 border border-red-500/30 text-xs font-bold cursor-pointer transition-all">
-                    Từ chối / Hủy
-                  </button>
-                  <button onclick="confirmProjectAction(true)" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-m3-1 flex items-center gap-1 cursor-pointer transition-all">
-                    <span class="material-symbols-outlined text-[16px]">check_circle</span>
-                    <span>Xác nhận & Phê duyệt</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- STEP 4: APPROVED & RENDER EXECUTION CARD -->
-            <div id="projectStep4Card" class="hidden bg-[#18151E] rounded-xl p-4 border border-emerald-500/40 shadow-m3-2 space-y-3.5">
-              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center">4</span>
-                  <h3 class="text-xs font-bold text-emerald-300 uppercase tracking-wider">Sản xuất Audio & Sinh giọng nói (Render)</h3>
-                </div>
-                <span class="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">✅ Approved</span>
-              </div>
-
-              <!-- Narration Script Editor -->
-              <div>
-                <div class="flex items-center justify-between mb-1.5">
-                  <label class="text-xs font-medium text-slate-300">Kịch bản phân đoạn giọng nói (Script):</label>
-                  <button onclick="generateProjectSampleScript()" class="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer">
-                    <span class="material-symbols-outlined text-[14px]">auto_fix_high</span>
-                    <span>Tự tạo kịch bản mẫu</span>
-                  </button>
-                </div>
-                <textarea id="projectScriptInput" rows="4" class="w-full bg-[#0E0C12] border border-[#3F3A46] focus:border-emerald-500 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-hidden resize-none"></textarea>
-              </div>
-
-              <!-- Overrides Row -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label class="block text-[11px] font-medium text-slate-400 mb-1">Giọng đọc / Nhân vật:</label>
-                  <select id="projectCharacterSelect" class="w-full bg-[#0E0C12] border border-[#3F3A46] text-xs text-white rounded-lg p-2 focus:outline-hidden">
-                    <option value="">Tự động tối ưu theo chủ đề</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-[11px] font-medium text-slate-400 mb-1">Chất lượng Preset:</label>
-                  <select id="projectPresetSelect" class="w-full bg-[#0E0C12] border border-[#3F3A46] text-xs text-white rounded-lg p-2 focus:outline-hidden">
-                    <option value="balanced">⚖️ Cân bằng (Balanced - Chuẩn)</option>
-                    <option value="fast">⚡ Siêu nhanh (Fast - Nano)</option>
-                    <option value="expressive">🎭 Biểu cảm cao (Expressive - Turbo)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="pt-2 border-t border-[#3F3A46]/40 flex items-center justify-between">
-                <span class="text-[11px] text-slate-400">Đã phê duyệt an toàn • Sẵn sàng tổng hợp</span>
-                <button id="projectRenderBtn" onclick="renderProjectAction()" class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-m3-2 cursor-pointer transition-all">
-                  <span class="material-symbols-outlined text-[18px]">play_circle</span>
-                  <span>Bắt đầu Render Audio</span>
-                </button>
-              </div>
-
-              <!-- Realtime Job Player & Result Box -->
-              <div id="projectJobResultBox" class="hidden p-3.5 rounded-xl bg-[#0E0C12] border border-[#3F3A46] space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span id="projectJobStatusTitle">Đang tổng hợp...</span>
-                  </span>
-                  <span id="projectJobIdText" class="text-[10px] font-mono text-purple-400">Job: ...</span>
-                </div>
-                <div class="w-full bg-[#231F2A] rounded-full h-2 overflow-hidden">
-                  <div id="projectJobProgressBar" class="bg-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                </div>
-                <!-- Audio Player -->
-                <div id="projectAudioPlayerContainer" class="hidden space-y-2 pt-2 border-t border-[#3F3A46]/40">
-                  <audio id="projectAudioEl" controls class="w-full h-9 rounded-lg"></audio>
-                  <div class="flex items-center justify-end gap-2">
-                    <a id="projectDownloadWavBtn" href="#" download class="px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold flex items-center gap-1">
-                      <span class="material-symbols-outlined text-[14px]">download</span>
-                      <span>Tải WAV</span>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- RIGHT COLUMN: Saved Projects History & Switcher (5 Cols) -->
-          <div class="lg:col-span-5 space-y-3">
-            <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-3">
-              <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
-                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-[16px] text-indigo-400">folder_open</span>
-                  <span>Danh sách Dự án</span>
-                </h3>
-                <span id="projectsCountBadge" class="px-2 py-0.5 rounded-full bg-[#231F2A] text-slate-300 text-[10px] font-bold">0 dự án</span>
-              </div>
-
-              <!-- Status Filters -->
-              <div class="flex flex-wrap gap-1">
-                <button onclick="filterProjectsList('all')" data-pfilter="all" class="pfilter-btn active px-2.5 py-1 rounded-md bg-purple-600 text-white text-[10px] font-bold cursor-pointer">Tất cả</button>
-                <button onclick="filterProjectsList('awaiting_answers')" data-pfilter="awaiting_answers" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Chờ trả lời</button>
-                <button onclick="filterProjectsList('awaiting_confirmation')" data-pfilter="awaiting_confirmation" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Chờ duyệt</button>
-                <button onclick="filterProjectsList('approved')" data-pfilter="approved" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Đã duyệt</button>
-                <button onclick="filterProjectsList('rendering')" data-pfilter="rendering" class="pfilter-btn px-2.5 py-1 rounded-md bg-[#231F2A] text-slate-400 hover:text-white text-[10px] font-medium cursor-pointer">Đang tạo</button>
-              </div>
-
-              <!-- Projects List Box -->
-              <div id="projectsListContainer" class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-                <div class="text-xs text-slate-500 py-8 text-center">Chưa có dự án nào. Hãy nhập ý tưởng bên trái để khởi tạo!</div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ========================================================================= -->
       <!-- TAB 6: DIRECTOR CONSOLE                                                   -->
       <!-- ========================================================================= -->
       <section id="panel-director" class="tab-panel space-y-3.5">
@@ -1427,9 +1175,59 @@
           <div class="flex gap-2"><button onclick="toggleDirectorCreate()" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Tạo bản thu mới</button><button onclick="loadDirectorWorkflows()" class="p-2 rounded-lg bg-[#231F2A] text-slate-300" title="Làm mới"><span class="material-symbols-outlined text-[18px]">refresh</span></button></div>
         </div>
         <div id="directorCreate" class="hidden bg-[#18151E] rounded-xl p-4 border border-purple-500/40 space-y-3">
-          <div class="grid md:grid-cols-4 gap-2"><input id="directorTitle" class="director-input" placeholder="Tên dự án"><input id="directorProjectId" class="director-input" placeholder="Mã dự án (không bắt buộc)"><select id="directorProvider" class="director-input"><option value="local">Chatterbox cục bộ</option><option value="fake">Giả lập (chỉ kiểm thử)</option><option value="gemini">Gemini</option></select><input id="directorModel" class="director-input" placeholder="Model (không bắt buộc)"></div>
-          <textarea id="directorScript" rows="5" class="director-input w-full" placeholder="Kịch bản gốc (không thể sửa sau khi bắt đầu)"></textarea>
-          <div class="flex flex-wrap items-center gap-4 text-xs text-slate-300"><label><input id="directorMp3" type="checkbox"> Xuất thêm MP3</label><label><input id="directorFinalGate" type="checkbox" checked> Yêu cầu duyệt bản master cuối</label><button onclick="startDirectorWorkflow()" class="ml-auto px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Bắt đầu sản xuất</button></div>
+          <div class="flex gap-1.5 p-1 rounded-lg bg-[#0E0C12] border border-[#3F3A46] w-fit">
+            <button id="directorModeManualBtn" onclick="setDirectorCreateMode('manual')" class="px-3 py-1.5 rounded-md text-xs font-bold bg-purple-600 text-white">📝 Dán kịch bản có sẵn</button>
+            <button id="directorModeIdeaBtn" onclick="setDirectorCreateMode('idea')" class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-300">💡 Tạo từ ý tưởng</button>
+          </div>
+
+          <!-- MANUAL MODE: paste an already-written script -->
+          <div id="directorManualPanel" class="space-y-3">
+            <div class="grid md:grid-cols-4 gap-2"><input id="directorTitle" class="director-input" placeholder="Tên dự án"><input id="directorProjectId" class="director-input" placeholder="Mã dự án (không bắt buộc)"><select id="directorProvider" class="director-input"><option value="local">Chatterbox cục bộ</option><option value="fake">Giả lập (chỉ kiểm thử)</option><option value="gemini">Gemini</option></select><input id="directorModel" class="director-input" placeholder="Model (không bắt buộc)"></div>
+            <textarea id="directorScript" rows="5" class="director-input w-full" placeholder="Kịch bản gốc (không thể sửa sau khi bắt đầu)"></textarea>
+            <div class="flex flex-wrap items-center gap-4 text-xs text-slate-300"><label><input id="directorMp3" type="checkbox"> Xuất thêm MP3</label><label><input id="directorFinalGate" type="checkbox" checked> Yêu cầu duyệt bản master cuối</label><button onclick="startDirectorWorkflow()" class="ml-auto px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Bắt đầu sản xuất</button></div>
+          </div>
+
+          <!-- IDEA MODE: generate an English script from a topic first (reuses the two-gate /api/v1/projects planner), then hand it to the workflow above -->
+          <div id="directorIdeaPanel" class="hidden space-y-3">
+            <div id="directorIdeaStep1" class="space-y-2.5">
+              <label class="block text-xs font-medium text-slate-300">Chủ đề hoặc mô tả yêu cầu sản phẩm:</label>
+              <textarea id="directorIdeaTopic" rows="3" class="director-input w-full resize-none" placeholder="Ví dụ: Audiobook 3 phút tiếng Anh kể về truyền thuyết Kỳ Lân, giọng kể chuyện trầm ấm, nhạc nền nhẹ..."></textarea>
+              <div class="flex items-center justify-between gap-2">
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300"><input type="checkbox" id="directorIdeaAutoDefaults" class="w-4 h-4 rounded border-[#3F3A46] bg-[#0E0C12]"><span>Tự động điền mặc định cho mục không quan trọng</span></label>
+                <button id="directorIdeaPrepareBtn" onclick="directorIdeaPrepare()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px]">psychology</span><span>Phân tích & Khởi tạo</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="directorIdeaStep2" class="hidden space-y-2.5 pt-2 border-t border-[#3F3A46]/40">
+              <div>
+                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Thông tin AI đã nhận diện được:</span>
+                <div id="directorIdeaTags" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+              </div>
+              <div id="directorIdeaQuestions" class="space-y-3"></div>
+              <input type="text" id="directorIdeaFreeform" class="director-input w-full" placeholder="Hoặc nhập câu trả lời tổng hợp bằng lời nói tự nhiên...">
+              <div class="flex items-center justify-between gap-2">
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300"><input type="checkbox" id="directorIdeaAnswersAutoDefaults" checked class="w-4 h-4 rounded border-[#3F3A46] bg-[#0E0C12]"><span>Tự động chọn mặc định các mục còn lại</span></label>
+                <button id="directorIdeaAnswersBtn" onclick="directorIdeaSubmitAnswers()" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px]">send</span><span>Gửi câu trả lời & Tóm tắt</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="directorIdeaStep3" class="hidden space-y-2.5 pt-2 border-t border-[#3F3A46]/40">
+              <div class="flex items-center justify-between">
+                <span id="directorIdeaGateLabel" class="px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 text-[10px] font-bold border border-blue-500/30">Gate 1: Xác nhận yêu cầu</span>
+              </div>
+              <div id="directorIdeaSummaryBox" class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] text-xs leading-relaxed text-slate-200 space-y-2"></div>
+              <div class="flex items-center justify-end gap-2">
+                <button onclick="directorIdeaConfirm(false)" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-red-950/40 text-red-300 border border-red-500/30 text-xs font-bold">Từ chối / Hủy</button>
+                <button onclick="directorIdeaConfirm(true)" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[16px]">check_circle</span><span>Xác nhận & Phê duyệt</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="grid lg:grid-cols-12 gap-4">
           <aside class="lg:col-span-4 bg-[#18151E] rounded-xl border border-[#3F3A46] p-3"><div class="flex justify-between mb-3"><h3 class="text-xs font-bold text-white">Các bản sản xuất</h3><span id="directorCount" class="text-[10px] text-slate-400"></span></div><div id="directorWorkflowList" class="space-y-2 max-h-[68vh] overflow-y-auto"><p class="text-xs text-slate-500">Đang tải…</p></div></aside>
@@ -2178,8 +1976,7 @@
   <script src="/static/js/batch.js?v=20260913-v25"></script>
   <script src="/static/js/multilingual.js?v=20260913-v25"></script>
   <script src="/static/js/vc.js?v=20260913-v25"></script>
-  <script src="/static/js/projects.js?v=20260913-v25"></script>
-  <script src="/static/js/director-console.js?v=20260914-v28"></script>
+  <script src="/static/js/director-console.js?v=20260915-v29"></script>
   <script src="/static/js/characters.js?v=20260913-v25"></script>
   <script src="/static/js/history.js?v=20260913-v25"></script>
   <script src="/static/js/settings.js?v=20260913-v25"></script>

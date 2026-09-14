@@ -14,8 +14,7 @@ Tài liệu hướng dẫn giao diện Material 3 Web Studio và giao thức Mod
       2. Tab 2: TTS Đa ngôn ngữ (`js/multilingual.js`).
       3. Tab 3: Nhân vật & Mẫu giọng (`js/characters.js`).
       4. Tab 4: Chuyển đổi giọng nói (`js/vc.js`).
-      5. Tab 5: Dự án âm thanh cơ bản (`js/projects.js`).
-      6. Tab 6: Bàn điều khiển Đạo diễn 25 Phase (`js/director-console.js`).
+      5. Tab 5: Bàn điều khiển Đạo diễn 25 Phase (`js/director-console.js`), bao gồm chế độ "Tạo từ ý tưởng" nhúng luồng 2-gate sinh kịch bản (`/api/v1/projects/*`, xem [Domain 03](file:///e:/Project/chatterbox/docs/domains/03-voice-director-workflow.md)).
     - Phục vụ tệp tĩnh: Biểu tượng Favicon (`/favicon.ico`, `/favicon.svg`), Stylesheet (`css/styles.css`).
   - **Máy chủ MCP (Model Context Protocol - `mcp_server.py`)**:
     - Triển khai chuẩn giao thức JSON-RPC 2.0 qua Standard I/O (`stdio`).
