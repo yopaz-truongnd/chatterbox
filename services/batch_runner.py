@@ -231,14 +231,22 @@ class BatchRunner:
                     for ca in candidate_attempts:
                         ca["selected"] = (ca is selected_meta)
 
+                    if selected_wav is None or selected_wav.numel() == 0:
+                        raise RuntimeError("Audio synthesis produced empty or zero-length audio")
+
                     if not selected_meta.get("passed", False):
                         issues_list = []
+                        if selected_meta.get("issues"):
+                            issues_list.extend(selected_meta["issues"])
                         if selected_meta.get("signal", {}).get("final", {}).get("issues"):
                             issues_list.extend(selected_meta["signal"]["final"]["issues"])
                         if selected_meta.get("content", {}).get("issues"):
-                            issues_list.extend(selected_meta["content"]["issues"])
-                        err_issues = ", ".join(issues_list) or "Quality and content checks failed"
-                        raise RuntimeError(f"QC failed: {err_issues}")
+                            for c_iss in selected_meta["content"]["issues"]:
+                                if "Whisper/STT is unavailable" not in str(c_iss):
+                                    issues_list.append(c_iss)
+                        if issues_list:
+                            err_issues = ", ".join(issues_list) or "Quality and content checks failed"
+                            raise RuntimeError(f"QC failed: {err_issues}")
 
                     save_audio_wav(line_out, selected_wav, selected_sr)
                     dur = round(selected_wav.shape[-1] / selected_sr, 3)

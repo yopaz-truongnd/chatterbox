@@ -1,253 +1,97 @@
-# Chatterbox Agent Routing Map
+# Chatterbox Agent Routing Map & Navigation Matrix
 
-Chọn đúng nhóm tính năng trước khi đọc code. Đọc primary files trước và chỉ mở secondary files khi thay đổi đi qua trách nhiệm của chúng.
+> **DÀNH CHO AI ASSISTANT**:
+> Trước khi đọc hoặc sửa bất kỳ mã nguồn nào, hãy **tra cứu Bảng Ma trận Tính năng** ở mục 1 dưới đây để xác định chính xác 100% các file cần mở.
+> **TUYỆT ĐỐI KHÔNG** nạp toàn bộ dự án hoặc đọc lan man các file không liên quan.
+> Tuân thủ các quy tắc kiến trúc bất biến trong [docs/invariants.md](file:///e:/Project/chatterbox/docs/invariants.md).
 
-## Product Planning & Narration Pipeline
+---
 
-Dùng cho topic, câu hỏi làm rõ (single batch), xác nhận yêu cầu (Gate 1), lập kịch bản & phân đoạn (Gate 2), phát âm riêng (Pronunciation Dict), kế hoạch diễn cảm (Narration Plan) và vòng đời dự án.
+## 1. Bảng Ma trận Tra cứu Nhanh (Feature-to-File Fast Lookup Matrix)
 
-- Primary Services:
-  - `services/project_planner.py` — State machine facade, quản lý Gate 1/Gate 2, JobManager sync.
-  - `services/project_requirements.py` — Trích xuất heuristic yêu cầu, phân tích thiếu sót, tạo câu hỏi.
-  - `services/project_script.py` — Sinh cấu trúc scene outline, kịch bản tiếng Anh, phân đoạn ngữ nghĩa (8-25s).
-  - `services/narration_planner.py` — Quét từ cần xác nhận phát âm, áp dụng từ điển phiên âm, lập Narration Plan (role, emotion, energy, target WPM, dynamic pauses, emphasis, candidate strategy).
-- REST API: `routers/projects.py`
-- MCP Adapter:
-  - `mcp_server.py` — JSON-RPC stdio server facade & HTTP dispatcher.
-  - `mcp_adapter/catalog.py` — Tool schemas (16 tools).
-  - `mcp_adapter/project_tools.py` — Handlers cho Project Planning, Pronunciation, Render và Event Stream.
-  - `mcp_adapter/voice_tools.py` — Handlers cho Voice, TTS, Characters, Download và Audio Critic.
-- Web UI: `webui/js/projects.js`
-- Tests: `tests/test_project_workflow.py`, `tests/test_narration_plan.py`
+Tra cứu mục tiêu của người dùng trong bảng này để đến thẳng các file cần sửa:
 
-## Voice Quality & Dual-Critic Pipeline
+| Nhóm tính năng | Từ khóa thường gặp | Service cốt lõi (`services/`) | Router REST (`routers/`) | Giao diện Web (`webui/`) | Công cụ MCP (`mcp_adapter/`) | Tài liệu Domain | File Test tương ứng |
+|---|---|---|---|---|---|---|---|
+| **TTS Đơn lẻ** | `tts`, `synthesize`, `seed`, `temperature`, `exaggeration` | `synthesis.py`, `model_runtime.py`, `inference.py` | `tts.py` | `js/tts.js` | `voice_tools.py` | [Domain 01](file:///e:/Project/chatterbox/docs/domains/01-tts-and-models.md) | `tests/test_api_app.py` |
+| **Nhân vật & Clone** | `character`, `voice_clone`, `reference_audio` | `character_api.py`, `synthesis.py` | `character_api.py` | `js/characters.js`, `js/vc.js` | `voice_tools.py` | [Domain 01](file:///e:/Project/chatterbox/docs/domains/01-tts-and-models.md) | `tests/test_character_api.py` |
+| **Đa ngôn ngữ** | `multilingual`, `mtl`, `translate` | `synthesis.py`, `model_registry.py` | `tts.py` | `js/multilingual.js` | `voice_tools.py` | [Domain 01](file:///e:/Project/chatterbox/docs/domains/01-tts-and-models.md) | `tests/test_api_app.py` |
+| **Batch Studio & SRT** | `batch`, `script_parser`, `pause_duration`, `srt` | `batch_runner.py`, `script_parser.py`, `batch_export.py` | `jobs.py` | `js/batch.js` | `project_tools.py` | [Domain 02](file:///e:/Project/chatterbox/docs/domains/02-batch-and-qc.md) | `tests/test_batch_studio_advanced.py` |
+| **Đánh giá Âm thanh (QC)** | `evaluator`, `critic`, `whisper`, `wer`, `wpm` | `audio.py`, `critic.py`, `audio_candidate_evaluator.py`, `voice_qc.py` | `critic.py` | — | `voice_tools.py` | [Domain 02](file:///e:/Project/chatterbox/docs/domains/02-batch-and-qc.md) | `tests/test_audio_quality.py` |
+| **Tự động sửa (Auto-Fix)** | `auto_fix`, `trim_silence`, `normalize_rms`, `limiter` | `audio.py`, `audio_candidate_evaluator.py` | `critic.py` | — | `voice_tools.py` | [Domain 02](file:///e:/Project/chatterbox/docs/domains/02-batch-and-qc.md) | `tests/test_audio_quality.py` |
+| **Sự kiện & Thông báo** | `notifications`, `notifications_active`, `events`, `long_polling` | `event_bus.py`, `job_manager.py` | `events.py` | `js/notifications.js` | `project_tools.py` | [Domain 05](file:///e:/Project/chatterbox/docs/domains/05-events-and-observability.md) | `tests/test_project_workflow.py` |
+| **Voice Director (25 Steps)** | `director`, `beats`, `voice_plan`, `story_analyzer`, `reproduce` | `voice_project_service.py`, `voice_project_workflow.py`, `story_analyzer.py` | `voice_projects.py`, `voice_workflows.py` | `js/director-console.js`, `js/projects.js` | `voice_project_tools.py` | [Domain 03](file:///e:/Project/chatterbox/docs/domains/03-voice-director-workflow.md) | `tests/test_voice_orchestration_phase24.py` |
+| **Lập Timeline & Trộn sóng** | `mix`, `timeline`, `ducking`, `crossfade`, `wave_audio_mixer` | `mix_plan_builder.py`, `wave_audio_mixer.py` | `voice_workflows.py` | `js/director-console.js` | `voice_project_tools.py` | [Domain 04](file:///e:/Project/chatterbox/docs/domains/04-audio-engineering.md) | `tests/test_mix_plan_builder.py`, `test_wave_audio_mixer.py` |
+| **Mastering & Limiter** | `master`, `lufs`, `true_peak`, `peak_limiter`, `ebur128` | `audio_mastering.py` | `voice_workflows.py` | `js/director-console.js` | `voice_project_tools.py` | [Domain 04](file:///e:/Project/chatterbox/docs/domains/04-audio-engineering.md) | `tests/test_audio_mastering.py` |
+| **Xuất xưởng & SHA-256** | `export`, `manifest`, `sha256`, `final_wav` | `audio_export.py`, `atomic_io.py` | `voice_workflows.py` | `js/director-console.js` | `voice_project_tools.py` | [Domain 04](file:///e:/Project/chatterbox/docs/domains/04-audio-engineering.md) | `tests/test_audio_export.py` |
+| **Tài nguyên & Phát âm** | `assets`, `sfx`, `ambience`, `pronunciation`, `proper_nouns` | `asset_library_service.py`, `pronunciation_knowledge.py`, `resource_manager.py` | `voice_assets.py` | — | `asset_tools.py` | [Domain 03](file:///e:/Project/chatterbox/docs/domains/03-voice-director-workflow.md) | `tests/test_asset_library.py`, `test_pronunciation_knowledge.py` |
+| **Series Nhiều tập** | `series`, `episodes`, `voice_bible`, `series_production` | `voice_series_service.py`, `voice_series_operations.py` | `voice_series.py` | — | `series_tools.py` | [Domain 03](file:///e:/Project/chatterbox/docs/domains/03-voice-director-workflow.md) | `tests/test_voice_series_service.py` |
+| **Sức khỏe & Chẩn đoán** | `health`, `diagnostics`, `runtime_caps`, `preflight` | `production_health_service.py`, `diagnostics_service.py`, `local_runtime_service.py` | `voice_health.py`, `voice_runtime.py`, `system.py` | `js/main.js` | `health_tools.py`, `runtime_tools.py` | [Domain 05](file:///e:/Project/chatterbox/docs/domains/05-events-and-observability.md) | `tests/test_production_health.py`, `test_diagnostics_bundle.py` |
+| **Web Shell & Favicon** | `favicon`, `material_dashboard.html`, `theme`, `shortcuts` | `api_app.py` | `api_app.py` | `material_dashboard.html`, `js/main.js`, `favicon.ico`, `favicon.svg` | — | [Domain 06](file:///e:/Project/chatterbox/docs/domains/06-webui-and-mcp.md) | `tests/test_api_app.py` |
+| **Tương thích Nền tảng** | `windows`, `linux`, `file_lock`, `atomic_io`, `psapi`, `ctypes` | `file_lock.py`, `atomic_io.py`, `production_validation_metrics.py`, `platform_tools.py` | — | — | — | [Invariants](file:///e:/Project/chatterbox/docs/invariants.md) | `tests/test_file_lock.py`, `test_atomic_io.py` |
 
-Dùng cho evaluate signal, Whisper ASR content critic, auto-fix, selective multi-candidate, adaptive retry, merge và publish.
+---
 
-1. `services/audio.py` — Signal evaluation (silence, RMS, clipping, duration, Crest factor) và signal auto-fix.
-2. `services/critic.py` — ASR Speech Content Critic (`evaluate_speech_content`: Whisper transcribe, WER, missing words/dropped text detection, repetition/stutter detection, actual WPM measurement).
-3. `services/batch_runner.py` — In-process batch sequencing, model-aware parameter stripping, selective 2-candidate generation cho dialogue/climax/pronunciation, ranking (60% Content + 40% Signal), adaptive retry.
-4. `inference_runner.py` — Subprocess batch runner parity.
-5. `services/job_manager.py` — Quản lý trạng thái tác vụ, phase (`evaluating`, `auto_fixing`, `re_evaluating`, `merging_audio`, `publishing`) và event.
-6. `tests/test_audio_quality.py` — Test signal QC, auto-fix, resume và phase progress.
-7. `tests/test_narration_plan.py` — Test Narration Plan, pronunciation dictionary, ASR content evaluation và candidate ranking.
+## 2. Danh mục Tài liệu Chuyên sâu theo Domain
 
-Invariant xử lý segment:
+Để tìm hiểu chi tiết luồng dữ liệu và các quy tắc nghiệp vụ, đọc các tài liệu sau:
 
-```text
-[Generate Candidate(s)] -> [Signal QC + Whisper ASR Content Critic]
-                        -> [Signal Auto-Fix nếu fixable] -> [Re-evaluate]
-                        -> [Nếu lỗi: Adaptive Retry với new seed/temperature (tối đa 2 lần)]
-                        -> [Rank & Chọn candidate tốt nhất] -> [Merge passing chunks] -> [Publish]
-```
+1. **[docs/domains/01-tts-and-models.md](file:///e:/Project/chatterbox/docs/domains/01-tts-and-models.md)**: TTS, Voice Cloning, vòng đời Checkpoints (Nano, Turbo, Standard, Multilingual).
+2. **[docs/domains/02-batch-and-qc.md](file:///e:/Project/chatterbox/docs/domains/02-batch-and-qc.md)**: Batch Studio, phân tích kịch bản, phụ đề SRT, Signal QC & Whisper Content Critic.
+3. **[docs/domains/03-voice-director-workflow.md](file:///e:/Project/chatterbox/docs/domains/03-voice-director-workflow.md)**: Quy trình 25 bước Voice Director, Story Beats, Human Approval Gates, Revisions.
+4. **[docs/domains/04-audio-engineering.md](file:///e:/Project/chatterbox/docs/domains/04-audio-engineering.md)**: Hậu kỳ âm thanh, MixPlan đa track, chuẩn hóa LUFS, soft-knee limiter, xuất SHA-256.
+5. **[docs/domains/05-events-and-observability.md](file:///e:/Project/chatterbox/docs/domains/05-events-and-observability.md)**: EventBus, Zero-CPU Long-Polling, Health Check, Diagnostics Redaction.
+6. **[docs/domains/06-webui-and-mcp.md](file:///e:/Project/chatterbox/docs/domains/06-webui-and-mcp.md)**: Material Web UI (vanilla không build step) và 76 MCP Tools cho AI IDE.
+7. **[docs/invariants.md](file:///e:/Project/chatterbox/docs/invariants.md)**: Quy tắc bất biến bắt buộc tuân thủ (Layering, Windows/Linux, Atomic IO).
 
-## Events
+---
 
-- Primary: `services/event_bus.py`
-- Producer: `services/job_manager.py`
-- Project synchronization: `services/project_planner.py`
-- REST API: `routers/events.py`
-- MCP adapter: `mcp_adapter/project_tools.py::handle_get_events_stream`
+## 3. Bản đồ Lịch sử Phát triển theo Phase (Phases 1–25)
 
-`JobManager` sở hữu technical progress. Project planner chỉ đồng bộ product state và không phát lại terminal event đã có.
+### Phase 1–3: Phân tích Cốt truyện & Đạo diễn Âm thanh
+- `services/story_analyzer.py` — Nhận diện StoryBeat, vai trò nhân vật, bối cảnh cảm xúc.
+- `services/sound_director.py` — Đạo diễn âm thanh tự động (Ambience, SFX, khoảng lặng).
+- `services/voice_plan.py` — Hợp đồng cấu trúc VoicePlan.
 
-## TTS API
+### Phase 4–6: Tài nguyên & Cơ sở Tri thức Phát âm
+- `services/resource_manager.py` — Trích xuất yêu cầu âm thanh, chấm điểm ứng viên, đồ thị thay thế.
+- `services/pronunciation_knowledge.py` — Cơ sở tri thức tên riêng thần thoại (proper nouns).
+- `services/asset_ingest.py`, `services/resource_doctor.py` — Nạp asset, kiểm tra sức khỏe thư viện.
 
-- Request validation: `routers/tts.py`
-- Parameter normalization: `services/synthesis.py`
-- Model catalog: `services/model_registry.py`
-- Loaded model lifecycle: `services/model_runtime.py`
-- Subprocess bridge: `services/inference.py`
-- Character and reference voice: `character_api.py`
-- Tests: `tests/test_api_app.py`, `tests/test_services_unified.py`, `tests/test_character_api.py`
+### Phase 7–10: Render Từng Beat & 3-Layer Voice QC
+- `services/voice_renderer.py` — Render từng beat theo VoicePlan, idempotency và resume.
+- `services/voice_qc.py` — Kiểm định 3 lớp (Signal, Content, Direction), candidate ranking.
+- `services/tts/` — TTS Provider protocol (`FakeTTSProvider`, `GeminiTTSProvider`, Local).
 
-## Batch Studio
+### Phase 11–13: Ứng dụng Dự án & Giao diện REST/MCP
+- `services/voice_project_service.py` — Application facade thống nhất.
+- `services/voice_project_store.py` — Lưu trữ YAML nguyên tử.
+- `routers/voice_projects.py`, `mcp_adapter/voice_project_tools.py`.
 
-- Primary: `services/batch_runner.py`
-- Parsing: `services/script_parser.py`
-- Audio assembly: `services/audio.py`
-- Export: `services/batch_export.py`
-- Job endpoints: `routers/jobs.py`
-- Tests: `tests/test_batch_studio_advanced.py`
+### Phase 14–16: Hậu kỳ Mix, Master, Export & Đạo diễn Đánh giá
+- `services/mix_plan_builder.py`, `services/wave_audio_mixer.py` — Trộn sóng PCM đa track.
+- `services/audio_mastering.py`, `services/audio_export.py` — Đo chuẩn LUFS, limiter, SHA-256.
+- `services/director_review_service.py`, `services/director_revision_service.py` — Review snapshot, audit revisions, reproduce.
 
-## UI Applications
+### Phase 17–20: Khả năng Runtime, Thư viện Thông minh, Series & Giám sát
+- `services/local_runtime_service.py` — Capabilities & Preflight validation (Phase 17).
+- `services/asset_library_service.py`, `services/asset_matching_service.py` — Semantic asset match (Phase 18).
+- `services/voice_series_service.py`, `services/voice_series_operations.py` — Series đa tập (Phase 19).
+- `services/production_health_service.py`, `services/diagnostics_service.py` — Health & Diagnostics (Phase 20).
 
-- Material Web UI: `webui/`
-- Desktop application: `apps/desktop.py`, `ui/`, `utils/`
-- Gradio applications: `apps/gradio/`
+### Phase 21–25: Tối ưu Nền tảng & Điều phối Tự trị Chuyên sâu
+- **Phase 21 — Real-Runtime Validation**: `services/production_validation_service.py`, đo lường tài nguyên thực tế với peak memory telemetry.
+- **Phase 22 — Windows Portability**: Khóa tệp `services/file_lock.py` (`msvcrt`), đo RAM `ctypes` (`psapi`), bảo toàn hash CRLF trong `services/atomic_io.py`.
+- **Phase 23 — Static Delivery & Favicon**: Cung cấp `/favicon.ico` và `/favicon.svg`, giải quyết lỗi 404.
+- **Phase 24 — Authoritative Next-Action Governance**: `services/voice_project_workflow.py::next_action()`, điều phối hành động đơn nhất, giám sát thao tác nền, chặn duplicate submission.
+- **Phase 25 — Persistent Notifications & Dynamic UI**: `routers/events.py` (`DELETE /api/v1/events`), `webui/js/notifications.js` (lưu trữ `localStorage`, xóa từng tin, icon động `notifications_active`, cache-busting).
 
-## Resource Management & Pronunciation Knowledge (Phases 4-6)
+---
 
-Dùng cho asset manifest, resolution từ narrative intent sang local assets, candidate scoring, intent substitution graph, pronunciation verification cho proper nouns mythology, asset ingest và shopping list.
+## 4. Trách nhiệm Sở hữu (Ownership Rules)
 
-- Primary Services:
-  - `services/resource_models.py` — Domain models cho Manifest, Requirements, Candidates, Resolutions, Gaps, Pronunciation, Reports.
-  - `services/resource_manager.py` — Extract requirements từ Directed VoicePlan, scoring candidate (intent, intensity, duration, tags, usage), substitution graph, gap report & readiness calculation.
-  - `services/pronunciation_knowledge.py` — Từ điển proper nouns, alias lookup, trạng thái kiểm duyệt (verified / unverified / rejected), phát hiện knowledge gap và tiêm pronunciation override vào VoiceDirection.
-  - `services/asset_ingest.py` — Trích xuất thông tin tệp audio, nạp asset vào manifest, quản lý lịch sử sử dụng (usage tracking) và tổng hợp Resource Shopping List đa dự án.
-  - `services/resource_doctor.py` — Chẩn đoán sức khỏe hệ thống tài nguyên, kiểm tra liên kết file, trùng lặp ID/path/hash và cảnh báo thiếu tag/intent.
-- Configuration & Knowledge:
-  - `assets/manifest.yaml` — Danh mục âm thanh mẫu (Ambience, SFX, Music).
-  - `rules/resource-substitution.yaml` — Đồ thị thay thế ý định âm thanh (Sound Intent Substitution Graph).
-  - `rules/resource-selection.yaml` — Trọng số chấm điểm, ngưỡng thay thế và chính sách chống lặp (Anti-repeat).
-  - `knowledge/pronunciation.yaml` — Cơ sở tri thức phát âm thần thoại (Zhulong, Taotie, Qiongqi, Nuwa, Fuxi,...).
-- Tests:
-  - `tests/test_resource_manager.py`
-  - `tests/test_pronunciation_knowledge.py`
-  - `tests/test_asset_ingest.py`
-  - `tests/test_resource_system_e2e.py`
-
-## CLI Workflow, TTS Provider & Per-Beat Renderer, Voice QC (Phases 7-9)
-
-Dùng cho CLI workspace orchestration, TTS provider abstraction (Fake & Gemini), per-beat audio rendering, Voice QC 3-layer (Signal, Content, Direction), deterministic retries, render manifest và candidate selection.
-
-- Primary Services:
-  - `services/render_models.py` — Domain models cho ProjectState, TTSRenderRequest, TTSRenderResult, RenderManifest, QC Results.
-  - `services/tts/base.py`, `services/tts/fake.py`, `services/tts/gemini.py` — TTS Provider protocol và adapter (FakeTTSProvider offline test, GeminiTTSProvider centralized direction mapping).
-  - `services/voice_renderer.py` — Per-beat renderer, render readiness gate, selective rerender, idempotency & resume.
-  - `services/voice_qc.py` — 3-layer Voice QC (Signal: clipping/RMS/silence, Content: Whisper WER/omissions/proper noun risk, Direction: WPM/duration range), deterministic retry policy & candidate selection.
-  - `services/voice_cli.py` — CLI Orchestrator (`voice new`, `inspect`, `plan`, `resources`, `resources missing`, `assets ingest`, `doctor`, `render`, `rerender`, `qc`).
-  - `voice_cli.py` — Executable root CLI wrapper.
-- Tests:
-  - `tests/test_voice_cli.py`
-  - `tests/test_voice_renderer.py`
-  - `tests/test_voice_qc.py`
-  - `tests/test_voice_pipeline_e2e.py`
-
-## Voice Project Application Core & REST/MCP Interfaces (Phases 11-13)
-
-Dùng cho VoiceProject application service, YAML workspace storage, background operations concurrency, strict resource gating, REST asynchronous endpoints, và MCP Agent tools.
-
-- Primary Services:
-  - `services/voice_project_service.py` — Unified application facade cho CLI, REST và MCP.
-  - `services/voice_project_models.py` — Domain contracts, error taxonomy và lifecycle results.
-  - `services/voice_project_store.py` — Atomic YAML storage và staleness invalidation.
-  - `services/voice_project_operations.py` — Background operations manager, YAML persistence, cancel & recovery.
-  - `services/voice_project_preflight.py` — Synchronous preflight validation (fail-fast trước 202).
-  - `services/voice_project_dependencies.py` — Dependency injection và strict TTS provider resolution.
-- REST API: `routers/voice_projects.py`
-- MCP Adapter:
-  - `mcp_adapter/voice_project_tools.py` — MCP handlers chuyển tiếp qua REST API layer.
-  - `mcp_adapter/catalog.py` — Tool schemas (35 tools).
-- Tests:
-  - `tests/test_voice_projects_api.py`
-  - `tests/test_voice_project_mcp.py`
-  - `tests/test_voice_project_cross_parity.py`
-  - `tests/test_voice_project_cancellation.py`
-  - `tests/test_voice_project_provider.py`
-  - `tests/test_voice_preflight.py`
-
-## Audio Mix, Master, Export & Autonomous Workflow (Phases 14-15)
-
-Dùng cho multi-track timeline construction (MixPlan), pure Python WAV mixing & crossfade, dynamics mastering (LUFS loudness & true peak limiter), deliverable export (FINAL.wav, export-manifest.yaml), và autonomous workflow orchestration loop (`produce`, pause at human action gates, resume, cancel).
-
-- Primary Services:
-  - `services/audio_mix_models.py` — Domain models cho MixPlan, VoiceClip, AmbienceClip, SFXClip, MasteringProfile, ExportManifest.
-  - `services/mix_plan_builder.py` — Xây dựng multi-track timeline từ real audio durations và beat pauses.
-  - `services/audio_mix_execution.py` — Universal mixing execution protocol.
-  - `services/wave_audio_mixer.py` — Pure Python 16-bit PCM WAV multi-track mixer.
-  - `services/audio_mastering.py` — Pure Python LUFS loudness normalizer và soft-knee peak limiter.
-  - `services/audio_export.py` — Package deliverable audio và tính toán SHA-256 manifest.
-  - `services/voice_project_workflow_models.py` — Workflow state machine và step models.
-  - `services/voice_project_workflow_store.py` — YAML persistence cho workflows.
-  - `services/voice_project_workflow.py` — Multi-step autonomous orchestrator loop.
-- REST API: `routers/voice_workflows.py`
-- Configuration: `rules/mixing.yaml`, `rules/mastering.yaml`
-- Tests:
-  - `tests/test_mix_plan_builder.py`
-  - `tests/test_wave_audio_mixer.py`
-  - `tests/test_audio_mastering.py`
-  - `tests/test_audio_export.py`
-  - `tests/test_voice_workflow.py`
-
-## Director Review, Resource Resolution & Incremental Reproduction (Phase 16)
-
-Dùng cho director snapshot, resource shopping list/binding, beat candidate approval,
-direction/timing/resource revisions, persisted audit trail và minimum-safe reproduction.
-
-- Primary Services:
-  - `services/director_review_models.py` — Typed public/application contracts cho review, gaps, candidates và impacts.
-  - `services/director_review_service.py` — Read model tổng hợp từ immutable source, VoicePlan, ResourceReport và RenderManifest.
-  - `services/director_resource_service.py` — Pronunciation overrides, managed asset registration/binding và omission policy.
-  - `services/director_revision_service.py` — Candidate decisions, constrained beat patches và incremental reproduction.
-  - `services/director_revision_store.py` — Atomic `revision-history.yaml` và explicit `revision-state.yaml`.
-  - `services/resource_manager.py::apply_project_resource_overrides` — Reapply persisted project decisions on every canonical resource check.
-- REST API: `routers/voice_projects.py` (`/director-review`, `/resource-shopping-list`, beat revisions, `/reproduce`).
-- MCP Adapter: `mcp_adapter/voice_project_tools.py`, schemas in `mcp_adapter/catalog.py`.
-- CLI: `services/voice_cli.py` Phase 16 commands use REST and never instantiate server inference.
-- Tests: `tests/test_director_phase16.py` plus existing Phase 11-15 regression suites.
-
-## Ownership Rules
-
-- `services/project_requirements.py` sở hữu heuristic trích xuất và câu hỏi làm rõ.
-- `services/project_script.py` sở hữu script outline và phân đoạn ngữ nghĩa.
-- `services/narration_planner.py` sở hữu việc phát hiện phát âm và gán thông số Narration Plan.
-- `services/voice_plan.py` sở hữu schema hợp đồng VoicePlan và khả năng tương thích ngược.
-- `services/story_analyzer.py` sở hữu phân tích kịch bản thành StoryBeat và gán role.
-- `services/sound_director.py` sở hữu đạo diễn âm thanh (Ambience, SFX, Silence) theo mạch kịch bản.
-- `services/director_critic.py` sở hữu kiểm duyệt và tự động sửa xung đột âm thanh.
-- `services/resource_manager.py` sở hữu việc trích xuất yêu cầu tài nguyên, tính điểm chấm chọn và đồ thị thay thế.
-- `services/pronunciation_knowledge.py` sở hữu cơ sở tri thức phát âm tên riêng thần thoại.
-- `services/asset_ingest.py` & `services/resource_doctor.py` sở hữu nạp tài nguyên và chẩn đoán thư viện.
-- `services/voice_renderer.py` & `services/tts/` sở hữu render voice narration theo từng beat.
-- `services/voice_qc.py` sở hữu kiểm định chất lượng âm thanh 3 lớp và chính sách retry.
-- `services/voice_cli.py` sở hữu giao diện dòng lệnh orchestration layer.
-- `services/voice_project_service.py` sở hữu business logic cốt lõi của Voice Projects.
-- `services/mix_plan_builder.py`, `services/wave_audio_mixer.py`, `services/audio_mastering.py`, `services/audio_export.py` sở hữu hậu kỳ âm thanh (Mix/Master/Export).
-- `services/voice_project_workflow.py` sở hữu điều phối quy trình tự động từ kịch bản đến sản phẩm cuối cùng.
-- `JobManager` sở hữu tiến trình kỹ thuật chạy inference TTS và phát sinh sự kiện `EventBus`.
-- Các router `routers/`, adapter MCP `mcp_adapter/`, UI `webui/` và CLI `services/voice_cli.py` tuyệt đối không chứa business logic; chỉ đóng vai trò validate, chuyển đổi hoặc hiển thị dữ liệu.
-- Product state và confirmation gates thuộc `services/project_planner.py`.
-- HTTP validation thuộc `routers/`.
-- MCP chỉ đóng vai trò adapter chuyển đổi giao thức, định nghĩa schema trong `mcp_adapter/catalog.py`.
-
-## Production Runtime Validation (Phase 17)
-
-Kiểm tra in-process local runtime capabilities và preflight validation trước khi production.
-
-- Primary Services:
-  - `services/local_runtime_models.py` — `LocalRuntimeCapabilities`, `PreflightIssue` data contracts.
-  - `services/local_runtime_service.py` — `get_capabilities()` (model cache, device, formats), `run_production_preflight()` (ffmpeg check, disk space, model readiness). Zero HTTP loopback.
-- REST API: `routers/voice_runtime.py` (`GET /api/v1/voice-runtime/capabilities`, `POST /api/v1/voice-runtime/preflight/{project_id}`).
-- MCP Adapter: `mcp_adapter/runtime_tools.py` → `chatterbox_voice_runtime_capabilities`, `chatterbox_voice_runtime_preflight`.
-- Tests: `tests/test_local_runtime_capabilities.py`, `tests/test_voice_production_preflight.py`.
-
-## Intelligent Asset Library (Phase 18)
-
-Librarian service for ingesting, indexing, semantic matching and security-validating sound assets.
-
-- Primary Services:
-  - `services/asset_library_models.py` — `LibraryAsset`, `AssetCategory`, `AssetMatchResult`.
-  - `services/asset_library_store.py` — Persistent `library-index.yaml`, atomic CRUD.
-  - `services/asset_library_service.py` — Ingest with path-traversal security guard, symlink resolution.
-  - `services/asset_matching_service.py` — Semantic scoring (intent overlap, mood, energy, duration).
-- REST API: `routers/voice_assets.py` (`GET /api/v1/voice-assets`, `POST /register`, `POST /scan`, `POST /match`, `GET /{id}/preview`).
-- MCP Adapter: `mcp_adapter/asset_tools.py` → `chatterbox_voice_asset*` tools via `handle_asset_tool()`.
-- Tests: `tests/test_asset_library.py`, `tests/test_asset_matching.py`, `tests/test_asset_security.py`.
-
-## Story Series & Batch Production (Phase 19)
-
-Multi-episode production with shared Voice, Pronunciation and Sound bibles; concurrent batch execution.
-
-- Primary Services:
-  - `services/voice_series_models.py` — `VoiceSeries`, `VoiceSeriesEpisode`, `SeriesVoiceBible`, `SeriesPronunciationBible`, `SeriesSoundBible`, `SeriesProductionSummary`.
-  - `services/voice_series_store.py` — `projects/series/{series_id}/series.yaml` and `episodes/{episode_id}.yaml`.
-  - `services/voice_series_service.py` — Series/episode CRUD, completed episode invariant guard.
-  - `services/voice_series_operations.py` — Concurrent batch execution, cancellation token, deliverable export packaging (`exports/` fallback `output/`).
-- REST API: `routers/voice_series.py` (`POST /api/v1/voice-series`, `GET /{id}`, episodes, produce, status, review-queue, cancel).
-- MCP Adapter: `mcp_adapter/series_tools.py` → `chatterbox_voice_series_*` tools.
-- Tests: `tests/test_voice_series_models.py`, `tests/test_voice_series_service.py`, `tests/test_voice_series_operations.py`, `tests/test_voice_series_recovery.py`.
-
-## Observability, Recovery & Release Readiness (Phase 20)
-
-Structured audit events, health aggregation, sanitized diagnostics bundles for production observability.
-
-- Primary Services:
-  - `services/production_event_models.py` — `ProductionEvent`, `ProductionEventType`, `ProductionErrorCode`, `ProjectProductionHealth`, `SeriesProductionHealth`.
-  - `services/production_event_store.py` — Append-only `events.jsonl` per project/series (fcntl-locked, corruption-tolerant, auto-rotating at 1000 events).
-  - `services/production_health_service.py` — `get_project_health()`, `get_series_health()`: aggregate state + artifact freshness + active operations + runtime health.
-  - `services/diagnostics_service.py` — `create_project_diagnostics()`, `create_series_diagnostics()`: sanitize paths, redact secrets, bundle runtime caps + health + events.
-- REST API: `routers/voice_health.py` (`GET /api/v1/voice-projects/{id}/health`, `/events`, `POST /diagnostics`; equivalent series endpoints).
-- MCP Adapter: `mcp_adapter/health_tools.py` → `chatterbox_voice_health`, `chatterbox_voice_events`, `chatterbox_voice_diagnostics`, `chatterbox_voice_series_health`, `chatterbox_voice_series_events`.
-- Tests: `tests/test_production_events.py`, `tests/test_production_health.py`, `tests/test_diagnostics_bundle.py`.
-- Cross-Phase Integration: `tests/test_phase17_20_rest.py`, `tests/test_phase17_20_mcp.py`, `tests/test_phase17_20_cross_parity.py`, `tests/test_phase17_20_e2e.py`.
+1. **Business Logic** chỉ được phép tồn tại trong `services/`.
+2. **Routers** (`routers/`) chỉ validate và chuyển đổi HTTP.
+3. **MCP Adapters** (`mcp_adapter/`) chỉ chuyển tiếp giao thức JSON-RPC, schema khai báo tại `mcp_adapter/catalog.py`.
+4. **Web UI** (`webui/`) chỉ hiển thị và gọi API REST. Không chứa thuật toán nghiệp vụ.
+5. **JobManager** sở hữu tiến trình kỹ thuật của task. **Project Planner** sở hữu trạng thái nghiệp vụ.

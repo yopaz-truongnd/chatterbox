@@ -286,6 +286,17 @@ class ProjectWorkflowTestCase(unittest.TestCase):
         self.assertEqual(resp_other.status_code, 200)
         self.assertEqual(resp_other.json()["count"], 0)
 
+        # 4. DELETE /api/v1/events clears global event buffer
+        del_resp = self.client.delete("/api/v1/events")
+        self.assertEqual(del_resp.status_code, 200)
+        self.assertEqual(del_resp.json()["status"], "ok")
+        self.assertIn("server_boot_id", del_resp.json())
+
+        # Verify event buffer is empty after DELETE
+        resp_after_del = self.client.get("/api/v1/events?after_id=0&wait=0")
+        self.assertEqual(resp_after_del.status_code, 200)
+        self.assertEqual(resp_after_del.json()["count"], 0)
+
     def test_mcp_get_events_tool(self):
         import mcp_server
         from services.event_bus import event_bus

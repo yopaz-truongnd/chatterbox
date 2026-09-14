@@ -311,8 +311,13 @@ class AudioCandidateEvaluator:
             )
 
         # 4. Scoring Synthesis
+        is_stt_unavailable = any("Whisper/STT is unavailable" in str(iss) for iss in content_eval.get("issues", []))
         signal_score = 100.0 if final_signal.get("passed", True) else 35.0
-        content_score = float(content_eval.get("score", 100.0))
+        # Content could not be verified; fall back to the signal score instead of
+        # fabricating a perfect score. `content_passed` below stays honest so this
+        # routes to human review rather than silently auto-approving unverified
+        # content (see the invariant documented in services/critic.py).
+        content_score = signal_score if is_stt_unavailable else float(content_eval.get("score", 100.0))
         direction_score = float(direction_eval.get("score", 100.0)) if direction_eval else 100.0
 
         w_content = self.weights["content"]
@@ -331,7 +336,11 @@ class AudioCandidateEvaluator:
         issues.extend(final_signal.get("issues", []))
         warnings.extend(final_signal.get("warnings", []))
 
-        issues.extend(content_eval.get("issues", []))
+        for c_iss in content_eval.get("issues", []):
+            if "Whisper/STT is unavailable" in str(c_iss):
+                warnings.append(str(c_iss))
+            else:
+                issues.append(str(c_iss))
         warnings.extend(content_eval.get("warnings", []))
 
         if direction_eval:

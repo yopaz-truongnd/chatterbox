@@ -7,7 +7,10 @@ import math
 import os
 from pathlib import Path
 import platform
-import resource
+try:
+    import resource
+except ImportError:
+    resource = None
 import struct
 from typing import Any
 import wave
@@ -50,12 +53,48 @@ def _get_machine_summary() -> dict[str, Any]:
 
 def _get_peak_memory_mb() -> float:
     """Measure peak process memory in megabytes."""
-    try:
-        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        divisor = 1024 * 1024 if platform.system() == "Darwin" else 1024
-        return round(usage / divisor, 2)
-    except Exception:
-        return 0.0
+    if resource is not None:
+        try:
+            usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            divisor = 1024 * 1024 if platform.system() == "Darwin" else 1024
+            return round(usage / divisor, 2)
+        except Exception:
+            return 0.0
+
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+
+            counters = PROCESS_MEMORY_COUNTERS()
+            counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+            handle = ctypes.windll.kernel32.GetCurrentProcess()
+            ctypes.windll.psapi.GetProcessMemoryInfo.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(PROCESS_MEMORY_COUNTERS),
+                wintypes.DWORD,
+            ]
+            ctypes.windll.psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            if ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+                return round(counters.PeakWorkingSetSize / (1024 * 1024), 2)
+        except Exception:
+            return 0.0
+
+    return 0.0
 
 
 def _workflow_step_duration_ms(step: Any) -> float:

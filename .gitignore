@@ -65,3 +65,4 @@ data/characters/
 # Temporary audio files and test projects
 tmp/
 projects/
+outputs/

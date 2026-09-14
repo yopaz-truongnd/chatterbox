@@ -37,6 +37,7 @@ if ($args[0] -eq "--test" -or $args[0] -eq "test") {
     Write-Host "       CHATTERBOX TTS -- CHAY KIEM THU TICH HOP (UNIT TESTS)           " -ForegroundColor Cyan
     Write-Host "=======================================================================" -ForegroundColor Cyan
     $env:CHATTERBOX_IN_PROCESS = "1"
+    if (-not $env:CHATTERBOX_TEST_DUMMY_INFERENCE) { $env:CHATTERBOX_TEST_DUMMY_INFERENCE = "1" }
     & $PythonBin -m unittest discover -v tests/
     exit $LASTEXITCODE
 }

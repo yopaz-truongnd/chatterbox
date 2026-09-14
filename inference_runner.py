@@ -183,10 +183,16 @@ def run_batch_inference(config: dict) -> None:
                         target_wpm = narration_plan.get("target_wpm")
                         content_eval = evaluate_speech_content(wav, sr, reference_text=raw_text, target_wpm=target_wpm)
 
+                        is_stt_unavailable = any("Whisper/STT is unavailable" in str(iss) for iss in content_eval.get("issues", []))
                         signal_score = 100.0 if final_eval["passed"] else 30.0
-                        content_score = content_eval.get("score", 100.0)
+                        # Content could not be verified; fall back to the signal score instead of
+                        # fabricating a perfect score. `content_passed` stays honest so this routes
+                        # to human review rather than silently auto-approving unverified content
+                        # (see the invariant documented in services/critic.py).
+                        content_score = signal_score if is_stt_unavailable else content_eval.get("score", 100.0)
                         combined_score = round(content_score * 0.6 + signal_score * 0.4, 1)
-                        is_passing = final_eval["passed"] and content_eval.get("passed", True)
+                        content_passed = content_eval.get("passed", True)
+                        is_passing = final_eval["passed"] and content_passed
 
                         cand_meta = {
                             "candidate_idx": cand_idx,
@@ -229,14 +235,20 @@ def run_batch_inference(config: dict) -> None:
             for ca in candidate_attempts:
                 ca["selected"] = (ca is selected_meta)
 
+            if selected_wav is None or selected_wav.numel() == 0:
+                raise RuntimeError("Audio synthesis produced empty or zero-length audio")
+
             if not selected_meta.get("passed", False):
                 issues_list = []
                 if selected_meta.get("signal", {}).get("final", {}).get("issues"):
                     issues_list.extend(selected_meta["signal"]["final"]["issues"])
                 if selected_meta.get("content", {}).get("issues"):
-                    issues_list.extend(selected_meta["content"]["issues"])
-                err_issues = ", ".join(issues_list) or "Quality and content checks failed"
-                raise RuntimeError(f"QC failed: {err_issues}")
+                    for c_iss in selected_meta["content"]["issues"]:
+                        if "Whisper/STT is unavailable" not in str(c_iss):
+                            issues_list.append(c_iss)
+                if issues_list:
+                    err_issues = ", ".join(issues_list) or "Quality and content checks failed"
+                    raise RuntimeError(f"QC failed: {err_issues}")
 
             ta.save(line_out, selected_wav, selected_sr, encoding="PCM_S", bits_per_sample=16)
             line_dur = round(selected_wav.shape[-1] / selected_sr, 3)

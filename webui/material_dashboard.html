@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chatterbox TTS Studio — Material 3 Web GUI</title>
   
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/favicon.ico">
+  
   <!-- Google Fonts & Material Symbols -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -116,7 +121,7 @@
       <!-- Notifications Button & Dropdown -->
       <div class="relative">
         <button id="notificationsToggle" onclick="toggleNotificationsPanel()" class="relative p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Thông báo sự kiện (Real-time Events)">
-          <span class="material-symbols-outlined text-[18px]">notifications</span>
+          <span id="notificationsBellIcon" class="material-symbols-outlined text-[18px]">notifications</span>
           <span id="notificationsBadge" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500 animate-ping"></span>
           <span id="notificationsCount" class="hidden absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 text-[9px] font-bold bg-purple-600 text-white rounded-full flex items-center justify-center border border-[#18151E]">0</span>
         </button>
@@ -125,7 +130,7 @@
         <div id="notificationsPanel" class="hidden absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#18151E] border border-[#3F3A46] rounded-xl shadow-m3-3 z-50 overflow-hidden text-xs">
           <div class="px-3.5 py-2.5 bg-[#231F2A] border-b border-[#3F3A46] flex items-center justify-between">
             <div class="flex items-center gap-1.5 font-bold text-white">
-              <span class="material-symbols-outlined text-purple-400 text-[18px]">notifications_active</span>
+              <span id="notifHeaderIcon" class="material-symbols-outlined text-purple-400 text-[18px]">notifications_active</span>
               <span>Sự kiện & Thông báo</span>
               <span id="notifTotalBadge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-600/30 text-purple-300 border border-purple-500/40 font-mono">0</span>
             </div>
@@ -1434,7 +1439,7 @@
               <div class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-4"><div class="flex flex-wrap justify-between gap-2"><div><h3 id="directorActiveTitle" class="font-bold text-white"></h3><p id="directorActiveMeta" class="text-[10px] text-slate-400 font-mono"></p></div><div id="directorGateActions" class="flex gap-2"></div></div><div id="directorFlowGuide" class="mt-3"></div><div id="directorProgress" class="grid grid-cols-3 md:grid-cols-5 gap-1 mt-4"></div></div>
               <div id="directorOperations" class="hidden bg-[#18151E] rounded-xl border border-purple-500/30 p-4"></div>
               <div id="directorPendingRevisions" class="hidden bg-[#18151E] rounded-xl border border-amber-500/30 p-4"></div>
-              <nav class="flex gap-1 overflow-x-auto" id="directorViews"><button data-view="workspace" onclick="showDirectorView('workspace')">Kế hoạch</button><button data-view="review" onclick="showDirectorView('review')">Duyệt giọng đọc</button><button data-view="mix" onclick="showDirectorView('mix')">Phối & Master</button><button data-view="delivery" onclick="showDirectorView('delivery')">Duyệt & Tải xuống</button></nav>
+              <nav class="flex gap-1 overflow-x-auto" id="directorViews"><button data-view="workspace" onclick="showDirectorView('workspace', true)">Kế hoạch</button><button data-view="review" onclick="showDirectorView('review', true)">Duyệt giọng đọc</button><button data-view="mix" onclick="showDirectorView('mix', true)">Phối & Master</button><button data-view="delivery" onclick="showDirectorView('delivery', true)">Duyệt & Tải xuống</button><button data-view="final" onclick="showDirectorView('final', true)">Tổng kết & Tra soát</button></nav>
               <div id="directorViewContent" class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-4 min-h-64"></div>
             </div>
           </div>
@@ -2168,17 +2173,17 @@
   </div>
 
   <!-- ==================== JAVASCRIPT CONTROLLERS (MODULAR) ==================== -->
-  <script src="/static/js/state.js"></script>
-  <script src="/static/js/tts.js"></script>
-  <script src="/static/js/batch.js"></script>
-  <script src="/static/js/multilingual.js"></script>
-  <script src="/static/js/vc.js"></script>
-  <script src="/static/js/projects.js"></script>
-  <script src="/static/js/director-console.js?v=20260911-qc-gate"></script>
-  <script src="/static/js/characters.js"></script>
-  <script src="/static/js/history.js"></script>
-  <script src="/static/js/settings.js"></script>
-  <script src="/static/js/notifications.js"></script>
-  <script src="/static/js/main.js"></script>
+  <script src="/static/js/state.js?v=20260913-v25"></script>
+  <script src="/static/js/tts.js?v=20260913-v25"></script>
+  <script src="/static/js/batch.js?v=20260913-v25"></script>
+  <script src="/static/js/multilingual.js?v=20260913-v25"></script>
+  <script src="/static/js/vc.js?v=20260913-v25"></script>
+  <script src="/static/js/projects.js?v=20260913-v25"></script>
+  <script src="/static/js/director-console.js?v=20260914-v28"></script>
+  <script src="/static/js/characters.js?v=20260913-v25"></script>
+  <script src="/static/js/history.js?v=20260913-v25"></script>
+  <script src="/static/js/settings.js?v=20260913-v25"></script>
+  <script src="/static/js/notifications.js?v=20260913-v26"></script>
+  <script src="/static/js/main.js?v=20260913-v25"></script>
 </body>
 </html>

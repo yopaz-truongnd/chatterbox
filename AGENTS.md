@@ -15,10 +15,12 @@
 
 ## Repository Navigation
 
-- Trước khi đọc implementation, mở `docs/agent-map.md` và chọn nhóm tính năng nhỏ nhất phù hợp với yêu cầu.
-- Đọc primary files trước; chỉ mở secondary files khi thay đổi thật sự vượt qua ranh giới trách nhiệm.
+- **BƯỚC 1 (Bắt buộc)**: Mở [docs/agent-map.md](file:///e:/Project/chatterbox/docs/agent-map.md), tra cứu **Bảng Ma trận Tính năng** (Mục 1) để tìm đúng các tệp cần sửa (Service, Router, UI, Test) trong 1 bước thay vì nạp toàn bộ dự án.
+- **BƯỚC 2**: Nếu cần hiểu sâu luồng dữ liệu của phân hệ, đọc tài liệu Domain tương ứng trong `docs/domains/` (ví dụ `01-tts-and-models.md`, `02-batch-and-qc.md`,...).
+- **BƯỚC 3**: Luôn đối chiếu và tuân thủ các quy chuẩn bất biến trong [docs/invariants.md](file:///e:/Project/chatterbox/docs/invariants.md) (Cross-platform Windows/Linux, Atomic I/O, Layering Rules).
 - Tìm symbol và caller bằng `rg` trước khi đọc toàn bộ file lớn.
 - Không đọc lại file chưa thay đổi trong cùng một task, trừ khi cần kiểm tra một symbol hoặc caller cụ thể.
 - Không đọc Desktop/Gradio khi task chỉ liên quan API, MCP hoặc project workflow.
 - Không đọc implementation multilingual nếu thay đổi không liên quan language handling. English là ưu tiên hiện tại, nhưng phải giữ khả năng multilingual.
 - Business logic nằm trong `services/`; router, MCP và UI chỉ validate, chuyển đổi hoặc trình bày dữ liệu.
+

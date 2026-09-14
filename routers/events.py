@@ -35,6 +35,23 @@ def get_global_events(
         "events": events,
         "count": len(events),
         "last_event_id": last_id,
+        "server_boot_id": event_bus.boot_id,
+    }
+
+
+@router.delete("/api/v1/events")
+def clear_global_events(
+    project_id: Annotated[str | None, Query(description="Optional filter to clear events for a specific project")] = None,
+) -> dict[str, Any]:
+    """Clear all events, or delegate to the per-project clear when project_id is given."""
+    if project_id:
+        return clear_specific_project_events(project_id)
+    event_bus.clear()
+    return {
+        "status": "ok",
+        "message": "All events cleared successfully",
+        "cleared_count": 0,
+        "server_boot_id": event_bus.boot_id,
     }
 
 
@@ -60,4 +77,18 @@ def get_project_events(
         "events": events,
         "count": len(events),
         "last_event_id": last_id,
+        "server_boot_id": event_bus.boot_id,
     }
+
+
+@router.delete("/api/v1/projects/{project_id}/events")
+def clear_specific_project_events(project_id: str) -> dict[str, Any]:
+    """Clear events for a specific project from the event bus."""
+    cleared_count = event_bus.clear_project_events(project_id)
+    return {
+        "status": "ok",
+        "message": f"Events for project {project_id} cleared",
+        "cleared_count": cleared_count,
+        "server_boot_id": event_bus.boot_id,
+    }
+

@@ -127,6 +127,39 @@ class TestAudioCandidateEvaluatorPhase10B(unittest.TestCase):
             self.assertIn("Content omission", res.retry_reason)
             self.assertIn("director_note", res.retry_adjustment)
 
+    def test_stt_unavailable_does_not_silently_pass(self):
+        """STT-unavailable content must never be auto-approved (see services/critic.py).
+
+        Regression guard: graceful degradation for a missing/unavailable Whisper
+        install must still route the candidate to human review (needs_review=True)
+        instead of forcing `passed=True`, and the STT-unavailable message must be
+        surfaced as a warning rather than a hard issue.
+        """
+        evaluator = AudioCandidateEvaluator(profile="default")
+
+        mock_content = {
+            "passed": False,
+            "score": 0.0,
+            "missing_words": [],
+            "repeated_words": [],
+            "accuracy_percent": 0.0,
+            "transcription": "",
+            "actual_wpm": 0.0,
+            "issues": ["Speech content could not be verified because Whisper/STT is unavailable"],
+            "warnings": [],
+        }
+
+        with mock.patch("services.audio_candidate_evaluator.evaluate_speech_content", return_value=mock_content):
+            res = evaluator.evaluate(
+                audio_source=self.clean_tensor,
+                reference_text="A clean test sentence.",
+            )
+
+            self.assertFalse(res.passed)
+            self.assertTrue(res.needs_review)
+            self.assertNotIn("Speech content could not be verified because Whisper/STT is unavailable", res.issues)
+            self.assertIn("Speech content could not be verified because Whisper/STT is unavailable", res.warnings)
+
     def test_candidate_ranking_and_deterministic_tie_breaking(self):
         # Candidate 1: Passed, score 95
         c1 = CandidateEvaluation(
