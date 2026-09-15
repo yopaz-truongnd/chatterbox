@@ -3,60 +3,54 @@
  */
 
 async function checkSystemHealth() {
-  const dot = document.getElementById('statusDot');
-  const text = document.getElementById('statusText');
-  const chip = document.getElementById('statusChip');
-  const ramBadge = document.getElementById('ramBadge');
-  const ramUsage = document.getElementById('ramUsage');
-  const deviceBadge = document.getElementById('deviceBadge');
-  const modelRecBadge = document.getElementById('modelRecBadge');
+  // Targets the header's hardware chip (#deviceChip > #deviceIndicator +
+  // #deviceStatus). All fields read from /health are already normalized
+  // cross-platform by utils/platform_tools.py (device: 'cpu'|'cuda'|'mps',
+  // total_ram_gb via GlobalMemoryStatusEx/sysctl/proc-meminfo per OS) --
+  // this function must not re-derive or assume anything OS-specific itself.
+  const indicator = document.getElementById('deviceIndicator');
+  const status = document.getElementById('deviceStatus');
+  const chip = document.getElementById('deviceChip');
 
   try {
     const res = await fetch('/health');
     if (res.ok) {
       const data = await res.json();
-      if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-      if (text) text.textContent = 'API Sẵn Sàng (Online)';
-      if (chip) chip.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 font-medium';
+      if (indicator) indicator.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+      if (chip) chip.className = 'flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#231F2A] border border-[#3F3A46] text-xs font-mono text-emerald-400';
 
-      if (data.device && deviceBadge) {
-        deviceBadge.textContent = data.device.toUpperCase();
+      if (status) {
+        const deviceLabel = (data.device || 'cpu').toUpperCase();
+        const threadsLabel = data.device === 'cpu' && data.cpu_threads ? ` · ${data.cpu_threads} luồng` : '';
+        status.textContent = `${deviceLabel}${threadsLabel}`;
+      }
+      if (chip) {
+        const ramLabel = typeof data.total_ram_gb === 'number' ? `RAM: ${data.total_ram_gb} GB` : '';
+        chip.title = [ramLabel, data.recommendation_reason].filter(Boolean).join(' — ');
       }
 
-      if (data.memory) {
-        if (ramBadge) ramBadge.classList.remove('hidden');
-        if (ramUsage) ramUsage.textContent = `${data.memory.process_ram_mb} MB / ${data.memory.system_ram_gb} GB`;
-
-        if (data.memory.system_ram_gb <= 16) {
-          systemRecommendedModel = 'nano';
-          if (modelRecBadge) {
-            modelRecBadge.textContent = 'Khuyên dùng: NANO (RAM ≤ 16GB)';
-            modelRecBadge.className = 'px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-[10px]';
-          }
-          if (!userManuallyChangedModel) {
-            const mSelect = document.getElementById('ttsModelSelect');
-            if (mSelect) mSelect.value = 'nano';
-            const bSelect = document.getElementById('batchModelSelect');
-            if (bSelect) bSelect.value = 'nano';
-            if (typeof handleModelChange === 'function') handleModelChange('nano');
-          }
-        } else {
-          systemRecommendedModel = 'turbo';
-          if (modelRecBadge) {
-            modelRecBadge.textContent = 'Khuyên dùng: TURBO (RAM > 16GB)';
-            modelRecBadge.className = 'px-2 py-0.5 rounded-full bg-purple-950/60 text-purple-300 border border-purple-800 text-[10px]';
-          }
+      // Backend already picks the resource-appropriate model per platform
+      // (RAM, and GPU VRAM when device is cuda) -- just follow it here
+      // instead of re-deriving a recommendation from raw fields.
+      if (data.recommended_model) {
+        systemRecommendedModel = data.recommended_model;
+        if (!userManuallyChangedModel) {
+          const mSelect = document.getElementById('ttsModelSelect');
+          if (mSelect) mSelect.value = systemRecommendedModel;
+          const bSelect = document.getElementById('batchModelSelect');
+          if (bSelect) bSelect.value = systemRecommendedModel;
+          if (typeof handleModelChange === 'function') handleModelChange(systemRecommendedModel);
         }
       }
     } else {
-      if (dot) dot.className = 'w-2 h-2 rounded-full bg-yellow-400';
-      if (text) text.textContent = 'API Đang khởi động...';
-      if (chip) chip.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-950/40 border border-yellow-500/30 text-yellow-400 font-medium';
+      if (indicator) indicator.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+      if (status) status.textContent = 'API đang khởi động...';
+      if (chip) chip.className = 'flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-950/40 border border-amber-500/30 text-xs font-mono text-amber-400';
     }
   } catch (err) {
-    if (dot) dot.className = 'w-2 h-2 rounded-full bg-red-400';
-    if (text) text.textContent = 'Mất kết nối API';
-    if (chip) chip.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-950/40 border border-red-500/30 text-red-400 font-medium';
+    if (indicator) indicator.className = 'w-1.5 h-1.5 rounded-full bg-red-400';
+    if (status) status.textContent = 'Mất kết nối API';
+    if (chip) chip.className = 'flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-950/40 border border-red-500/30 text-xs font-mono text-red-400';
   }
 }
 
