@@ -5,7 +5,7 @@
     {
       "id": "ISSUE-0001",
       "title": "Possessive apostrophe in a required pronunciation term creates an unresolvable resource gate (deadlock)",
-      "status": "open",
+      "status": "fixed",
       "severity": "high",
       "area": "director-resource-readiness",
       "reported_by": "yopaz-hunghv@be-agile.jp",
@@ -27,12 +27,18 @@
       ],
       "suggested_fix": "In scan_pronunciation_candidates, stop cleaning at the first apostrophe for a title-case word (treat \"Wukong's\" as base term \"Wukong\" + possessive marker, not as a new word \"Wukongs\"), e.g. strip a trailing \"'s\"/\"’s\" before the generic non-word stripping. Alternatively, have add_pronunciation fall back to matching the term with trailing possessive suffixes stripped from the script text before rejecting.",
       "workaround": "Rewrite the sentence to avoid the possessive form (e.g. \"the hand of Wukong\" instead of \"Wukong's hand\") before calling plan()/resources/check().",
-      "updates": []
+      "updates": [
+        {
+          "date": "2026-09-15",
+          "by": "hirovjp9999@gmail.com",
+          "note": "Fixed in commit 7408a3b: scan_pronunciation_candidates now strips a trailing possessive marker (\"'s\"/\"'s\") before the generic non-word strip, so \"Wukong's\" is recorded as base term \"Wukong\", which occurs verbatim in the script and can be resolved via add_pronunciation(). Added regression test test_scan_pronunciation_candidates_strips_possessive_marker in tests/test_narration_plan.py."
+        }
+      ]
     },
     {
       "id": "ISSUE-0002",
       "title": "GET /resources/missing throws 500: 'ResourceGap' object has no attribute 'to_dict'",
-      "status": "open",
+      "status": "fixed",
       "severity": "medium",
       "area": "director-resource-readiness",
       "reported_by": "yopaz-hunghv@be-agile.jp",
@@ -51,7 +57,13 @@
       ],
       "suggested_fix": "Replace `g.to_dict()` with `g.model_dump()` (or `g.model_dump(mode=\"json\")` if enum/complex fields need JSON-safe serialization) on both lines.",
       "workaround": "Use GET /api/v1/voice-projects/{project_id}/resource-shopping-list instead, which returns equivalent data without erroring.",
-      "updates": []
+      "updates": [
+        {
+          "date": "2026-09-15",
+          "by": "hirovjp9999@gmail.com",
+          "note": "Fixed in commit 7408a3b: replaced g.to_dict() with g.model_dump(mode=\"json\") on both lines in routers/voice_projects.py, matching every other endpoint in the router. Added regression test test_get_missing_resources_returns_gaps_without_500 in tests/test_voice_projects_api.py."
+        }
+      ]
     }
   ]
 }

@@ -59,6 +59,17 @@ class NarrationPlanTestCase(unittest.TestCase):
         self.assertNotIn("Podcast", words)
         self.assertNotIn("Show", words)
 
+    def test_scan_pronunciation_candidates_strips_possessive_marker(self):
+        """A possessive proper noun ("Wukong's") must be recorded as its base
+        term ("Wukong"), which occurs verbatim in the script, instead of a
+        mangled form ("Wukongs") that add_pronunciation() can never resolve
+        (see docs/known-issues.json ISSUE-0001)."""
+        sample_text = "It was the moment Wukong's hand touched it that everything changed."
+        words = [c["word"] for c in scan_pronunciation_candidates(sample_text)]
+
+        self.assertIn("Wukong", words)
+        self.assertNotIn("Wukongs", words)
+
     def test_apply_pronunciation_dict(self):
         text = "Welcome to NASA. We explore AI frontiers at NASA headquarters."
         pron_dict = {"NASA": "N.A.S.A.", "AI": "A.I."}
