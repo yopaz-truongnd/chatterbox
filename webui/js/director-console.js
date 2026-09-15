@@ -290,6 +290,10 @@ async function loadDirectorWorkflows(syncActive = false) {
   if (!list) return;
   try {
     directorWorkflows = await directorFetch('/api/v1/voice-workflows?limit=100');
+    // The backend lists files sorted by workflow_id (a random UUID segment),
+    // which is not chronological at all. Sort by creation time (newest
+    // first) here so the list order is actually meaningful.
+    directorWorkflows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     const countEl = document.getElementById('directorCount');
     if (countEl) countEl.textContent = `${directorWorkflows.length} quy trình`;
     const fp = JSON.stringify(directorWorkflows.map(w => [w.workflow_id, w.status, w.updated_at, (w.steps || []).map(s => s.status)])) + `|${directorActive?.workflow_id || ''}`;
@@ -298,11 +302,13 @@ async function loadDirectorWorkflows(syncActive = false) {
       const prevScroll = list.scrollTop;
       list.innerHTML = directorWorkflows.length ? directorWorkflows.map(workflow => {
         const progress = workflow.steps.length ? Math.round(workflow.steps.filter(s => ['completed', 'skipped'].includes(s.status)).length * 100 / workflow.steps.length) : 0;
+        const createdLabel = workflow.created_at ? new Date(workflow.created_at).toLocaleString('vi-VN') : '—';
         return `<div class="relative"><button onclick="openDirectorWorkflow('${escapeHtml(workflow.workflow_id)}')" class="w-full text-left p-3 pr-10 rounded-lg border ${directorActive?.workflow_id === workflow.workflow_id ? 'border-purple-500' : 'border-[#3F3A46]'} bg-[#0E0C12] hover:bg-[#231F2A]">
-          <div class="flex justify-between gap-2"><strong class="text-xs text-white truncate">${escapeHtml(workflow.project_id)}</strong>${directorStatusChip(workflow.status)}</div>
+          <div class="flex items-center gap-2 min-w-0">${directorStatusChip(workflow.status)}<strong class="text-xs text-white truncate min-w-0">${escapeHtml(workflow.project_id)}</strong></div>
+          <div class="mt-1 text-[10px] text-slate-500">Tạo lúc ${escapeHtml(createdLabel)}</div>
           <div class="mt-2 h-1 bg-[#3F3A46] rounded"><div class="h-1 bg-purple-500 rounded" style="width:${progress}%"></div></div>
           <div class="mt-1 flex justify-between text-[10px] text-slate-500"><span>${escapeHtml(workflow.policy.provider)} / ${escapeHtml(workflow.policy.model || 'mặc định')}</span><span>${progress}%</span></div>
-        </button><button onclick="deleteDirectorProduction('${escapeHtml(workflow.workflow_id)}','${escapeHtml(workflow.project_id)}')" class="absolute right-2 top-8 px-2 py-1 rounded bg-red-950 text-red-300 hover:bg-red-900 text-[10px] font-bold" title="Xóa bản sản xuất và tất cả file liên quan" aria-label="Xóa bản sản xuất ${escapeHtml(workflow.project_id)}">Xóa</button></div>`;
+        </button><button onclick="deleteDirectorProduction('${escapeHtml(workflow.workflow_id)}','${escapeHtml(workflow.project_id)}')" class="absolute right-2 top-2 px-2 py-1 rounded bg-red-950 text-red-300 hover:bg-red-900 text-[10px] font-bold" title="Xóa bản sản xuất và tất cả file liên quan" aria-label="Xóa bản sản xuất ${escapeHtml(workflow.project_id)}">Xóa</button></div>`;
       }).join('') : '<p class="text-xs text-slate-500 py-6 text-center">Chưa có bản sản xuất nào.</p>';
       list.scrollTop = prevScroll;
     }
