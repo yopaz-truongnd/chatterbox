@@ -11,7 +11,9 @@ from unittest import mock
 import yaml
 
 from services.voice_project_workflow import VoiceProjectWorkflowService
-from services.voice_project_workflow_models import VoiceWorkflowState, WorkflowPolicy, WorkflowStatus
+from services.voice_project_workflow_models import (
+    VoiceWorkflowState, WorkflowPolicy, WorkflowStatus, WorkflowStep, WorkflowStepName,
+)
 from services.voice_project_models import InvalidArtifactShaError, InvalidProjectStateError, LineageInvalidError, ProjectStatus
 from services.voice_project_models import MixPlanStaleError
 from services.tts.fake import FakeTTSProvider
@@ -185,6 +187,73 @@ class TestVoiceWorkflow(unittest.TestCase):
             for item in project_service.list_artifacts(state.project_id)
         ))
         self.assertNotEqual(self.service.next_action(state.workflow_id).next_action, "deliver")
+
+    def test_resume_syncs_stale_steps_instead_of_rerunning_superseded_work(self):
+        """A revision can drive a project ahead independently of the workflow's
+        own step loop (e.g. via DirectorRevisionService), leaving the
+        workflow's bookkeeping stale relative to reality. Resuming such a
+        workflow must reconcile its step records against the project's real
+        stage instead of blindly re-invoking an already-superseded step
+        (e.g. render() on a project already at MASTERED, which fails
+        outright) — see docs/known-issues.json ISSUE-0003 follow-up."""
+        project_id = "wf_stale_steps"
+        project_service = VoiceProjectService(store=self.service.project_store, provider_name="fake")
+        project_service.create_project(
+            "The morning sun rose gently over the calm green valley.", project_id=project_id,
+        )
+        project_service.plan(project_id)
+        project_service.check_resources(project_id)
+        project_service.render(project_id)
+        project_service.evaluate(project_id)
+        project_service.prepare_for_mix(project_id)
+        project_service.mix(project_id)
+        project_service.master(project_id)
+        self.assertEqual(self.service.project_store.get_project_state(project_id).stage, ProjectStatus.MASTERED)
+
+        # Simulate a workflow that never advanced past its own RENDER step
+        # bookkeeping (e.g. it paused at audio_quality_review and only the
+        # revision path above actually pushed the project forward).
+        self.wf_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_stale_steps",
+            project_id=project_id,
+            status=WorkflowStatus.WAITING_FOR_HUMAN,
+            policy=WorkflowPolicy(provider="fake", require_final_approval=True),
+            human_action={"action_type": "audio_quality_review", "resume_action": "evaluate"},
+            steps=[
+                WorkflowStep(name=WorkflowStepName.CREATE_PROJECT.value, status="completed"),
+                WorkflowStep(name=WorkflowStepName.PLAN.value, status="completed"),
+                WorkflowStep(name=WorkflowStepName.CHECK_RESOURCES.value, status="completed"),
+                WorkflowStep(name=WorkflowStepName.RENDER.value, status="failed", error={"code": "REVIEW_REQUIRED"}),
+                WorkflowStep(name=WorkflowStepName.EVALUATE.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.PREPARE_MIX.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.MIX.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.MASTER.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.EXPORT.value, status="pending"),
+            ],
+            current_step=WorkflowStepName.RENDER.value,
+        ))
+
+        self.service.resume_workflow("vwf_stale_steps")
+
+        final_state = self._wait_for_workflow(
+            "vwf_stale_steps", target_statuses=(WorkflowStatus.WAITING_FOR_HUMAN, WorkflowStatus.FAILED),
+        )
+        self.assertEqual(final_state.status, WorkflowStatus.WAITING_FOR_HUMAN)
+        self.assertEqual(final_state.human_action["action_type"], "final_audio_approval")
+
+        for name in ("render", "evaluate", "prepare_mix", "mix", "master"):
+            step = next(s for s in final_state.steps if s.name == name)
+            self.assertEqual(step.status, "completed", f"step '{name}' should have been synced to completed")
+
+        render_step = next(s for s in final_state.steps if s.name == "render")
+        self.assertIn("synced_from_project_stage", render_step.result_summary)
+
+        master_step = next(s for s in final_state.steps if s.name == "master")
+        self.assertNotEqual(master_step.result_summary.get("approved"), True, "sync must never fabricate an approval")
+
+        master_path = self.service.project_store.get_project_dir(project_id) / "mix" / "master.wav"
+        from services.voice_project_service import compute_file_sha256
+        self.assertEqual(final_state.human_action["items"][0]["sha256"], compute_file_sha256(master_path))
 
     def test_qc_always_runs_when_narration_requires_manual_acceptance(self):
         state = self.service.start_workflow(

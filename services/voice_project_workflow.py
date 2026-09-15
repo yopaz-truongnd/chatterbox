@@ -64,6 +64,36 @@ def _is_step_completed(state: VoiceWorkflowState, step_name: str) -> bool:
     return False
 
 
+# Project stages that prove a given workflow step's work already happened,
+# even if this workflow's own bookkeeping never recorded it (e.g. because a
+# revision was driven independently through DirectorRevisionService instead
+# of through this workflow's own step loop). Ordered so later stages imply
+# every earlier one is also done.
+_STEP_COMPLETION_STAGES: dict[str, tuple[ProjectStatus, ...]] = {
+    WorkflowStepName.RENDER.value: (
+        ProjectStatus.NARRATION_READY, ProjectStatus.PREPARING_MIX, ProjectStatus.MIX_READY,
+        ProjectStatus.MIXING, ProjectStatus.MIXED, ProjectStatus.MASTERING, ProjectStatus.MASTERED,
+        ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
+    ),
+    WorkflowStepName.EVALUATE.value: (
+        ProjectStatus.NARRATION_READY, ProjectStatus.PREPARING_MIX, ProjectStatus.MIX_READY,
+        ProjectStatus.MIXING, ProjectStatus.MIXED, ProjectStatus.MASTERING, ProjectStatus.MASTERED,
+        ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
+    ),
+    WorkflowStepName.PREPARE_MIX.value: (
+        ProjectStatus.MIX_READY, ProjectStatus.MIXING, ProjectStatus.MIXED, ProjectStatus.MASTERING,
+        ProjectStatus.MASTERED, ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
+    ),
+    WorkflowStepName.MIX.value: (
+        ProjectStatus.MIXED, ProjectStatus.MASTERING, ProjectStatus.MASTERED,
+        ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
+    ),
+    WorkflowStepName.MASTER.value: (
+        ProjectStatus.MASTERED, ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
+    ),
+}
+
+
 class VoiceProjectWorkflowService:
     """Autonomous orchestrator for end-to-end Voice Projects."""
 
@@ -511,6 +541,43 @@ class VoiceProjectWorkflowService:
                 error=error,
             )
 
+    def _sync_steps_with_project_stage(self, workflow_id: str, project_id: str) -> None:
+        """Reconcile stale workflow step bookkeeping against the project's actual
+        stage before executing anything.
+
+        A revision can be driven directly through DirectorRevisionService
+        (e.g. an explicit beat approval + reproduce) without going through
+        this workflow's own step loop, leaving the workflow's step records
+        stale relative to where the project really is. Left unreconciled,
+        resuming would blindly re-invoke an already-superseded step (e.g.
+        render() on a project already at MASTERED), which fails outright.
+        This only ever marks a step *completed* when the project's real
+        stage proves the underlying work already happened — it never
+        fabricates a human decision, so gates like the final-audio-approval
+        check below still require an explicit, real approval.
+        """
+        if not self.project_store.project_exists(project_id):
+            return
+        try:
+            stage = self.project_store.get_project_state(project_id).stage
+        except Exception:
+            return
+        state = self.store.get_workflow(workflow_id)
+        if not state:
+            return
+        changed = False
+        for step in state.steps:
+            stages = _STEP_COMPLETION_STAGES.get(step.name)
+            if stages and step.status != "completed" and stage in stages:
+                step.status = "completed"
+                step.completed_at = datetime.now(timezone.utc).isoformat()
+                step.error = None
+                step.result_summary.setdefault("synced_from_project_stage", stage.value)
+                changed = True
+        if changed:
+            state.updated_at = datetime.now(timezone.utc).isoformat()
+            self.store.save_workflow(state)
+
     def _run_workflow_op(
         self,
         workflow_id: str,
@@ -641,6 +708,9 @@ class VoiceProjectWorkflowService:
                 voice=state.policy.narrator_reference_voice,
             )
             project_id = state.project_id
+
+            self._sync_steps_with_project_stage(workflow_id, project_id)
+            state = self.store.get_workflow(workflow_id) or state
 
             # 1. Step: CREATE_PROJECT
             if script_text and not _is_step_completed(state, WorkflowStepName.CREATE_PROJECT.value):
