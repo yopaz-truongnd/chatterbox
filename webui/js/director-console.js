@@ -608,7 +608,9 @@ function renderDirectorResourceReadiness(readiness, gaps) {
 
   const pronBulkBtn = pronunciationGaps.length > 1 ? `<button onclick="confirmAllDirectorPronunciations(this)" class="text-[10px] text-purple-300 hover:text-purple-200 underline shrink-0">Xác nhận tất cả theo chính tả gốc</button>` : '';
   const pronSection = pronunciationGaps.length ? `<div class="mb-3"><div class="flex items-center justify-between gap-2 mb-1.5"><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Cần xác nhận phát âm (${pronunciationGaps.length})</h5>${pronBulkBtn}</div><div class="space-y-1.5 director-pron-list">${pronunciationGaps.map(renderDirectorPronunciationGap).join('')}</div></div>` : '';
-  const assetSection = assetGaps.length ? `<div><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Tài nguyên âm thanh còn thiếu (${assetGaps.length})</h5><div class="space-y-2">${assetGaps.map(renderDirectorAssetGap).join('')}</div></div>` : '';
+  const skippableAssetCount = assetGaps.filter(g => g.priority !== 'required').length;
+  const assetBulkBtn = skippableAssetCount > 1 ? `<button onclick="omitAllDirectorAssetGaps(this)" class="text-[10px] text-purple-300 hover:text-purple-200 underline shrink-0">Bỏ qua tất cả không bắt buộc (${skippableAssetCount})</button>` : '';
+  const assetSection = assetGaps.length ? `<div><div class="flex items-center justify-between gap-2 mb-1.5"><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Tài nguyên âm thanh còn thiếu (${assetGaps.length})</h5>${assetBulkBtn}</div><div class="space-y-2 director-asset-gap-list">${assetGaps.map(renderDirectorAssetGap).join('')}</div></div>` : '';
 
   return `${header}${summary}${pronSection}${assetSection}`;
 }
@@ -630,17 +632,53 @@ async function confirmAllDirectorPronunciations(button) {
   const originalLabel = button.textContent;
   button.textContent = 'Đang xác nhận...';
   try {
-    const results = await Promise.allSettled(Array.from(rows).map(row => {
+    // Sequential on purpose: firing these concurrently races multiple writers
+    // against the same project.yaml, which can fail on Windows with
+    // "[WinError 5] Access is denied" during the atomic rename (found live
+    // while testing the analogous bulk-omit button below).
+    let failed = 0;
+    for (const row of rows) {
       const term = row.getAttribute('data-pron-term');
       const phonetic = row.querySelector('input')?.value.trim() || term;
-      return directorFetch(`/api/v1/voice-projects/${directorActive.project_id}/resources/pronunciations`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ term, phonetic, actor_id: 'director-console' }),
-      });
-    }));
-    const failed = results.filter(r => r.status === 'rejected').length;
+      try {
+        await directorFetch(`/api/v1/voice-projects/${directorActive.project_id}/resources/pronunciations`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ term, phonetic, actor_id: 'director-console' }),
+        });
+      } catch { failed++; }
+    }
     if (failed) showToast('warning', `Đã xác nhận ${rows.length - failed}/${rows.length} từ, ${failed} từ bị lỗi.`);
     else showToast('success', `Đã xác nhận toàn bộ ${rows.length} từ theo chính tả gốc.`);
+    await refreshDirectorActive();
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+async function omitAllDirectorAssetGaps(button) {
+  const rows = document.querySelectorAll('.director-asset-gap-list [data-required="false"]');
+  if (!rows.length) return;
+  button.disabled = true;
+  const originalLabel = button.textContent;
+  button.textContent = 'Đang bỏ qua...';
+  try {
+    // Sequential on purpose: firing these concurrently races multiple
+    // writers against the same project.yaml, which failed live during
+    // testing with "[WinError 5] Access is denied" on the atomic rename --
+    // one of two omits silently lost even though the button reported both.
+    let failed = 0;
+    for (const row of rows) {
+      const resourceId = row.getAttribute('data-resource-id');
+      try {
+        await directorFetch(`/api/v1/voice-projects/${directorActive.project_id}/resources/omit`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ resource_id: resourceId, actor_id: 'director-console', reason: 'Optional resource bulk-omitted by director' }),
+        });
+      } catch { failed++; }
+    }
+    if (failed) showToast('warning', `Đã bỏ qua ${rows.length - failed}/${rows.length} mục, ${failed} mục bị lỗi.`);
+    else showToast('success', `Đã bỏ qua toàn bộ ${rows.length} tài nguyên không bắt buộc.`);
     await refreshDirectorActive();
   } finally {
     button.disabled = false;
@@ -655,7 +693,7 @@ function renderDirectorAssetGap(gap) {
   const details = `<div class="mt-1.5 text-[10px] text-slate-300 flex flex-wrap gap-x-3">${wanted.duration ? `<span><b>Thời lượng:</b> ${escapeHtml(String(wanted.duration))}</span>` : ''}${wanted.intensity ? `<span><b>Cường độ:</b> ${escapeHtml(String(wanted.intensity))}/5</span>` : ''}</div>${gap.narrative_context?.text ? `<p class="mt-1 text-[10px] text-slate-300"><b>Ngữ cảnh:</b> ${escapeHtml(gap.narrative_context.text)}</p>` : ''}${gap.suggested_search?.length ? `<p class="mt-1 text-[10px] text-slate-300"><b>Từ khóa:</b> ${escapeHtml(gap.suggested_search.slice(0, 3).join(' · '))}</p>` : ''}`;
   const canSuggest = ['sfx', 'ambience'].includes(gap.resource_type);
   const suggestBtn = canSuggest ? `<button type="button" onclick="directorFindAssetSuggestions('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-[#231F2A] hover:bg-purple-900/40 text-[10px] text-purple-300 border border-purple-700/40">🔍 Tìm gợi ý</button>` : '';
-  return `<div class="director-asset-gap p-2 rounded border ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} text-xs text-amber-200">
+  return `<div class="director-asset-gap p-2 rounded border ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} text-xs text-amber-200" data-resource-id="${escapeHtml(gap.resource_id)}" data-required="${required}">
     <div class="flex justify-between items-start gap-2"><b class="text-white">${escapeHtml(label)}</b><b class="text-[9px] uppercase shrink-0">${escapeHtml(gap.priority)}</b></div>
     ${details}
     <div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button>${suggestBtn}${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-[#231F2A] text-[10px]">Bỏ qua</button>`}</div>

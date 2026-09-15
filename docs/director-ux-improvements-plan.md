@@ -23,7 +23,7 @@ Use one status per item: `TODO`, `IN PROGRESS`, `DONE`, `SKIPPED` (with reason).
 | B1 | Fix misleading attempt "da chon" label vs. real approval | Director Console / review gate | DONE | Button now shows 3 distinct states: neutral (not selected), amber "can duyet" (selected but status != passed), green "check da duyet" (status == passed). Verified live: amber before click, flipped to green + API status changed needs_review->passed after clicking. |
 | B2 | Toast feedback when an action has no effect (e.g. resume blocked by an unmet gate) | Director Console | DONE | resumeDirectorWorkflow() now polls (up to 6x700ms) for the settled state instead of trusting the immediate HTTP response, which fires before the background re-check runs. First implementation was itself wrong (compared the immediate response, giving a false "success" toast) -- caught and fixed during live verification. Verified live both ways: warning toast when bouncing back to the same gate unresolved, success toast (workflow ran to completion) after actually approving first. |
 | B3 | Per-beat render progress detail | Director Console | TODO | Scope to what the existing job data can show (current beat / attempt), not a new ETA subsystem |
-| B4 | Bulk "Bo qua tat ca" for recommended resource gaps | Director Console / resource gate | TODO | Today each recommended gap must be skipped one at a time |
+| B4 | Bulk "Bo qua tat ca" for recommended resource gaps | Director Console / resource gate | DONE | Bulk button appears when 2+ skippable (non-required) gaps exist. Found and fixed a real concurrency bug during live verification: firing the omit requests in parallel raced multiple writers against the same project.yaml, failing with "[WinError 5] Access is denied" on Windows' atomic rename -- one of two omits silently lost. Fixed by running sequentially; applied the same fix to the pre-existing bulk pronunciation-confirm button, which had the identical latent bug. Verified live: 2/2 gaps omitted correctly after the fix (0 remaining), vs. 1/2 before. |
 | B5 | Search box in the production list | Director Console | TODO | Helps once the list is long; filters already added in a prior pass |
 
 ## Non-goals
@@ -41,3 +41,4 @@ Use one status per item: `TODO`, `IN PROGRESS`, `DONE`, `SKIPPED` (with reason).
 - 2026-09-16: A1 and A2 done and verified live against the running server.
 - 2026-09-16: B1 done and verified live against the running server.
 - 2026-09-16: B2 done; first attempt had a bug (false success toast) caught by live verification and fixed before commit.
+- 2026-09-16: B4 done; live verification caught a Windows file-write race condition in the bulk-omit (and pre-existing bulk pronunciation-confirm) buttons, fixed by running sequentially instead of in parallel.
