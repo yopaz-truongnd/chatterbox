@@ -217,6 +217,12 @@
           <span class="material-symbols-outlined text-[19px]">integration_instructions</span>
           <span>Kết nối MCP</span>
         </button>
+
+        <!-- 8. Feedback / Known Issues -->
+        <button onclick="switchTab('feedback')" data-tab="feedback" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
+          <span class="material-symbols-outlined text-[19px]">bug_report</span>
+          <span>Feedback</span>
+        </button>
       </nav>
 
       <!-- Bottom Pinned Section: 7. Settings & Model -->
@@ -1702,6 +1708,33 @@
         </div>
       </section>
 
+      <!-- ========================================================================= -->
+      <!-- TAB 9: FEEDBACK / KNOWN ISSUES TRACKER                                     -->
+      <!-- ========================================================================= -->
+      <section id="panel-feedback" class="tab-panel space-y-3.5">
+        <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30">
+                <span class="material-symbols-outlined text-[20px]">bug_report</span>
+              </div>
+              <div>
+                <h2 class="text-sm font-bold text-white">🐞 Feedback &amp; Known Issues</h2>
+                <p class="text-[11px] text-slate-400">Danh sách lỗi phát hiện trong quá trình sử dụng, dùng chung giữa các phiên làm việc (đọc từ <code class="bg-[#1C1A22] px-1 py-0.5 rounded text-purple-300">docs/known-issues.json</code>).</p>
+              </div>
+            </div>
+            <button onclick="loadFeedback()" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2E2938] text-slate-300 text-xs font-medium flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Tải lại</span>
+            </button>
+          </div>
+
+          <div id="feedbackList" class="space-y-3">
+            <p class="text-xs text-slate-500">Đang tải danh sách lỗi...</p>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -1980,6 +2013,7 @@
   <script src="/static/js/characters.js?v=20260913-v25"></script>
   <script src="/static/js/history.js?v=20260913-v25"></script>
   <script src="/static/js/settings.js?v=20260913-v25"></script>
+  <script src="/static/js/feedback.js?v=20260915-v1"></script>
   <script src="/static/js/notifications.js?v=20260913-v26"></script>
   <script src="/static/js/main.js?v=20260913-v25"></script>
 </body>

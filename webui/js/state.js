@@ -46,7 +46,8 @@ const TAB_URL_MAP = {
   'characters': 'characters',
   'history': 'history',
   'settings': 'settings',
-  'mcp': 'connect-mcp'
+  'mcp': 'connect-mcp',
+  'feedback': 'feedback'
 };
 
 const URL_TAB_MAP = {
@@ -71,7 +72,8 @@ const URL_TAB_MAP = {
   'settings': 'settings',
   'settings-studio': 'settings',
   'connect-mcp': 'mcp',
-  'mcp': 'mcp'
+  'mcp': 'mcp',
+  'feedback': 'feedback'
 };
 
 // ==================== HELPER UTILS ====================
@@ -191,6 +193,7 @@ function switchTab(tabId, updateUrl = true) {
   if (tabId === 'characters' && typeof loadCharacters === 'function') loadCharacters();
   if (tabId === 'history' && typeof refreshHistory === 'function') refreshHistory();
   if (tabId === 'settings' && typeof loadSettings === 'function') loadSettings();
+  if (tabId === 'feedback' && typeof loadFeedback === 'function') loadFeedback();
 }
 
 function initUrlRoute() {
