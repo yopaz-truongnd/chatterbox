@@ -224,7 +224,8 @@ def render_project_narration(
     qc_dir = project_dir / "qc"
     qc_dir.mkdir(parents=True, exist_ok=True)
 
-    for beat in target_beats:
+    total_beats = len(target_beats)
+    for beat_index, beat in enumerate(target_beats, start=1):
         beat_state = manifest.get_or_create_beat(beat.id)
         beat_voice_profile = beat.character_id or voice_profile
 
@@ -240,6 +241,24 @@ def render_project_narration(
             if cancellation_token and cancellation_token.is_cancelled():
                 break
 
+            # No TTS provider (chatterbox_job/chatterbox_http/gemini) threads
+            # beat identity through its own progress_callback calls -- only
+            # the FakeTTSProvider happens to. Wrap here, at the one place that
+            # actually knows which beat/attempt is in flight, so the
+            # Director Console can show real per-beat progress instead of an
+            # opaque aggregate percentage across the whole render() call.
+            # VoiceProjectOperation has no dedicated beat_index/total_beats
+            # field, so fold that context into the existing free-text
+            # `message` field rather than widening the operation schema.
+            beat_progress_callback = progress_callback
+            if progress_callback:
+                def beat_progress_callback(phase, pct, extra=None, _cb=progress_callback, _beat_id=beat.id, _idx=beat_index, _total=total_beats, _attempt=current_attempt_id):
+                    merged = dict(extra or {})
+                    provider_message = merged.get("message")
+                    merged["beat_id"] = _beat_id
+                    merged["message"] = f"Đoạn {_beat_id} ({_idx}/{_total}) · lần thử {_attempt}" + (f" · {provider_message}" if provider_message else "")
+                    _cb(phase, pct, merged)
+
             attempt = render_single_beat_attempt(
                 project_dir=project_dir,
                 project_id=project_id,
@@ -249,7 +268,7 @@ def render_project_narration(
                 voice_profile=beat_voice_profile,
                 pronunciation_overrides=pronunciation_overrides,
                 retry_adjustment=retry_adjustment,
-                progress_callback=progress_callback,
+                progress_callback=beat_progress_callback,
                 cancellation_token=cancellation_token,
             )
 
