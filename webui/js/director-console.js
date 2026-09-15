@@ -706,7 +706,20 @@ function renderDirectorReview() {
   if (!directorReview?.beats?.length) return '<p class="text-xs text-slate-500">Chưa có đoạn giọng đọc nào.</p>';
   const gated = directorActive.status === 'waiting_for_human' && directorActive.human_action?.action_type === 'narration_acceptance';
   return `${gated ? '<div class="mb-3 p-3 rounded-lg border border-amber-500/50 bg-amber-950/30 text-xs text-amber-200"><b>Cần duyệt giọng đọc:</b> nghe các bản đã chọn. Nút xanh phía trên duyệt toàn bộ một lần.</div>' : ''}<div class="space-y-3">${sortDirectorBeatsByAttention(directorReview.beats).map(beat => `<article class="p-3 rounded-lg bg-[#0E0C12] border ${directorBeatNeedsAttention(beat) ? 'border-amber-600/60' : 'border-emerald-700/50'}"><div class="flex flex-wrap justify-between gap-2"><div><b class="text-white text-xs">${escapeHtml(beat.beat_id)} · ${escapeHtml(beat.emotion)}</b><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(beat.source_text)}</p></div><span class="text-[10px] text-slate-400">bản đã chọn ${beat.selected_attempt ?? 'chưa có'} · QC ${beat.qc_summary?.qc_score ?? beat.qc_summary?.score ?? beat.qc_summary?.overall_score ?? '—'}</span></div>
-    <div class="flex flex-wrap gap-2 mt-3">${beat.available_attempts.map(a => `<div class="flex items-center gap-1"><audio controls preload="none" class="h-8 w-44" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.artifact_id)}"></audio><button onclick="selectDirectorAttempt('${escapeHtml(beat.beat_id)}',${a.attempt_id})" class="px-2 py-1 rounded ${a.selected ? 'bg-emerald-700' : 'bg-[#231F2A]'} text-[10px] text-white">Bản ${a.attempt_id}${a.selected ? ' · đã chọn' : ''}</button></div>`).join('')}</div>
+    <div class="flex flex-wrap gap-2 mt-3">${beat.available_attempts.map(a => {
+      // "selected" only means this is the currently-pointed-to candidate --
+      // it does NOT mean a human explicitly approved it (status stays
+      // needs_review/qc_failed/etc until select_attempt(explicit_approval)
+      // flips it to 'passed'). Conflating the two in one "da chon" label is
+      // exactly the confusion behind ISSUE-0005: a beat can look "done"
+      // while still silently waiting on a real approval click.
+      const isApproved = a.selected && a.status === 'passed';
+      const needsApproval = a.selected && a.status !== 'passed';
+      const btnClass = isApproved ? 'bg-emerald-700' : needsApproval ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#231F2A] hover:bg-[#2d2838]';
+      const btnLabel = isApproved ? `✓ Bản ${a.attempt_id} · đã duyệt` : needsApproval ? `Bản ${a.attempt_id} · cần duyệt` : `Bản ${a.attempt_id}`;
+      const btnTitle = isApproved ? 'Đã được duyệt tường minh, sẵn sàng dùng cho bản phối cuối' : needsApproval ? 'Đang là bản được chọn nhưng CHƯA được duyệt tường minh -- bấm để duyệt' : 'Bấm để chọn và duyệt tường minh bản ghi âm này';
+      return `<div class="flex items-center gap-1"><audio controls preload="none" class="h-8 w-44" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.artifact_id)}"></audio><button onclick="selectDirectorAttempt('${escapeHtml(beat.beat_id)}',${a.attempt_id})" title="${btnTitle}" class="px-2 py-1 rounded ${btnClass} text-[10px] text-white">${btnLabel}</button></div>`;
+    }).join('')}</div>
     <div class="flex flex-wrap items-center gap-1.5 mt-3"><label class="text-[10px] text-slate-400 shrink-0">Giọng nhân vật:</label><select id="directorVoiceSelect_${escapeHtml(beat.beat_id)}" class="director-input flex-1 min-w-32">${directorVoiceOptionsHtml(beat.character_id)}</select><button onclick="saveDirectorBeatVoice('${escapeHtml(beat.beat_id)}',document.getElementById('directorVoiceSelect_${escapeHtml(beat.beat_id)}').value)" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Lưu giọng</button></div>
     <div class="flex gap-2 mt-3"><button onclick="openDirectorBeat('${escapeHtml(beat.beat_id)}')" class="px-3 py-1 rounded bg-purple-600 text-white text-[10px]">Mở chi tiết đoạn</button></div></article>`).join('')}</div>`;
 }
