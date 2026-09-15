@@ -210,6 +210,10 @@ class DirectorDirectionPatchRequest(DirectorActorRequest):
     voice_style: str | None = None
 
 
+class DirectorVoicePatchRequest(DirectorActorRequest):
+    character_id: str = ""
+
+
 class DirectorTimingPatchRequest(DirectorActorRequest):
     pause_before_ms: float | None = None
     pause_after_ms: float | None = None

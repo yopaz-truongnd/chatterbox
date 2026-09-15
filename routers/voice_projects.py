@@ -25,6 +25,7 @@ from schemas.voice_projects import (
     DirectorDirectionPatchRequest,
     DirectorResourcePatchRequest,
     DirectorTimingPatchRequest,
+    DirectorVoicePatchRequest,
     ExportVoiceProjectRequest,
     FinalizeVoiceProjectRequest,
     HumanActionSchema,
@@ -59,7 +60,7 @@ from services.voice_project_dependencies import (
     get_voice_project_store,
     resolve_server_tts_provider,
 )
-from services.director_review_models import BeatDirectionPatch, BeatResourcePatch, BeatTimingPatch
+from services.director_review_models import BeatDirectionPatch, BeatResourcePatch, BeatTimingPatch, BeatVoicePatch
 from services.director_revision_store import DirectorRevisionStore
 from services.voice_project_models import (
     BeatNotFoundError,
@@ -1049,6 +1050,17 @@ def update_director_direction(project_id: str, beat_id: str, req: DirectorDirect
     try:
         patch = BeatDirectionPatch.model_validate(req.model_dump(exclude={"actor_id", "reason"}))
         return get_director_revision_service().update_direction(
+            project_id, beat_id, patch, req.actor_id, req.reason
+        ).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.patch("/api/v1/voice-projects/{project_id}/beats/{beat_id}/voice")
+def update_director_voice(project_id: str, beat_id: str, req: DirectorVoicePatchRequest):
+    try:
+        patch = BeatVoicePatch.model_validate(req.model_dump(exclude={"actor_id", "reason"}))
+        return get_director_revision_service().update_voice(
             project_id, beat_id, patch, req.actor_id, req.reason
         ).model_dump(mode="json")
     except Exception as exc:

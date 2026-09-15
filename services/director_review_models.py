@@ -62,6 +62,7 @@ class DirectorBeatReview(BaseModel):
     source_end: int
     role: str
     voice_direction: dict[str, Any]
+    character_id: str | None = None
     emotion: str
     energy: float
     pace: float | None = None
@@ -169,6 +170,13 @@ class BeatDirectionPatch(BaseModel):
         if value is not None and not 0 <= value <= 5:
             raise ValueError("energy must be between 0 and 5")
         return value
+
+
+class BeatVoicePatch(BaseModel):
+    character_id: str = Field(
+        default="",
+        description="Character/voice ID to render this beat with. Empty string resets to the project's default voice.",
+    )
 
 
 class BeatTimingPatch(BaseModel):

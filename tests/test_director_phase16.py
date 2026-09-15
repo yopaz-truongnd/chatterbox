@@ -6,7 +6,7 @@ import time
 import unittest
 from unittest import mock
 
-from services.director_review_models import BeatResourcePatch, BeatTimingPatch
+from services.director_review_models import BeatResourcePatch, BeatTimingPatch, BeatVoicePatch
 from services.director_review_service import DirectorReviewService
 from services.director_resource_service import DirectorResourceService
 from services.director_revision_service import DirectorRevisionService
@@ -65,6 +65,30 @@ class TestDirectorPhase16(unittest.TestCase):
         self.assertIn("mix_plan", impact.invalidated_artifacts)
         self.assertTrue(impact.final_approval_invalidated)
 
+    def test_voice_revision_requires_rerender_and_supports_reset_to_default(self):
+        self._rendered_project("voice_revision")
+        manifest = self.store.load_manifest("voice_revision")
+        beat_id = next(iter(manifest.beats))
+        selected = manifest.beats[beat_id].selected_attempt
+        self.assertIsNotNone(selected)
+        service = DirectorRevisionService(self.project_service)
+
+        impact = service.update_voice(
+            "voice_revision", beat_id, BeatVoicePatch(character_id="char_custom"), "tester"
+        )
+        plan = self.store.load_voice_plan("voice_revision")
+        self.assertEqual(next(b for b in plan.beats if b.id == beat_id).character_id, "char_custom")
+        self.assertIsNone(self.store.load_manifest("voice_revision").beats[beat_id].selected_attempt)
+        self.assertIn("render_beat", impact.required_reproduction_steps)
+        self.assertEqual(impact.rerender_beats, [beat_id])
+        self.assertTrue(impact.final_approval_invalidated)
+
+        # Resetting to the empty string ("Mặc định") must clear back to None,
+        # not leave the previous override in place.
+        service.update_voice("voice_revision", beat_id, BeatVoicePatch(character_id=""), "tester")
+        plan_after_reset = self.store.load_voice_plan("voice_revision")
+        self.assertIsNone(next(b for b in plan_after_reset.beats if b.id == beat_id).character_id)
+
     def test_select_existing_attempt_does_not_rerender(self):
         self._rendered_project("select_attempt")
         manifest = self.store.load_manifest("select_attempt")
@@ -89,6 +113,23 @@ class TestDirectorPhase16(unittest.TestCase):
         )
         self.assertFalse(result.remaining_required_gaps)
         self.assertEqual((self.store.get_project_dir(project_id) / "source" / "script.txt").read_bytes(), before)
+
+    def test_resource_gap_description_shows_specific_term_not_generic_category(self):
+        """description must surface the specific term/intent, not the generic reason code.
+
+        Every proper-noun pronunciation gap previously shared the exact same
+        "mythological_proper_noun" reason string, and description prioritized
+        that reason over the actual term — making every gap card in the
+        Director Console indistinguishable from the others.
+        """
+        project_id = "gap_description_specificity"
+        self.project_service.create_project("The Zhong crossed the silent mountain at dusk.", project_id=project_id)
+        self.project_service.plan(project_id)
+        self.project_service.check_resources(project_id)
+        review = DirectorReviewService(self.store).get_review(project_id)
+        gap = next(g for g in review.required_resource_gaps if g.term == "Zhong")
+        self.assertEqual(gap.description, "Zhong")
+        self.assertNotIn("mythological_proper_noun", gap.description)
 
     def test_required_resource_cannot_be_omitted(self):
         project_id = "required_omit"

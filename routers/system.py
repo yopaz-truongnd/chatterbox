@@ -82,6 +82,23 @@ def get_diagnostics() -> dict:
     return detect_full_diagnostics(os.getenv("CHATTERBOX_DEVICE", "auto"), PROJECT_DIR)
 
 
+@router.get("/api/v1/feedback")
+def get_feedback() -> dict:
+    """Read the shared known-issues tracker (docs/known-issues.json) for the webui Feedback tab."""
+    import json
+
+    from api_app import PROJECT_DIR
+
+    path = PROJECT_DIR / "docs" / "known-issues.json"
+    if not path.exists():
+        return {"schema_version": 1, "instructions": "", "issues": []}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Malformed known-issues.json: {e}") from e
+
+
 @router.get("/api/v1/models", tags=["models"])
 def list_models() -> dict:
     from api_app import PROJECT_DIR

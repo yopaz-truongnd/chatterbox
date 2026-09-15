@@ -14,6 +14,7 @@ from services.director_review_models import (
     BeatResourcePatch,
     BeatReviewResult,
     BeatTimingPatch,
+    BeatVoicePatch,
     DirectorRevisionEvent,
     IncrementalReproductionResult,
     RevisionImpact,
@@ -190,6 +191,22 @@ class DirectorRevisionService:
         self.store.save_manifest(project_id, manifest)
         steps = ["check_resources", "render_beat", "evaluate", *MIX_STEPS]
         event = self._event(project_id, "beat_direction_changed", beat_id, before, beat.voice.model_dump(mode="json"), ["selected_attempt", "beat_qc", *MIX_ARTIFACTS], steps, actor_id, reason)
+        return RevisionImpact(project_id=project_id, beat_id=beat_id, revision_id=event.revision_id, invalidated_artifacts=event.affected_artifacts, required_reproduction_steps=steps, rerender_beats=[beat_id], final_approval_invalidated=True)
+
+    def update_voice(self, project_id: str, beat_id: str, patch: BeatVoicePatch, actor_id: str, reason: str | None = None) -> RevisionImpact:
+        plan, beat = self._beat(project_id, beat_id)
+        before = {"character_id": beat.character_id}
+        beat.character_id = patch.character_id or None
+        manifest = self.store.load_manifest(project_id)
+        beat_state = manifest.beats.get(beat_id)
+        if beat_state:
+            beat_state.selected_attempt = None
+            beat_state.status = RenderStatus.PENDING
+        self.store.save_voice_plan(project_id, plan)
+        self.store.save_manifest(project_id, manifest)
+        steps = ["check_resources", "render_beat", "evaluate", *MIX_STEPS]
+        after = {"character_id": beat.character_id}
+        event = self._event(project_id, "beat_voice_changed", beat_id, before, after, ["selected_attempt", "beat_qc", *MIX_ARTIFACTS], steps, actor_id, reason)
         return RevisionImpact(project_id=project_id, beat_id=beat_id, revision_id=event.revision_id, invalidated_artifacts=event.affected_artifacts, required_reproduction_steps=steps, rerender_beats=[beat_id], final_approval_invalidated=True)
 
     def update_timing(self, project_id: str, beat_id: str, patch: BeatTimingPatch, actor_id: str, reason: str | None = None) -> RevisionImpact:

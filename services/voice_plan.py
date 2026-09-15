@@ -165,6 +165,8 @@ class Beat(BaseModel):
     ambience: AmbienceIntent | None = None
     sfx: list[SFXIntent] = Field(default_factory=list)
     silence: SilenceDecision | None = None
+    # None falls back to the project's global VoiceMetadata.profile.
+    character_id: str | None = None
 
 
 class VoicePlan(BaseModel):

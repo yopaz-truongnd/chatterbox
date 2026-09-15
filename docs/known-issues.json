@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "instructions": "Shared bug tracker for this repo, surfaced in the webui Feedback tab (GET /api/v1/feedback). Status values: open, in_progress, fixed, wontfix. When you pick up an issue: set status to in_progress and append an entry to updates with {date, by, note}. When resolved: set status to fixed, append a final update note referencing the fix commit, and keep the entry (do not delete) for history.",
+  "issues": [
+    {
+      "id": "ISSUE-0001",
+      "title": "Possessive apostrophe in a required pronunciation term creates an unresolvable resource gate (deadlock)",
+      "status": "open",
+      "severity": "high",
+      "area": "director-resource-readiness",
+      "reported_by": "yopaz-hunghv@be-agile.jp",
+      "reported_at": "2026-09-15",
+      "summary": "When a script contains a possessive proper noun like \"Wukong's\" or \"Buddha's\", the pronunciation-candidate scanner strips the apostrophe (not '\\w') and records the mangled form (\"Wukongs\", \"Buddhas\") as the required term. Resolving that required resource via POST /resources/pronunciations then fails, because the resolver checks for the literal term inside the source script text and the mangled form never occurs verbatim. Required resources also cannot be omitted, so the project is permanently stuck in RESOURCE_BLOCKED / cannot reach READY_TO_RENDER unless the script text itself is rewritten to avoid the possessive form.",
+      "repro": [
+        "Create a voice project (POST /api/v1/voice-projects) with script_text containing a possessive proper noun, e.g. \"...the moment Wukong's hand touched it...\"",
+        "POST /api/v1/voice-projects/{id}/plan",
+        "POST /api/v1/voice-projects/{id}/resources/check -> required gap list includes \"Wukongs\" (no apostrophe)",
+        "POST /api/v1/voice-projects/{id}/resources/pronunciations with {\"term\": \"Wukongs\", \"phonetic\": \"Wukongs\"} -> HTTP 409 INVALID_PROJECT_STATE: \"Pronunciation term 'Wukongs' does not occur in the source script.\"",
+        "POST /api/v1/voice-projects/{id}/resources/omit with the gap's resource_id -> HTTP 409 INVALID_PROJECT_STATE: \"REQUIRED resources cannot be omitted.\"",
+        "Project is now stuck: the required gap can neither be resolved nor omitted."
+      ],
+      "root_cause": "services/narration_planner.py:81 builds the candidate word via `clean_w = re.sub(r\"[^\\w]\", \"\", tail[i])`, which strips the apostrophe from a possessive (\"Wukong's\" -> \"Wukongs\") instead of stopping at the apostrophe or keeping it. services/director_resource_service.py:103 (add_pronunciation) then requires `term.casefold() in beat.script.text.casefold()`, which the mangled term can never satisfy. services/director_resource_service.py:173 (omit_optional) explicitly refuses to omit REQUIRED priority gaps, removing the only other escape hatch.",
+      "files": [
+        "services/narration_planner.py:81",
+        "services/director_resource_service.py:103",
+        "services/director_resource_service.py:173"
+      ],
+      "suggested_fix": "In scan_pronunciation_candidates, stop cleaning at the first apostrophe for a title-case word (treat \"Wukong's\" as base term \"Wukong\" + possessive marker, not as a new word \"Wukongs\"), e.g. strip a trailing \"'s\"/\"’s\" before the generic non-word stripping. Alternatively, have add_pronunciation fall back to matching the term with trailing possessive suffixes stripped from the script text before rejecting.",
+      "workaround": "Rewrite the sentence to avoid the possessive form (e.g. \"the hand of Wukong\" instead of \"Wukong's hand\") before calling plan()/resources/check().",
+      "updates": []
+    },
+    {
+      "id": "ISSUE-0002",
+      "title": "GET /resources/missing throws 500: 'ResourceGap' object has no attribute 'to_dict'",
+      "status": "open",
+      "severity": "medium",
+      "area": "director-resource-readiness",
+      "reported_by": "yopaz-hunghv@be-agile.jp",
+      "reported_at": "2026-09-15",
+      "summary": "GET /api/v1/voice-projects/{project_id}/resources/missing always returns HTTP 500 whenever the project has any missing resources, because the handler calls `.to_dict()` on ResourceGap instances, but ResourceGap is a Pydantic BaseModel (services/resource_models.py:202) which only exposes `.model_dump()`. The resource-shopping-list endpoint (GET /resource-shopping-list) is unaffected and remains a usable substitute.",
+      "repro": [
+        "Create and plan a voice project that has at least one required or recommended resource gap",
+        "GET /api/v1/voice-projects/{project_id}/resources/missing",
+        "Response: {\"error\": {\"code\": \"INTERNAL_ERROR\", \"message\": \"'ResourceGap' object has no attribute 'to_dict'\", ...}}"
+      ],
+      "root_cause": "routers/voice_projects.py:429-430 call `g.to_dict()` on ResourceGap objects; ResourceGap (services/resource_models.py:202) is a Pydantic BaseModel with `.model_dump()`, not `.to_dict()`.",
+      "files": [
+        "routers/voice_projects.py:429",
+        "routers/voice_projects.py:430",
+        "services/resource_models.py:202"
+      ],
+      "suggested_fix": "Replace `g.to_dict()` with `g.model_dump()` (or `g.model_dump(mode=\"json\")` if enum/complex fields need JSON-safe serialization) on both lines.",
+      "workaround": "Use GET /api/v1/voice-projects/{project_id}/resource-shopping-list instead, which returns equivalent data without erroring.",
+      "updates": []
+    }
+  ]
+}
