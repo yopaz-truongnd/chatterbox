@@ -255,6 +255,79 @@ class TestVoiceWorkflow(unittest.TestCase):
         from services.voice_project_service import compute_file_sha256
         self.assertEqual(final_state.human_action["items"][0]["sha256"], compute_file_sha256(master_path))
 
+    def test_narration_acceptance_gate_not_skipped_after_out_of_band_approval(self):
+        """A beat approved out-of-band via DirectorRevisionService.select_attempt
+        (explicit_approval=True, pinning a NEEDS_REVIEW attempt to PASSED)
+        must still hit the workflow's own narration_acceptance human gate on
+        resume when policy.auto_accept_qc_pass is False -- that gate is a
+        separate "I've reviewed the whole narration batch" checkpoint from
+        the individual beat approval, and must never be silently bypassed
+        just because the RENDER step was synced complete from project stage
+        alone (see docs/known-issues.json ISSUE-0003 follow-up: the
+        narration_acceptance skip found while manually verifying the fix)."""
+        from services.director_revision_service import DirectorRevisionService
+        from services.render_models import RenderStatus, QCVerdict
+
+        project_id = "wf_pinned_approval"
+        project_service = VoiceProjectService(store=self.service.project_store, provider_name="fake")
+        project_service.create_project(
+            "The morning sun rose gently over the calm green valley.", project_id=project_id,
+        )
+        project_service.plan(project_id)
+        project_service.check_resources(project_id)
+        project_service.render(project_id)
+
+        # Force the rendered attempt into NEEDS_REVIEW so an explicit human
+        # approval is actually required, regardless of what the fake
+        # provider's own QC heuristic happened to produce.
+        manifest = self.service.project_store.load_manifest(project_id)
+        beat_id = next(iter(manifest.beats))
+        attempt = manifest.beats[beat_id].attempts[0]
+        attempt.status = RenderStatus.NEEDS_REVIEW
+        attempt.qc_result.verdict = QCVerdict.NEEDS_REVIEW
+        manifest.beats[beat_id].status = RenderStatus.NEEDS_REVIEW
+        self.service.project_store.save_manifest(project_id, manifest)
+
+        revision = DirectorRevisionService(project_service)
+        revision.select_attempt(project_id, beat_id, attempt.attempt, actor_id="tester", explicit_approval=True)
+        self.assertEqual(
+            self.service.project_store.get_project_state(project_id).stage, ProjectStatus.NARRATION_READY,
+        )
+
+        self.wf_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_pinned_approval",
+            project_id=project_id,
+            status=WorkflowStatus.WAITING_FOR_HUMAN,
+            policy=WorkflowPolicy(provider="fake", auto_accept_qc_pass=False),
+            human_action={"action_type": "audio_quality_review", "resume_action": "evaluate"},
+            steps=[
+                WorkflowStep(name=WorkflowStepName.CREATE_PROJECT.value, status="completed"),
+                WorkflowStep(name=WorkflowStepName.PLAN.value, status="completed"),
+                WorkflowStep(name=WorkflowStepName.CHECK_RESOURCES.value, status="completed"),
+                WorkflowStep(name=WorkflowStepName.RENDER.value, status="failed", error={"code": "REVIEW_REQUIRED"}),
+                WorkflowStep(name=WorkflowStepName.EVALUATE.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.PREPARE_MIX.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.MIX.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.MASTER.value, status="pending"),
+                WorkflowStep(name=WorkflowStepName.EXPORT.value, status="pending"),
+            ],
+            current_step=WorkflowStepName.RENDER.value,
+        ))
+
+        self.service.resume_workflow("vwf_pinned_approval")
+
+        final_state = self._wait_for_workflow(
+            "vwf_pinned_approval", target_statuses=(WorkflowStatus.WAITING_FOR_HUMAN, WorkflowStatus.COMPLETED, WorkflowStatus.FAILED),
+        )
+        self.assertEqual(final_state.status, WorkflowStatus.WAITING_FOR_HUMAN)
+        self.assertEqual(final_state.human_action["action_type"], "narration_acceptance")
+        self.assertIn(beat_id, final_state.human_action["items"])
+
+        # The pinned attempt's explicit approval must survive the real
+        # evaluate() re-run (not get silently reverted back to needs_review).
+        manifest_after = self.service.project_store.load_manifest(project_id)
+        self.assertEqual(manifest_after.beats[beat_id].status, RenderStatus.PASSED)
+
     def test_qc_always_runs_when_narration_requires_manual_acceptance(self):
         state = self.service.start_workflow(
             script_text="The morning sun rose gently over the calm green valley.",

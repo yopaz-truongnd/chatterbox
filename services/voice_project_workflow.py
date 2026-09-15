@@ -75,11 +75,15 @@ _STEP_COMPLETION_STAGES: dict[str, tuple[ProjectStatus, ...]] = {
         ProjectStatus.MIXING, ProjectStatus.MIXED, ProjectStatus.MASTERING, ProjectStatus.MASTERED,
         ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
     ),
-    WorkflowStepName.EVALUATE.value: (
-        ProjectStatus.NARRATION_READY, ProjectStatus.PREPARING_MIX, ProjectStatus.MIX_READY,
-        ProjectStatus.MIXING, ProjectStatus.MIXED, ProjectStatus.MASTERING, ProjectStatus.MASTERED,
-        ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
-    ),
+    # EVALUATE is deliberately NOT synced from stage alone: unlike render(),
+    # service.evaluate() is always safe to re-invoke regardless of the
+    # project's current stage (no "cannot evaluate from state X" guard), and
+    # actually running it for real on every resume is what enforces the
+    # auto_accept_qc_pass=False narration_acceptance human gate. Marking it
+    # completed here just because the stage already reached NARRATION_READY
+    # would silently skip that gate whenever a beat reached PASSED through an
+    # external actor (e.g. DirectorRevisionService.select_attempt()) instead
+    # of the workflow's own evaluate() call -- see ISSUE-0003 follow-up.
     WorkflowStepName.PREPARE_MIX.value: (
         ProjectStatus.MIX_READY, ProjectStatus.MIXING, ProjectStatus.MIXED, ProjectStatus.MASTERING,
         ProjectStatus.MASTERED, ProjectStatus.EXPORTING, ProjectStatus.COMPLETED,
@@ -891,6 +895,18 @@ class VoiceProjectWorkflowService:
                 if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
                     raise RuntimeError(f"Rendering did not achieve NARRATION_READY; ended in '{stage_str}'.")
 
+            state = self.store.get_workflow(workflow_id)
+            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+                return
+
+            # 4b. Step: EVALUATE (via OperationManager). Kept as its own
+            # top-level check -- independent of RENDER's completion state --
+            # so that resuming a workflow whose RENDER step was synced
+            # complete purely from the project's actual stage (see
+            # _sync_steps_with_project_stage) still genuinely re-evaluates
+            # instead of silently skipping straight past the
+            # auto_accept_qc_pass=False narration_acceptance gate below.
+            if not _is_step_completed(state, WorkflowStepName.EVALUATE.value):
                 evaluate_res = self._run_workflow_op(
                     workflow_id,
                     WorkflowStepName.EVALUATE.value,
@@ -934,7 +950,7 @@ class VoiceProjectWorkflowService:
                     self.store.save_workflow(state)
                     self._emit_production_event(
                         state, "human_gate_entered", "Narration-acceptance gate entered.",
-                        step=WorkflowStepName.RENDER.value,
+                        step=WorkflowStepName.EVALUATE.value,
                         action_type="narration_acceptance",
                     )
                     return

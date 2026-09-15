@@ -144,6 +144,37 @@
           "note": "Fixed: services/resource_manager.py's resolve_requirement() now filters category_assets to only entries whose resolve_asset_file_path(asset.file.path).exists() is true before either the exact- or substitute-intent scoring loop runs, so a phantom catalog entry (metadata with no backing file) can never be reported as resolved -- it now correctly falls through to a 'missing' gap. Updated fixture setUp in tests/test_resource_manager.py and tests/test_resource_system_e2e.py to point CHATTERBOX_ASSETS_DIR at a temp directory containing dummy files at each fixture's declared paths (these fixtures were reusing the same paths as the real, file-less assets/manifest.yaml catalog and would otherwise now correctly fail resolution). Full scoped suite (tests/test_resource_manager.py, tests/test_resource_system_e2e.py, tests/test_asset_ingest.py, tests/test_pronunciation_knowledge.py, tests/test_mix_plan_builder.py, tests/test_director_phase16.py, tests/test_voice_workflow.py, tests/test_voice_projects_api.py -- 90 tests total, tests/test_asset_library.py excluded because this environment lacks the pytest module it imports) passes. Note: assets/manifest.yaml itself still ships with 0 backing audio files -- this fix makes the system honestly report that as 'missing' gaps instead of silently dropping the audio, but does not add real ambience/SFX content to the repo; that remains a separate content/ops task, not a code bug."
         }
       ]
+    },
+    {
+      "id": "ISSUE-0005",
+      "title": "narration_acceptance human gate (auto_accept_qc_pass=false) silently bypassed after an out-of-band beat approval, letting a workflow auto-complete without the required narration sign-off",
+      "status": "fixed",
+      "severity": "high",
+      "area": "voice-director-workflow",
+      "reported_by": "hirovjp9999@gmail.com",
+      "reported_at": "2026-09-15",
+      "summary": "Discovered while manually re-testing the ISSUE-0003 fix against edge cases: create a workflow with policy.auto_accept_qc_pass=false (narration requires explicit bulk approval before mixing), let it pause at its own 'audio_quality_review' gate for a needs_review beat, then approve that beat out-of-band through the Director Console (POST .../beats/{id}/attempts/{id}/select with explicit_approval=true, which sets the project stage straight to NARRATION_READY). Resuming the workflow after that went straight to status=completed -- the narration_acceptance gate (which is supposed to force a human to explicitly accept the whole narration batch before mixing/export) never appeared at all, so a production could ship without the sign-off its own policy required.",
+      "repro": [
+        "Create a workflow via POST /api/v1/voice-workflows with policy {auto_accept_qc_pass: false}",
+        "Let it pause at human_action.action_type == 'audio_quality_review' for a needs_review beat",
+        "POST .../beats/{beat_id}/attempts/{n}/select {explicit_approval:true} to approve that beat directly (bypassing the workflow's own evaluate() call)",
+        "POST /api/v1/voice-workflows/{id}/resume",
+        "Workflow goes straight to status=completed -- no narration_acceptance gate is ever raised, even though policy.auto_accept_qc_pass is false"
+      ],
+      "root_cause": "Two compounding bugs: (1) the ISSUE-0003 fix's _sync_steps_with_project_stage() originally synced the EVALUATE step complete from project stage alone (NARRATION_READY), but (2) even after removing EVALUATE from that sync table, the real service.evaluate() call plus its narration_acceptance gate check were structurally NESTED inside the RENDER step's `if not _is_step_completed(state, RENDER)` block in _execute_workflow_loop() (services/voice_project_workflow.py) -- so once RENDER was synced complete (required to avoid the ISSUE-0003 crash), the entire nested block, including evaluate() and its policy gate, was skipped no matter what EVALUATE's own step status said. Separately, VoiceProjectService.evaluate() (services/voice_project_service.py) always blindly recomputed fresh QC and could silently overwrite an attempt a human had just explicitly approved (director_review.action == 'approved') back to NEEDS_REVIEW, which would have made simply 'always re-run evaluate()' crash the workflow instead of respecting the human's decision.",
+      "files": [
+        "services/voice_project_workflow.py (EVALUATE step, previously nested under RENDER's if-block)",
+        "services/voice_project_service.py:evaluate()"
+      ],
+      "suggested_fix": "Split EVALUATE into its own top-level `if not _is_step_completed(state, EVALUATE)` block in _execute_workflow_loop(), independent of RENDER's completion state, so it always genuinely runs (and enforces auto_accept_qc_pass) whenever the workflow's own bookkeeping hasn't recorded it -- regardless of whether RENDER was skipped via stage-sync. Make evaluate() skip re-scoring any attempt that already carries an explicit human approval (status PASSED and direction_summary.director_review.action == 'approved'), so re-running it is always safe and never discards a deliberate human override.",
+      "workaround": "Resolve gates only through the workflow's own resume/approve endpoints rather than mixing in out-of-band Director Console beat approvals while a workflow with auto_accept_qc_pass=false is still mid-flight.",
+      "updates": [
+        {
+          "date": "2026-09-15",
+          "by": "hirovjp9999@gmail.com",
+          "note": "Fixed: (1) services/voice_project_service.py's evaluate() now skips re-scoring an attempt whose status is already PASSED via an explicit human approval (direction_summary.director_review.action == 'approved'), and the downstream best-candidate aggregation now keys off attempt.status == PASSED rather than re-deriving purely from qc_result.verdict, so a pinned approval survives repeated evaluate() calls. (2) services/voice_project_workflow.py's _execute_workflow_loop() now runs EVALUATE as its own independent top-level step check (previously nested inside RENDER's if-block), and _STEP_COMPLETION_STAGES no longer includes EVALUATE, so it is always genuinely re-invoked -- and its auto_accept_qc_pass narration_acceptance gate always properly enforced -- on any resume, regardless of whether RENDER itself was skipped via stage-sync. Added regression test test_narration_acceptance_gate_not_skipped_after_out_of_band_approval in tests/test_voice_workflow.py, reproducing the exact scenario (out-of-band explicit beat approval, auto_accept_qc_pass=false, resume) and asserting the gate correctly fires and the pinned approval survives. Full scoped suite (tests/test_voice_workflow.py, tests/test_director_phase16.py, tests/test_voice_orchestration_phase24.py, tests/test_voice_projects_api.py, tests/test_resource_manager.py, tests/test_resource_system_e2e.py, tests/test_mix_plan_builder.py -- 78 tests) passes."
+        }
+      ]
     }
   ]
 }

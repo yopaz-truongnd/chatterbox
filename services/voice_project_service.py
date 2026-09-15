@@ -581,6 +581,18 @@ class VoiceProjectService:
                 for attempt in b_state.attempts:
                     if not attempt.audio_path:
                         continue
+                    # A human already explicitly approved this exact attempt
+                    # (select_attempt(..., explicit_approval=True)) to pin its
+                    # PASSED status despite an imperfect QC verdict. Re-scoring
+                    # it here would silently overwrite that deliberate
+                    # decision back to NEEDS_REVIEW/QC_FAILED every time
+                    # evaluate() is re-run (e.g. on workflow resume), erasing
+                    # the human's judgment call.
+                    if (
+                        attempt.status == RenderStatus.PASSED
+                        and (attempt.direction_summary or {}).get("director_review", {}).get("action") == "approved"
+                    ):
+                        continue
                     audio_path = Path(attempt.audio_path)
                     if not audio_path.is_absolute():
                         audio_path = proj_dir / audio_path
@@ -602,9 +614,13 @@ class VoiceProjectService:
                         else:
                             attempt.status = RenderStatus.FAILED
 
-                # Re-select best candidate
+                # Re-select best candidate. status == PASSED covers both a
+                # genuine QC "pass" verdict and an attempt a human explicitly
+                # approved despite an imperfect verdict (pinned above) --
+                # either way the beat is done and must not be pulled back
+                # into a review gate.
                 best_attempt = select_best_candidate(b_state.attempts)
-                if best_attempt and best_attempt.qc_result and best_attempt.qc_result.verdict.value == "pass":
+                if best_attempt and best_attempt.status == RenderStatus.PASSED:
                     b_state.selected_attempt = best_attempt.attempt
                     b_state.status = RenderStatus.PASSED
                 elif any(a.qc_result and a.qc_result.verdict.value == "needs_review" for a in b_state.attempts):
