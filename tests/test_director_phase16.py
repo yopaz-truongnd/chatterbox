@@ -492,6 +492,39 @@ class TestDirectorPhase16(unittest.TestCase):
         self.assertIsNotNone(result.approval_endpoint)
         self.assertIn("p1_artifact_info", result.approval_endpoint)
 
+    def test_reproduce_resumes_incomplete_workflow_instead_of_crashing(self):
+        """A revision made while the authoritative workflow is still mid-flight
+        (e.g. paused at the very audio_quality_review gate the revision just
+        resolved) must resume that workflow instead of crashing with
+        InvalidProjectStateError from request_revision_approval(), which only
+        accepts an already-COMPLETED workflow (see docs/known-issues.json
+        ISSUE-0003)."""
+        self._rendered_project("incomplete_workflow_reproduce")
+        beat_id = next(iter(self.store.load_manifest("incomplete_workflow_reproduce").beats))
+        revision = DirectorRevisionService(self.project_service)
+        revision.update_timing("incomplete_workflow_reproduce", beat_id, BeatTimingPatch(pause_after_ms=450), "tester")
+        workflow_store = VoiceProjectWorkflowStore(Path(self.tmp.name) / "incomplete-wf")
+        workflow_store.save_workflow(VoiceWorkflowState(
+            workflow_id="vwf_incomplete", project_id="incomplete_workflow_reproduce",
+            status=WorkflowStatus.WAITING_FOR_HUMAN,
+            policy=WorkflowPolicy(require_final_approval=True),
+            human_action={"action_type": "audio_quality_review", "resume_action": "evaluate"},
+        ))
+        workflow_service = VoiceProjectWorkflowService(store=workflow_store, project_store=self.store)
+        with mock.patch("services.voice_project_dependencies.get_voice_project_workflow_service", return_value=workflow_service), \
+             mock.patch.object(self.project_service, "prepare_for_mix"), \
+             mock.patch.object(self.project_service, "mix"), \
+             mock.patch.object(self.project_service, "master"), \
+             mock.patch.object(self.project_service, "export") as export, \
+             mock.patch.object(workflow_service, "resume_workflow", wraps=workflow_service.resume_workflow) as resume, \
+             mock.patch.object(workflow_service, "request_revision_approval") as reopen, \
+             mock.patch.object(workflow_service, "_execute_workflow_loop"):
+            result = revision.reproduce_project("incomplete_workflow_reproduce")
+        resume.assert_called_once_with("vwf_incomplete")
+        reopen.assert_not_called()
+        export.assert_not_called()
+        self.assertEqual(result.status, "delegated_to_workflow")
+
     def test_preserve_narration_does_not_overwrite_resource_blocked(self):
         """P1-3: _preserve_narration must not advance stage when stage is RESOURCE_BLOCKED."""
         self._rendered_project("p1_blocked")

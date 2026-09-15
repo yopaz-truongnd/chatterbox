@@ -64,6 +64,38 @@
           "note": "Fixed in commit 7408a3b: replaced g.to_dict() with g.model_dump(mode=\"json\") on both lines in routers/voice_projects.py, matching every other endpoint in the router. Added regression test test_get_missing_resources_returns_gaps_without_500 in tests/test_voice_projects_api.py."
         }
       ]
+    },
+    {
+      "id": "ISSUE-0003",
+      "title": "Approving a beat mid-workflow crashes 'reproduce' with InvalidProjectStateError: workflow must be completed",
+      "status": "fixed",
+      "severity": "high",
+      "area": "voice-director-workflow",
+      "reported_by": "hirovjp9999@gmail.com",
+      "reported_at": "2026-09-15",
+      "summary": "A voice project created via the autonomous Voice Workflow (POST /api/v1/voice-workflows, e.g. from the Director Console 'Bat dau san xuat' form) pauses at its own 'audio_quality_review' human gate when a rendered beat needs review. If the operator explicitly approves that beat's attempt through the manual Director Console review flow (POST .../beats/{id}/attempts/{id}/select with explicit_approval=true) instead of resolving the gate via the workflow's own resume/approve endpoints, the beat-level revision event's incremental reproduction ('Tai tao cac thay doi' / POST .../reproduce) walks all the way to its 'export' step, sees require_final_approval=true and final_approval_invalidated=true, and unconditionally calls VoiceProjectWorkflowService.request_revision_approval() to reopen the workflow's final-approval gate. That call hard-requires the workflow to already be in status COMPLETED (it exists to reopen a *finished* production for a post-completion revision). Since the workflow here is still WAITING_FOR_HUMAN on its original render-stage gate (never finished its first pass), the call raises InvalidProjectStateError('...must be completed before revision approval can be requested'), which surfaces as a failed 'reproduce' background job in the UI with no actionable guidance.",
+      "repro": [
+        "In Director Console, create a production via 'Dan kich ban co san' (POST /api/v1/voice-workflows) with a script long/complex enough that a beat's QC verdict is 'needs_review' after render",
+        "Workflow pauses at human_action.action_type == 'audio_quality_review' (WorkflowStatus.WAITING_FOR_HUMAN)",
+        "In the 'Duyet giong doc' tab, click the beat's attempt button (e.g. 'Ban 2 . da chon') to explicitly approve it -> POST .../beats/B01/attempts/2/select {explicit_approval:true} succeeds, beat.status becomes PASSED",
+        "Click 'Tai tao cac thay doi' -> POST .../reproduce",
+        "Job fails: {\"code\": \"InvalidProjectStateError\", \"message\": \"Workflow '<id>' must be completed before revision approval can be requested.\"}"
+      ],
+      "root_cause": "services/director_revision_service.py:315-321 (reproduce_project, step == 'export' branch) calls workflow_service.request_revision_approval(workflow.workflow_id, ...) whenever require_final_approval and final_approval_invalidated are true, without checking whether `workflow.status` is actually COMPLETED first. services/voice_project_workflow_store.py:131-139 (reopen_for_revision_approval) unconditionally raises InvalidProjectStateError for any non-COMPLETED workflow, because it was designed only for reopening an already-finished production, not for a workflow still mid-flight on its own first pass.",
+      "files": [
+        "services/director_revision_service.py:315",
+        "services/voice_project_workflow_store.py:131",
+        "services/voice_project_workflow.py:430"
+      ],
+      "suggested_fix": "Before calling request_revision_approval, check workflow.status. If it is not COMPLETED (still RUNNING/WAITING_FOR_HUMAN/etc.), the workflow has not granted any final approval yet to invalidate/reopen — instead call workflow_service.resume_workflow(workflow.workflow_id) so the workflow's own state machine drives evaluate/mix/master/export (and reaches its own final_audio_approval gate honestly) rather than racing an independent export from the reproduce path.",
+      "workaround": "Resolve the workflow's own gate through its own endpoints (POST /api/v1/voice-workflows/{id}/resume or /approve) instead of using the Director Console's independent beat-select + 'Tai tao cac thay doi' path while the workflow is still mid-flight.",
+      "updates": [
+        {
+          "date": "2026-09-15",
+          "by": "hirovjp9999@gmail.com",
+          "note": "Fixed: services/director_revision_service.py now checks workflow.status before calling request_revision_approval(); when the workflow is not yet COMPLETED it calls workflow_service.resume_workflow() instead and returns IncrementalReproductionResult(status='delegated_to_workflow'). Added regression test test_reproduce_resumes_incomplete_workflow_instead_of_crashing in tests/test_director_phase16.py. Verified end-to-end against the live webui/API (voice_proj_a33ca506): approving a needs_review beat then clicking 'Tai tao cac thay doi' no longer crashes and instead resumes the parked workflow."
+        }
+      ]
     }
   ]
 }
