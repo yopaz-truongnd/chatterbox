@@ -1189,8 +1189,21 @@
           <!-- MANUAL MODE: paste an already-written script -->
           <div id="directorManualPanel" class="space-y-3">
             <div class="grid md:grid-cols-4 gap-2"><input id="directorTitle" class="director-input" placeholder="Tên dự án"><input id="directorProjectId" class="director-input" placeholder="Mã dự án (không bắt buộc)"><select id="directorProvider" class="director-input"><option value="local">Chatterbox cục bộ</option><option value="fake">Giả lập (chỉ kiểm thử)</option><option value="gemini">Gemini</option></select><input id="directorModel" class="director-input" placeholder="Model (không bắt buộc)"></div>
-            <textarea id="directorScript" rows="5" class="director-input w-full" placeholder="Kịch bản gốc (không thể sửa sau khi bắt đầu)"></textarea>
+            <textarea id="directorScript" rows="5" class="director-input w-full" placeholder="Kịch bản gốc (không thể sửa sau khi bắt đầu)" oninput="updateDirectorScriptCounter()"></textarea>
+            <div class="flex justify-between items-center text-[10px] text-slate-500"><span id="directorScriptCounter">0 ký tự · 0 từ</span><button type="button" onclick="toggleDirectorScriptPreview()" id="directorPreviewToggleBtn" class="text-purple-300 hover:text-purple-200 underline">Xem trước kịch bản</button></div>
+            <div id="directorScriptPreview" class="hidden p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46] text-xs text-slate-300 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
+
             <div class="flex flex-wrap items-center gap-4 text-xs text-slate-300"><label><input id="directorMp3" type="checkbox"> Xuất thêm MP3</label><label><input id="directorFinalGate" type="checkbox" checked> Yêu cầu duyệt bản master cuối</label><button onclick="startDirectorWorkflow()" class="ml-auto px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Bắt đầu sản xuất</button></div>
+
+            <details class="rounded-lg border border-[#3F3A46] bg-[#0E0C12]">
+              <summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-300 hover:text-white select-none">⚙️ Tùy chọn nâng cao</summary>
+              <div class="p-3 pt-1 grid md:grid-cols-2 gap-3">
+                <label class="flex items-start gap-2 text-xs text-slate-300"><input id="directorAutoAccept" type="checkbox" checked class="mt-0.5"><span>Tự động chấp nhận giọng đọc đạt QC<br><span class="text-[10px] text-slate-500">Bỏ chọn để bắt buộc bạn duyệt toàn bộ narration trước khi phối âm</span></span></label>
+                <label class="flex items-start gap-2 text-xs text-slate-300"><input id="directorAllowSubstitute" type="checkbox" checked class="mt-0.5"><span>Cho phép thay thế SFX/ambience gần giống<br><span class="text-[10px] text-slate-500">Tắt để bắt buộc khớp chính xác, thiếu thì báo gap</span></span></label>
+                <label class="text-xs text-slate-300">Profile Master<select id="directorMasteringProfile" class="director-input w-full mt-1"><option value="storytelling">Storytelling (mặc định)</option><option value="podcast">Podcast</option><option value="broadcast">Broadcast</option></select></label>
+                <label class="text-xs text-slate-300">Số lần thử lại QC tối đa mỗi đoạn<input id="directorRetryBudget" type="number" min="1" max="5" value="2" class="director-input w-full mt-1"></label>
+              </div>
+            </details>
           </div>
 
           <!-- IDEA MODE: generate an English script from a topic first (reuses the two-gate /api/v1/projects planner), then hand it to the workflow above -->
@@ -2009,7 +2022,7 @@
   <script src="/static/js/batch.js?v=20260913-v25"></script>
   <script src="/static/js/multilingual.js?v=20260913-v25"></script>
   <script src="/static/js/vc.js?v=20260913-v25"></script>
-  <script src="/static/js/director-console.js?v=20260916-v38"></script>
+  <script src="/static/js/director-console.js?v=20260916-v39"></script>
   <script src="/static/js/characters.js?v=20260913-v25"></script>
   <script src="/static/js/history.js?v=20260913-v25"></script>
   <script src="/static/js/settings.js?v=20260913-v25"></script>

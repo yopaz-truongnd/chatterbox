@@ -18,8 +18,8 @@ Use one status per item: `TODO`, `IN PROGRESS`, `DONE`, `SKIPPED` (with reason).
 
 | # | Item | Area | Status | Notes |
 |---|---|---|---|---|
-| A1 | Advanced options section in create form (auto_accept_qc_pass, mixing/mastering profile, retry_budget, allow_resource_substitute) | Script creation flow | TODO | These policy fields already exist on the backend (`WorkflowPolicy`) but are only reachable via raw API calls today |
-| A2 | Script preview + character count before submit | Script creation flow | TODO | Script is immutable once the workflow starts; typos currently mean starting over |
+| A1 | Advanced options section in create form (auto_accept_qc_pass, allow_resource_substitute, mastering_profile, retry_budget) | Script creation flow | DONE | Collapsible `<details>` section. Skipped exposing `mixing_profile` -- `rules/mixing.yaml` only defines one profile, a dropdown would be meaningless until more are added. Verified live: submitted with `auto_accept_qc_pass=false` + `mastering_profile=podcast`, API echoed both correctly. |
+| A2 | Script preview + character count before submit | Script creation flow | DONE | Live char/word counter under the textarea + toggleable preview panel. Verified live: "69 ky tu . 12 tu" matched typed text exactly. |
 | B1 | Fix misleading attempt "da chon" label vs. real approval | Director Console / review gate | TODO | Root UX cause behind the ISSUE-0005 confusion: selection and explicit approval look identical in the UI |
 | B2 | Toast feedback when an action has no effect (e.g. resume blocked by an unmet gate) | Director Console | TODO | Currently silent; user has no way to tell why nothing happened |
 | B3 | Per-beat render progress detail | Director Console | TODO | Scope to what the existing job data can show (current beat / attempt), not a new ETA subsystem |
@@ -38,3 +38,4 @@ Use one status per item: `TODO`, `IN PROGRESS`, `DONE`, `SKIPPED` (with reason).
 ## Change log
 
 - 2026-09-16: Plan created, all items TODO.
+- 2026-09-16: A1 and A2 done and verified live against the running server.

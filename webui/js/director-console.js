@@ -86,14 +86,45 @@ function toggleDirectorCreate() {
   document.getElementById('directorCreate')?.classList.toggle('hidden');
 }
 
+function updateDirectorScriptCounter() {
+  const el = document.getElementById('directorScriptCounter');
+  if (!el) return;
+  const text = document.getElementById('directorScript').value;
+  const chars = text.length;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  el.textContent = `${chars} ký tự · ${words} từ`;
+  const preview = document.getElementById('directorScriptPreview');
+  if (preview && !preview.classList.contains('hidden')) preview.textContent = text || '(kịch bản trống)';
+}
+
+function toggleDirectorScriptPreview() {
+  const preview = document.getElementById('directorScriptPreview');
+  const btn = document.getElementById('directorPreviewToggleBtn');
+  if (!preview || !btn) return;
+  const showing = !preview.classList.contains('hidden');
+  if (showing) {
+    preview.classList.add('hidden');
+    btn.textContent = 'Xem trước kịch bản';
+  } else {
+    preview.textContent = document.getElementById('directorScript').value || '(kịch bản trống)';
+    preview.classList.remove('hidden');
+    btn.textContent = 'Ẩn xem trước';
+  }
+}
+
 async function startDirectorWorkflow() {
   const script = document.getElementById('directorScript').value.trim();
   if (!script) return showToast('warning', 'Vui lòng nhập kịch bản gốc.');
+  const retryBudgetRaw = parseInt(document.getElementById('directorRetryBudget')?.value, 10);
   const policy = {
     provider: document.getElementById('directorProvider').value,
     model: document.getElementById('directorModel').value.trim() || null,
     output_formats: document.getElementById('directorMp3').checked ? ['wav', 'mp3'] : ['wav'],
     require_final_approval: document.getElementById('directorFinalGate').checked,
+    auto_accept_qc_pass: document.getElementById('directorAutoAccept')?.checked ?? true,
+    allow_resource_substitute: document.getElementById('directorAllowSubstitute')?.checked ?? true,
+    mastering_profile: document.getElementById('directorMasteringProfile')?.value || 'storytelling',
+    retry_budget: Number.isFinite(retryBudgetRaw) && retryBudgetRaw >= 1 ? retryBudgetRaw : 2,
   };
   try {
     const workflow = await directorFetch('/api/v1/voice-workflows', {
