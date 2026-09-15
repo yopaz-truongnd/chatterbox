@@ -534,8 +534,18 @@ def resolve_requirement(
     exact_threshold = rules.get("exact_threshold", 0.60)
     subs = substitution_rules if substitution_rules is not None else DEFAULT_SUBSTITUTION_RULES
 
-    # Filter assets by category
-    category_assets = manifest.find_by_category(requirement.type)
+    # Filter assets by category. A catalog entry whose backing audio file does
+    # not actually exist on disk must never be treated as a usable candidate:
+    # left unfiltered, it gets reported as an EXACT/SUBSTITUTE match (readiness
+    # looks perfect) while mix_plan_builder.py silently drops the clip later
+    # because resolve_asset_file_path(...).exists() is false there too — the
+    # user ends up with silent, unexplained missing ambience/SFX in the final
+    # mix. Excluding it here lets a real fallback (substitute, then a proper
+    # "missing" gap) take over instead.
+    category_assets = [
+        asset for asset in manifest.find_by_category(requirement.type)
+        if resolve_asset_file_path(asset.file.path).exists()
+    ]
 
     # 1. Exact Intent Matching
     exact_candidates: list[ResourceCandidate] = []

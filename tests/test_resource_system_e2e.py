@@ -1,6 +1,9 @@
 """End-to-End Integration Tests for Phase 4-6 Resource System."""
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from services.voice_plan import (
     VoicePlan,
     Beat,
@@ -43,6 +46,21 @@ from services.pronunciation_knowledge import load_pronunciation_knowledge
 class TestResourceSystemE2E(unittest.TestCase):
 
     def setUp(self):
+        # Resolution only treats a catalog entry as usable when its backing
+        # audio file actually exists on disk (see ISSUE-0004 in
+        # docs/known-issues.json). Point CHATTERBOX_ASSETS_DIR at a temp
+        # directory holding dummy files at the fixture manifest's declared
+        # paths so this fixture still represents assets that are genuinely
+        # available, not just metadata.
+        self._assets_tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self._prev_assets_dir = os.environ.get("CHATTERBOX_ASSETS_DIR")
+        os.environ["CHATTERBOX_ASSETS_DIR"] = self._assets_tmp.name
+        for rel_path in ("ambience/dark/dark_wind_01.wav", "sfx/riser/mystical_dark_riser_01.wav"):
+            dummy = Path(self._assets_tmp.name) / rel_path
+            dummy.parent.mkdir(parents=True, exist_ok=True)
+            dummy.write_bytes(b"RIFF....WAVEfmt ")
+        self.addCleanup(self._restore_assets_dir)
+
         # 1. Manifest Fixture
         self.manifest = ResourceManifest(
             version=1,
@@ -99,6 +117,13 @@ class TestResourceSystemE2E(unittest.TestCase):
                 ),
             },
         )
+
+    def _restore_assets_dir(self):
+        if self._prev_assets_dir is None:
+            os.environ.pop("CHATTERBOX_ASSETS_DIR", None)
+        else:
+            os.environ["CHATTERBOX_ASSETS_DIR"] = self._prev_assets_dir
+        self._assets_tmp.cleanup()
 
     def test_full_resource_pipeline_acceptance_scenario(self):
         """Test full pipeline:

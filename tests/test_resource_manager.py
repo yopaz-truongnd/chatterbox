@@ -1,6 +1,9 @@
 """Unit tests for Phase 4 Resource Manager service."""
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from services.voice_plan import (
     VoicePlan,
     Beat,
@@ -48,6 +51,25 @@ from services.resource_manager import (
 class TestResourceManagerPhase4(unittest.TestCase):
 
     def setUp(self):
+        # Resolution only treats a catalog entry as usable when its backing
+        # audio file actually exists on disk (see ISSUE-0004 in
+        # docs/known-issues.json). Point CHATTERBOX_ASSETS_DIR at a temp
+        # directory holding dummy files at every fixture path below so this
+        # fixture represents assets that are genuinely available.
+        self._assets_tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self._prev_assets_dir = os.environ.get("CHATTERBOX_ASSETS_DIR")
+        os.environ["CHATTERBOX_ASSETS_DIR"] = self._assets_tmp.name
+        for rel_path in (
+            "ambience/dark/dark_wind_01.wav",
+            "ambience/ancient/temple_drone_01.wav",
+            "sfx/riser/mystical_dark_riser_01.wav",
+            "sfx/impact/supernatural_impact_01.wav",
+        ):
+            dummy = Path(self._assets_tmp.name) / rel_path
+            dummy.parent.mkdir(parents=True, exist_ok=True)
+            dummy.write_bytes(b"RIFF....WAVEfmt ")
+        self.addCleanup(self._restore_assets_dir)
+
         # Build sample manifest
         self.manifest = ResourceManifest(
             version=1,
@@ -104,6 +126,13 @@ class TestResourceManagerPhase4(unittest.TestCase):
                 "dark_temple_ambience",
             ]
         }
+
+    def _restore_assets_dir(self):
+        if self._prev_assets_dir is None:
+            os.environ.pop("CHATTERBOX_ASSETS_DIR", None)
+        else:
+            os.environ["CHATTERBOX_ASSETS_DIR"] = self._prev_assets_dir
+        self._assets_tmp.cleanup()
 
     def test_extract_resource_requirements_from_voice_plan(self):
         plan = VoicePlan(

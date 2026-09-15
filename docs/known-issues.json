@@ -111,6 +111,39 @@
           "note": "Root-cause fixed: services/voice_project_workflow.py now has _sync_steps_with_project_stage(), called at the top of _execute_workflow_loop() on every run (including resume). It reconciles each workflow step's completion status against the project's actual current stage (a lookup table _STEP_COMPLETION_STAGES mapping render/evaluate/prepare_mix/mix/master to the ProjectStatus values that prove each already happened), marking a step completed only when the real project stage proves the work already ran -- it never fabricates a human decision (approved stays untouched), so the final_audio_approval gate still requires a genuine explicit approval. This makes the ISSUE-0003 resume_workflow() fix actually safe end-to-end: resuming a workflow whose project was independently advanced (e.g. via DirectorRevisionService.reproduce_project()) now skips the already-superseded steps and correctly falls through to the workflow's own final_audio_approval human gate instead of crashing into FAILED. Added regression test test_resume_syncs_stale_steps_instead_of_rerunning_superseded_work in tests/test_voice_workflow.py, reproducing the exact stale-bookkeeping scenario (project driven to MASTERED independently, workflow still parked at its own 'render' step) and asserting no crash, correct step sync, and a fresh unforged approval gate. Full scoped suite (tests/test_voice_workflow.py + tests/test_director_phase16.py + tests/test_voice_orchestration_phase24.py, 53 tests) passes. Note: the specific already-FAILED workflow record from earlier testing (vwf_bd14e2af8a1e / voice_proj_a33ca506) remains permanently stuck by design (the immutability guard on FAILED records is intentional and correctly cannot be bypassed) -- this fix prevents the FAILED dead-end from happening for any future workflow, it does not retroactively repair that one test artifact."
         }
       ]
+    },
+    {
+      "id": "ISSUE-0004",
+      "title": "Resource resolution reports ambience/SFX as resolved even when the catalog's backing audio file does not exist, so it silently disappears from the final mix",
+      "status": "fixed",
+      "severity": "high",
+      "area": "director-resource-readiness",
+      "reported_by": "hirovjp9999@gmail.com",
+      "reported_at": "2026-09-15",
+      "summary": "The bundled catalog at assets/manifest.yaml lists 6 ambience/SFX entries (ambience_dark_001, ambience_temple_001, ambience_cold_wind_001, sfx_riser_mystical_001, sfx_impact_supernatural_001, ...) with full metadata (intents, tags, duration, mix levels) but the repo ships NO actual audio files under assets/ -- `find assets -type f` returns only manifest.yaml itself; the ambience/ and sfx/ subdirectories the catalog points at (e.g. assets/ambience/dark/dark_wind_01.wav) do not exist at all. services/resource_manager.py's resolve_requirement() matched candidates purely by intent/tag metadata against the catalog, with no check that the referenced file actually exists, so any beat whose ambience/SFX intent matched one of these 6 phantom entries was reported as a clean EXACT or SUBSTITUTE resolution (readiness score unaffected, nothing flagged to the user). Separately, services/mix_plan_builder.py *does* check resolve_asset_file_path(...).exists() when placing ambience/SFX clips (lines ~234 and ~280) and silently skips the clip if the file is missing -- with no warning, log, or gap surfaced anywhere. Net effect: a project can sail through resource-check reporting 100% readiness while its ambience/SFX track is quietly absent from every rendered mix, exactly matching the user's memory of 'requires SFX resources but they're empty'.",
+      "repro": [
+        "Confirm the gap on disk: `find assets -type f` under the repo root returns only assets/manifest.yaml -- no .wav files exist despite the catalog listing 6 resources with real-looking file paths.",
+        "Create/plan a voice project whose script triggers an ambience or SFX intent matching one of the 6 catalog entries (e.g. 'ancient_dark_atmosphere' matches ambience_dark_001)",
+        "POST .../resources/check -> resource report shows the ambience/SFX as resolved (status EXACT or SUBSTITUTE), readiness score unaffected, no gap listed",
+        "Render, mix, and master the project -> inspect the beat's ambience_intents/resource_dependencies in the review payload (shows resolved) vs. the actual final mixed WAV, which has no ambience/SFX audio at all -- mix_plan_builder.py silently dropped the clip at resolve_asset_file_path(...).exists() == False with zero warning"
+      ],
+      "root_cause": "services/resource_manager.py:resolve_requirement() (candidate loops around what is now ~line 538-552 for exact matching and ~583-593 for substitute matching) filtered manifest.find_by_category(requirement.type) purely on requirement.intent membership in asset.intents/tags, never verifying asset.file.path resolves to a real file on disk via resolve_asset_file_path() (which the file itself already defines at line 129, and which mix_plan_builder.py already uses defensively downstream). A catalog entry can therefore be pure metadata with no backing audio and still be reported as a confident EXACT/SUBSTITUTE match.",
+      "files": [
+        "services/resource_manager.py:538",
+        "services/resource_manager.py:583",
+        "services/mix_plan_builder.py:234",
+        "services/mix_plan_builder.py:280",
+        "assets/manifest.yaml"
+      ],
+      "suggested_fix": "Filter manifest.find_by_category(requirement.type) to only candidates whose resolve_asset_file_path(asset.file.path).exists() is true, before scoring exact or substitute matches. A phantom catalog entry then naturally falls through to substitute matching and finally to a proper 'missing' gap instead of a false-positive resolution.",
+      "workaround": "None available to end users short of adding the real audio files under assets/ (or CHATTERBOX_ASSETS_DIR) at the paths the catalog declares; ambience/SFX are RECOMMENDED priority so they never block rendering, which is exactly why the silent loss went unnoticed.",
+      "updates": [
+        {
+          "date": "2026-09-15",
+          "by": "hirovjp9999@gmail.com",
+          "note": "Fixed: services/resource_manager.py's resolve_requirement() now filters category_assets to only entries whose resolve_asset_file_path(asset.file.path).exists() is true before either the exact- or substitute-intent scoring loop runs, so a phantom catalog entry (metadata with no backing file) can never be reported as resolved -- it now correctly falls through to a 'missing' gap. Updated fixture setUp in tests/test_resource_manager.py and tests/test_resource_system_e2e.py to point CHATTERBOX_ASSETS_DIR at a temp directory containing dummy files at each fixture's declared paths (these fixtures were reusing the same paths as the real, file-less assets/manifest.yaml catalog and would otherwise now correctly fail resolution). Full scoped suite (tests/test_resource_manager.py, tests/test_resource_system_e2e.py, tests/test_asset_ingest.py, tests/test_pronunciation_knowledge.py, tests/test_mix_plan_builder.py, tests/test_director_phase16.py, tests/test_voice_workflow.py, tests/test_voice_projects_api.py -- 90 tests total, tests/test_asset_library.py excluded because this environment lacks the pytest module it imports) passes. Note: assets/manifest.yaml itself still ships with 0 backing audio files -- this fix makes the system honestly report that as 'missing' gaps instead of silently dropping the audio, but does not add real ambience/SFX content to the repo; that remains a separate content/ops task, not a code bug."
+        }
+      ]
     }
   ]
 }
