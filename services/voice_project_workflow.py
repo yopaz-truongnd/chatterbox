@@ -582,6 +582,73 @@ class VoiceProjectWorkflowService:
             state.updated_at = datetime.now(timezone.utc).isoformat()
             self.store.save_workflow(state)
 
+    def _refresh_or_bail(self, workflow_id: str) -> VoiceWorkflowState | None:
+        """Reload workflow state and return None if the caller should stop.
+
+        Centralizes the "reload state, stop if it vanished or a cancel is in
+        flight" check that _execute_workflow_loop repeats between every step
+        -- callers do `state = self._refresh_or_bail(workflow_id)` followed
+        by `if state is None: return`.
+        """
+        state = self.store.get_workflow(workflow_id)
+        if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            return None
+        return state
+
+    def _enter_human_gate(
+        self,
+        workflow_id: str,
+        state: VoiceWorkflowState,
+        *,
+        action_type: str,
+        reason: str,
+        items: Any,
+        available_options: list[str],
+        resume_action: str,
+        suggested_action: str,
+        step_name: str,
+        gate_event_message: str,
+        fail_step: str | None = None,
+        fail_error: dict[str, Any] | None = None,
+        pre_gate_event: tuple[str, str] | None = None,
+        extra_human_action: dict[str, Any] | None = None,
+        extra_event_kwargs: dict[str, Any] | None = None,
+    ) -> VoiceWorkflowState:
+        """Pause the workflow at a WAITING_FOR_HUMAN gate.
+
+        Every human gate (resource_required, audio_quality_review,
+        narration_acceptance, final_audio_approval) shares this exact shape;
+        extracting it keeps them from drifting out of sync with each other,
+        which is how ISSUE-0005 (a gate silently skipped) slipped in.
+        """
+        state = self.store.get_workflow(workflow_id) or state
+        state.status = WorkflowStatus.WAITING_FOR_HUMAN
+        state.human_action = {
+            "action_type": action_type,
+            "reason": reason,
+            "items": items,
+            "available_options": available_options,
+            "resume_action": resume_action,
+            **(extra_human_action or {}),
+        }
+        state.suggested_action = suggested_action
+        if fail_step:
+            for step in state.steps:
+                if step.name == fail_step:
+                    step.status = "failed"
+                    step.completed_at = datetime.now(timezone.utc).isoformat()
+                    step.error = fail_error
+                    break
+        self.store.save_workflow(state)
+        if pre_gate_event:
+            pre_event_type, pre_message = pre_gate_event
+            self._emit_production_event(state, pre_event_type, pre_message, step=step_name)
+        self._emit_production_event(
+            state, "human_gate_entered", gate_event_message,
+            step=step_name, action_type=action_type, **(extra_event_kwargs or {}),
+        )
+        return state
+
     def _run_workflow_op(
         self,
         workflow_id: str,
@@ -731,8 +798,8 @@ class VoiceProjectWorkflowService:
                 self._mark_step(workflow_id, WorkflowStepName.CREATE_PROJECT.value, "running")
                 self._mark_step(workflow_id, WorkflowStepName.CREATE_PROJECT.value, "completed", {"project_id": project_id})
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # 2. Step: PLAN (via OperationManager)
@@ -775,8 +842,8 @@ class VoiceProjectWorkflowService:
                                 project_id, term, phonetic, actor_id="series_bible"
                             )
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # 3. Step: CHECK_RESOURCES (via OperationManager)
@@ -802,31 +869,19 @@ class VoiceProjectWorkflowService:
                 # Human Gate: Resource Blocked
                 if render_blocked:
                     missing_terms = required_missing or ["Unverified pronunciation/audio asset"]
-                    state = self.store.get_workflow(workflow_id) or state
-                    state.status = WorkflowStatus.WAITING_FOR_HUMAN
-                    state.human_action = {
-                        "action_type": "resource_required",
-                        "reason": "Required audio assets or proper noun pronunciations are unverified",
-                        "items": missing_terms,
-                        "available_options": ["add_pronunciation", "cancel_workflow"],
-                        "resume_action": "check_resources",
-                    }
-                    state.suggested_action = f"Add pronunciations or resources for: {', '.join(missing_terms[:3])}"
-                    for step in state.steps:
-                        if step.name == WorkflowStepName.CHECK_RESOURCES.value:
-                            step.status = "failed"
-                            step.completed_at = datetime.now(timezone.utc).isoformat()
-                            step.error = {"code": "RESOURCE_BLOCKED", "message": "Required resources missing"}
-                            break
-                    self.store.save_workflow(state)
-                    self._emit_production_event(
-                        state, "human_action_required", "Required resources need human action.",
-                        step=WorkflowStepName.CHECK_RESOURCES.value,
-                    )
-                    self._emit_production_event(
-                        state, "human_gate_entered", "Required-resource gate entered.",
-                        step=WorkflowStepName.CHECK_RESOURCES.value,
+                    self._enter_human_gate(
+                        workflow_id, state,
                         action_type="resource_required",
+                        reason="Required audio assets or proper noun pronunciations are unverified",
+                        items=missing_terms,
+                        available_options=["add_pronunciation", "cancel_workflow"],
+                        resume_action="check_resources",
+                        suggested_action=f"Add pronunciations or resources for: {', '.join(missing_terms[:3])}",
+                        step_name=WorkflowStepName.CHECK_RESOURCES.value,
+                        gate_event_message="Required-resource gate entered.",
+                        fail_step=WorkflowStepName.CHECK_RESOURCES.value,
+                        fail_error={"code": "RESOURCE_BLOCKED", "message": "Required resources missing"},
+                        pre_gate_event=("human_action_required", "Required resources need human action."),
                     )
                     return  # Pause workflow until user/agent resumes
 
@@ -837,8 +892,8 @@ class VoiceProjectWorkflowService:
                     {"readiness_score": readiness_score, "gaps_count": len(required_missing) + len(recommended_missing)},
                 )
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # 4. Step: RENDER (via OperationManager)
@@ -864,39 +919,27 @@ class VoiceProjectWorkflowService:
                     review_ids = [
                         bid for bid, b in manifest.beats.items() if b.status == RenderStatus.NEEDS_REVIEW
                     ]
-                    state = self.store.get_workflow(workflow_id) or state
-                    state.status = WorkflowStatus.WAITING_FOR_HUMAN
-                    state.human_action = {
-                        "action_type": "audio_quality_review",
-                        "reason": "One or more rendered beats did not achieve passing QC score",
-                        "items": review_ids,
-                        "available_options": ["accept_beat", "rerender_beat", "cancel_workflow"],
-                        "resume_action": "evaluate",
-                    }
-                    state.suggested_action = f"Review quality for beats: {', '.join(review_ids)}"
-                    for step in state.steps:
-                        if step.name == WorkflowStepName.RENDER.value:
-                            step.status = "failed"
-                            step.completed_at = datetime.now(timezone.utc).isoformat()
-                            step.error = {"code": "REVIEW_REQUIRED"}
-                            break
-                    self.store.save_workflow(state)
-                    self._emit_production_event(
-                        state, "human_action_required", "Narration requires human acceptance.",
-                        step=WorkflowStepName.RENDER.value,
-                    )
-                    self._emit_production_event(
-                        state, "human_gate_entered", "Audio-quality gate entered.",
-                        step=WorkflowStepName.RENDER.value,
+                    self._enter_human_gate(
+                        workflow_id, state,
                         action_type="audio_quality_review",
+                        reason="One or more rendered beats did not achieve passing QC score",
+                        items=review_ids,
+                        available_options=["accept_beat", "rerender_beat", "cancel_workflow"],
+                        resume_action="evaluate",
+                        suggested_action=f"Review quality for beats: {', '.join(review_ids)}",
+                        step_name=WorkflowStepName.RENDER.value,
+                        gate_event_message="Audio-quality gate entered.",
+                        fail_step=WorkflowStepName.RENDER.value,
+                        fail_error={"code": "REVIEW_REQUIRED"},
+                        pre_gate_event=("human_action_required", "Narration requires human acceptance."),
                     )
                     return
 
                 if stage_str not in (ProjectStatus.NARRATION_READY.value, ProjectStatus.COMPLETED.value):
                     raise RuntimeError(f"Rendering did not achieve NARRATION_READY; ended in '{stage_str}'.")
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # 4b. Step: EVALUATE (via OperationManager). Kept as its own
@@ -937,26 +980,21 @@ class VoiceProjectWorkflowService:
                 if not state.policy.auto_accept_qc_pass:
                     manifest = self.project_store.load_manifest(project_id)
                     passed_beats = [bid for bid, beat in manifest.beats.items() if beat.status == RenderStatus.PASSED]
-                    state = self.store.get_workflow(workflow_id) or state
-                    state.status = WorkflowStatus.WAITING_FOR_HUMAN
-                    state.human_action = {
-                        "action_type": "narration_acceptance",
-                        "reason": "Narration passed QC and requires explicit acceptance before mixing.",
-                        "items": passed_beats,
-                        "available_options": ["approve", "rerender", "cancel_workflow"],
-                        "resume_action": "prepare_mix",
-                    }
-                    state.suggested_action = "Review and approve the QC-passed narration beats."
-                    self.store.save_workflow(state)
-                    self._emit_production_event(
-                        state, "human_gate_entered", "Narration-acceptance gate entered.",
-                        step=WorkflowStepName.EVALUATE.value,
+                    self._enter_human_gate(
+                        workflow_id, state,
                         action_type="narration_acceptance",
+                        reason="Narration passed QC and requires explicit acceptance before mixing.",
+                        items=passed_beats,
+                        available_options=["approve", "rerender", "cancel_workflow"],
+                        resume_action="prepare_mix",
+                        suggested_action="Review and approve the QC-passed narration beats.",
+                        step_name=WorkflowStepName.EVALUATE.value,
+                        gate_event_message="Narration-acceptance gate entered.",
                     )
                     return
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # 5. Step: PREPARE_MIX (via OperationManager)
@@ -977,8 +1015,8 @@ class VoiceProjectWorkflowService:
                     target_lufs=state.policy.loudness_target_lufs,
                 )
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # 6. Step: MIX (via OperationManager)
@@ -991,8 +1029,8 @@ class VoiceProjectWorkflowService:
                     project_id,
                 )
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # 7. Step: MASTER (via OperationManager)
@@ -1013,8 +1051,8 @@ class VoiceProjectWorkflowService:
                         step=WorkflowStepName.MASTER.value, artifact_id="master_wav",
                     )
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # Human Gate: Final Director Approval (if policy enabled and not yet approved)
@@ -1026,29 +1064,22 @@ class VoiceProjectWorkflowService:
                 master_sha256 = compute_file_sha256(master_path)
                 if not master_sha256:
                     raise RuntimeError("Master audio is missing before final approval.")
-                state.status = WorkflowStatus.WAITING_FOR_HUMAN
-                state.human_action = {
-                    "action_type": "final_audio_approval",
-                    "reason": "Master audio rendered and awaiting final director approval before export.",
-                    "items": [{
+                self._enter_human_gate(
+                    workflow_id, state,
+                    action_type="final_audio_approval",
+                    reason="Master audio rendered and awaiting final director approval before export.",
+                    items=[{
                         "artifact_id": "master_wav",
                         "sha256": master_sha256,
                         "download_url": f"/api/v1/voice-projects/{project_id}/artifacts/master_wav",
                     }],
-                    "available_options": ["approve", "rerender", "cancel_workflow"],
-                    "resume_action": "export",
-                }
-                state.suggested_action = "Listen to and explicitly approve the master audio."
-                self.store.save_workflow(state)
-                self._emit_production_event(
-                    state, "approval_required", "Master audio requires final approval.",
-                    step=WorkflowStepName.MASTER.value,
-                )
-                self._emit_production_event(
-                    state, "human_gate_entered", "Final-audio approval gate entered.",
-                    step=WorkflowStepName.MASTER.value,
-                    action_type="final_audio_approval",
-                    artifact_id="master_wav",
+                    available_options=["approve", "rerender", "cancel_workflow"],
+                    resume_action="export",
+                    suggested_action="Listen to and explicitly approve the master audio.",
+                    step_name=WorkflowStepName.MASTER.value,
+                    gate_event_message="Final-audio approval gate entered.",
+                    pre_gate_event=("approval_required", "Master audio requires final approval."),
+                    extra_event_kwargs={"artifact_id": "master_wav"},
                 )
                 return
 
@@ -1072,8 +1103,8 @@ class VoiceProjectWorkflowService:
                 # artifact, including revisions created while resolving resources.
                 revision_store.mark_reproduced(project_id, satisfied_revision_ids)
 
-            state = self.store.get_workflow(workflow_id)
-            if not state or state.status in (WorkflowStatus.CANCELLING, WorkflowStatus.CANCELLED):
+            state = self._refresh_or_bail(workflow_id)
+            if state is None:
                 return
 
             # Complete Workflow
