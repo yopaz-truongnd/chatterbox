@@ -60,6 +60,14 @@ def scan_pronunciation_candidates(script_text: str) -> list[dict[str, Any]]:
         "the", "this", "that", "there", "then", "when", "what", "where", "how", "and", "but", "so",
         "welcome", "today", "however", "meanwhile", "finally", "thank", "please",
     )
+
+    def _clean_candidate_word(w: str) -> str:
+        # Strip a trailing possessive marker ("Wukong's" -> "Wukong") before the
+        # generic non-word strip, so the candidate term still occurs verbatim in
+        # the source script and can later be resolved via add_pronunciation().
+        w = re.sub(r"['’]s$", "", w)
+        return re.sub(r"[^\w]", "", w)
+
     sentences = re.split(r"(?<=[.?!])\s+", script_text)
     for sent in sentences:
         words = sent.strip().split()
@@ -67,7 +75,7 @@ def scan_pronunciation_candidates(script_text: str) -> list[dict[str, Any]]:
             continue
         tail = words[1:]
         is_title = [
-            len(re.sub(r"[^\w]", "", w)) > 2 and re.sub(r"[^\w]", "", w).istitle()
+            len(_clean_candidate_word(w)) > 2 and _clean_candidate_word(w).istitle()
             for w in tail
         ]
         i = 0
@@ -79,7 +87,7 @@ def scan_pronunciation_candidates(script_text: str) -> list[dict[str, Any]]:
             while run_end < len(tail) and is_title[run_end]:
                 run_end += 1
             if run_end - i == 1:
-                clean_w = re.sub(r"[^\w]", "", tail[i])
+                clean_w = _clean_candidate_word(tail[i])
                 if clean_w not in seen and clean_w.lower() not in _COMMON_CAPITALIZED_WORDS:
                     seen.add(clean_w)
                     candidates.append({

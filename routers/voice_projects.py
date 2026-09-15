@@ -426,8 +426,8 @@ def get_missing_resources(project_id: str):
         if not report:
             raise InvalidProjectStateError(f"Resource report missing for project '{project_id}'. Run check_resources first.")
 
-        req_gaps = [g.to_dict() for g in report.missing if g.priority == RequirementPriority.REQUIRED]
-        rec_gaps = [g.to_dict() for g in report.missing if g.priority == RequirementPriority.RECOMMENDED]
+        req_gaps = [g.model_dump(mode="json") for g in report.missing if g.priority == RequirementPriority.REQUIRED]
+        rec_gaps = [g.model_dump(mode="json") for g in report.missing if g.priority == RequirementPriority.RECOMMENDED]
 
         return {
             "project_id": project_id,

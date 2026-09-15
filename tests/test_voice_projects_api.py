@@ -190,6 +190,28 @@ class TestVoiceProjectsAPI(unittest.TestCase):
         self.assertEqual(render_resp.status_code, 409)
         self.assertEqual(render_resp.json()["error"]["code"], "RESOURCE_BLOCKED")
 
+    def test_get_missing_resources_returns_gaps_without_500(self):
+        """GET /resources/missing must serialize ResourceGap entries correctly
+        instead of crashing on a nonexistent .to_dict() method (see
+        docs/known-issues.json ISSUE-0002)."""
+        script_text = "Long ago the mysterious beast Qiongqi roamed Mount Zhong."
+        self.client.post(
+            "/api/v1/voice-projects",
+            json={"project_id": "missing_gaps_proj", "script_text": script_text},
+        )
+        plan_resp = self.client.post("/api/v1/voice-projects/missing_gaps_proj/plan")
+        self._wait_for_op(plan_resp.json()["job_id"])
+
+        res_resp = self.client.post("/api/v1/voice-projects/missing_gaps_proj/resources/check")
+        self._wait_for_op(res_resp.json()["job_id"])
+
+        missing_resp = self.client.get("/api/v1/voice-projects/missing_gaps_proj/resources/missing")
+        self.assertEqual(missing_resp.status_code, 200, missing_resp.text)
+        missing_data = missing_resp.json()
+        self.assertTrue(missing_data["render_blocked"])
+        self.assertGreater(len(missing_data["required"]), 0)
+        self.assertEqual(missing_data["required"][0]["term"], "Qiongqi")
+
     def test_update_script_invalidates_downstream_and_enforces_replan(self):
         self.client.post(
             "/api/v1/voice-projects",
