@@ -383,10 +383,14 @@ function renderDirectorWorkflowList() {
   if (!list) return;
   const countEl = document.getElementById('directorCount');
   const activeFilter = DIRECTOR_LIST_FILTERS.find(f => f.key === directorListFilter) || DIRECTOR_LIST_FILTERS[0];
-  const filtered = directorWorkflows.filter(w => activeFilter.match(w.status));
-  if (countEl) countEl.textContent = directorListFilter === 'all' ? `${directorWorkflows.length} quy trình` : `${filtered.length}/${directorWorkflows.length} quy trình`;
+  const query = (document.getElementById('directorListSearch')?.value || '').trim().toLowerCase();
+  const statusFiltered = directorWorkflows.filter(w => activeFilter.match(w.status));
+  const filtered = query
+    ? statusFiltered.filter(w => (w.title || '').toLowerCase().includes(query) || w.project_id.toLowerCase().includes(query))
+    : statusFiltered;
+  if (countEl) countEl.textContent = (directorListFilter === 'all' && !query) ? `${directorWorkflows.length} quy trình` : `${filtered.length}/${directorWorkflows.length} quy trình`;
 
-  const fp = JSON.stringify(filtered.map(w => [w.workflow_id, w.status, w.updated_at, w.title, (w.steps || []).map(s => s.status)])) + `|${directorActive?.workflow_id || ''}`;
+  const fp = JSON.stringify(filtered.map(w => [w.workflow_id, w.status, w.updated_at, w.title, (w.steps || []).map(s => s.status)])) + `|${directorActive?.workflow_id || ''}|${query}`;
   if (fp === directorWorkflowsFp) return;
   directorWorkflowsFp = fp;
 
