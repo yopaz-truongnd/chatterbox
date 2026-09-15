@@ -27,6 +27,7 @@ from services.voice_plan import AmbienceIntent, SFXIntent
 from services.voice_project_models import BeatNotFoundError, InvalidProjectStateError
 from services.voice_project_service import VoiceProjectService, compute_file_sha256
 from services.voice_project_workflow import VoiceProjectWorkflowService
+from services.voice_project_workflow_models import WorkflowStatus
 
 
 MIX_ARTIFACTS = ["mix_plan", "premaster_wav", "master_wav", "exports", "final_approval"]
@@ -316,6 +317,21 @@ class DirectorRevisionService:
                 if final_approval_invalidated and require_final_approval:
                     if not workflow:
                         raise InvalidProjectStateError("Final approval is required but no authoritative workflow exists.")
+                    if workflow.status != WorkflowStatus.COMPLETED:
+                        # The authoritative workflow hasn't finished its own first run yet
+                        # (e.g. it's still parked at the very human gate this revision just
+                        # resolved), so there is no already-granted final approval to
+                        # invalidate/reopen. Resume it so its own state machine drives
+                        # evaluate/mix/master/export (and its own final-approval gate)
+                        # instead of racing an independent export here.
+                        resumed = workflow_service.resume_workflow(workflow.workflow_id)
+                        return IncrementalReproductionResult(
+                            project_id=project_id,
+                            affected_beats=affected_beats,
+                            executed_steps=executed,
+                            status="delegated_to_workflow",
+                            suggested_action=f"Resumed workflow {resumed.workflow_id}; it will drive mix/master/export and its own final-approval gate.",
+                        )
                     master_path = self.store.get_project_dir(project_id) / "mix" / "master.wav"
                     artifact_sha = compute_file_sha256(master_path)
                     reopened = workflow_service.request_revision_approval(workflow.workflow_id, artifact_sha, selected_ids)
