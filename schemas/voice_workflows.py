@@ -96,6 +96,7 @@ class VoiceWorkflowResponse(BaseModel):
 
     workflow_id: str
     project_id: str
+    title: str = ""
     status: str
     policy: WorkflowPolicySchema = Field(default_factory=WorkflowPolicySchema)
     steps: list[WorkflowStepSchema] = Field(default_factory=list)

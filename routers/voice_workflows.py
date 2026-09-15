@@ -16,7 +16,7 @@ from schemas.voice_workflows import (
     WorkflowPolicySchema,
     WorkflowStepSchema,
 )
-from services.voice_project_dependencies import get_voice_project_workflow_service
+from services.voice_project_dependencies import get_voice_project_workflow_service, get_voice_project_store
 from services.voice_project_workflow_models import (
     VoiceOrchestrationDecision,
     VoiceWorkflowState,
@@ -42,11 +42,26 @@ def _workflow_error(code: str, message: str, workflow_id: str, status_code: int 
     )
 
 
+def _project_title(project_id: str) -> str:
+    """Best-effort lookup of the human-readable title stored on the project.
+
+    VoiceWorkflowState itself never persisted a title, so the list view
+    otherwise has nothing but the project_id slug to show. Falls back to
+    project_id if the project is missing or unreadable (e.g. deleted).
+    """
+    try:
+        title = get_voice_project_store().get_project_state(project_id).title
+        return title or project_id
+    except Exception:
+        return project_id
+
+
 def _format_workflow_response(state: VoiceWorkflowState) -> VoiceWorkflowResponse:
     """Map internal VoiceWorkflowState to public REST schema."""
     return VoiceWorkflowResponse(
         workflow_id=state.workflow_id,
         project_id=state.project_id,
+        title=_project_title(state.project_id),
         status=state.status.value if hasattr(state.status, "value") else str(state.status),
         policy=WorkflowPolicySchema.model_validate(state.policy.model_dump()),
         steps=[
