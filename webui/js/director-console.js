@@ -1026,7 +1026,37 @@ async function approveDirectorGate(approved) {
   } finally { directorGateSubmitting = false; }
 }
 async function cancelDirectorWorkflow() { await directorMutation(`/api/v1/voice-workflows/${directorActive.workflow_id}/cancel`, {method:'POST'}); }
-async function resumeDirectorWorkflow() { await directorMutation(`/api/v1/voice-workflows/${directorActive.workflow_id}/resume`, {method:'POST'}); }
+async function resumeDirectorWorkflow() {
+  // "resume" can legitimately return 200 and yet land the workflow right
+  // back on the exact same gate it started from (e.g. clicking this before
+  // actually approving the beat's attempt) -- silent to the user otherwise,
+  // since nothing on screen visibly changes. The catch: resume()'s HTTP
+  // response fires before the background re-check (render/evaluate) has
+  // actually run, so trusting that immediate response alone produces a
+  // false "success" toast. Poll briefly for the settled state instead.
+  const wfId = directorActive?.workflow_id;
+  const beforeGate = directorActive?.human_action?.action_type || null;
+  if (!wfId) return;
+  const result = await directorMutation(`/api/v1/voice-workflows/${wfId}/resume`, {method:'POST'});
+  if (!result) return; // directorMutation already toasted the error
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    let fresh;
+    try { fresh = await directorFetch(`/api/v1/voice-workflows/${wfId}`); } catch { break; }
+    if (directorActive?.workflow_id === wfId) { directorActive = fresh; renderDirectorShell(); }
+    if (fresh.status !== 'running') {
+      if (fresh.status === 'waiting_for_human' && fresh.human_action?.action_type === beforeGate) {
+        showToast('warning', 'Chưa có gì thay đổi: vẫn đang chờ bạn xử lý mục ở trên trước khi có thể tiếp tục.');
+      } else {
+        showToast('success', 'Đã tiếp tục quy trình sản xuất.');
+      }
+      await loadDirectorWorkflows(false);
+      return;
+    }
+  }
+  showToast('info', 'Đang xử lý, vui lòng đợi trong giây lát...');
+}
 async function deleteDirectorProduction(workflowId, projectId) {
   if (!confirm(`Xóa vĩnh viễn bản sản xuất "${projectId}"?\n\nToàn bộ kịch bản, bản thu, mix/master, file xuất, revision và lịch sử tác vụ liên quan sẽ bị xóa.`)) return;
   try {
