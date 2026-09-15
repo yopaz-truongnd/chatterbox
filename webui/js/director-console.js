@@ -15,6 +15,7 @@ let directorLastGateType = null;
 let directorLastPollTime = 0;
 
 let directorWorkflowsFp = '';
+let directorListFilter = 'all';
 let directorShellFp = '';
 let directorOperationsFp = '';
 let directorRevisionsFp = '';
@@ -25,6 +26,29 @@ const directorStatusLabels = {queued:'đang chờ', running:'đang xử lý', wa
 const directorStepLabels = {create_project:'Tạo dự án', plan:'Lập kế hoạch', check_resources:'Kiểm tra tài nguyên', render:'Tạo giọng đọc', evaluate:'Kiểm tra chất lượng', prepare_mix:'Chuẩn bị phối', mix:'Phối âm', master:'Tạo master', export:'Xuất file'};
 const directorStatusLabel = status => directorStatusLabels[status] || status;
 const directorStepLabel = step => directorStepLabels[step] || step;
+
+function directorRelativeTime(isoString) {
+  if (!isoString) return '—';
+  const diffSec = Math.round((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (diffSec < 60) return 'vừa xong';
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} phút trước`;
+  const diffHour = Math.round(diffMin / 60);
+  if (diffHour < 24) return `${diffHour} giờ trước`;
+  const diffDay = Math.round(diffHour / 24);
+  if (diffDay < 30) return `${diffDay} ngày trước`;
+  const diffMonth = Math.round(diffDay / 30);
+  if (diffMonth < 12) return `${diffMonth} tháng trước`;
+  return `${Math.round(diffMonth / 12)} năm trước`;
+}
+
+const DIRECTOR_LIST_FILTERS = [
+  { key: 'all', label: 'Tất cả', match: () => true },
+  { key: 'active', label: 'Đang xử lý', match: s => ['queued', 'running', 'cancelling'].includes(s) },
+  { key: 'waiting', label: 'Chờ bạn duyệt', match: s => s === 'waiting_for_human' },
+  { key: 'completed', label: 'Hoàn tất', match: s => s === 'completed' },
+  { key: 'failed', label: 'Lỗi', match: s => ['failed', 'cancelled', 'interrupted'].includes(s) },
+];
 
 function formatDirectorBytes(bytes) {
   if (!bytes || isNaN(bytes)) return '—';
@@ -290,22 +314,12 @@ async function loadDirectorWorkflows(syncActive = false) {
   if (!list) return;
   try {
     directorWorkflows = await directorFetch('/api/v1/voice-workflows?limit=100');
-    const countEl = document.getElementById('directorCount');
-    if (countEl) countEl.textContent = `${directorWorkflows.length} quy trình`;
-    const fp = JSON.stringify(directorWorkflows.map(w => [w.workflow_id, w.status, w.updated_at, (w.steps || []).map(s => s.status)])) + `|${directorActive?.workflow_id || ''}`;
-    if (fp !== directorWorkflowsFp) {
-      directorWorkflowsFp = fp;
-      const prevScroll = list.scrollTop;
-      list.innerHTML = directorWorkflows.length ? directorWorkflows.map(workflow => {
-        const progress = workflow.steps.length ? Math.round(workflow.steps.filter(s => ['completed', 'skipped'].includes(s.status)).length * 100 / workflow.steps.length) : 0;
-        return `<div class="relative"><button onclick="openDirectorWorkflow('${escapeHtml(workflow.workflow_id)}')" class="w-full text-left p-3 pr-10 rounded-lg border ${directorActive?.workflow_id === workflow.workflow_id ? 'border-purple-500' : 'border-[#3F3A46]'} bg-[#0E0C12] hover:bg-[#231F2A]">
-          <div class="flex justify-between gap-2"><strong class="text-xs text-white truncate">${escapeHtml(workflow.project_id)}</strong>${directorStatusChip(workflow.status)}</div>
-          <div class="mt-2 h-1 bg-[#3F3A46] rounded"><div class="h-1 bg-purple-500 rounded" style="width:${progress}%"></div></div>
-          <div class="mt-1 flex justify-between text-[10px] text-slate-500"><span>${escapeHtml(workflow.policy.provider)} / ${escapeHtml(workflow.policy.model || 'mặc định')}</span><span>${progress}%</span></div>
-        </button><button onclick="deleteDirectorProduction('${escapeHtml(workflow.workflow_id)}','${escapeHtml(workflow.project_id)}')" class="absolute right-2 top-8 px-2 py-1 rounded bg-red-950 text-red-300 hover:bg-red-900 text-[10px] font-bold" title="Xóa bản sản xuất và tất cả file liên quan" aria-label="Xóa bản sản xuất ${escapeHtml(workflow.project_id)}">Xóa</button></div>`;
-      }).join('') : '<p class="text-xs text-slate-500 py-6 text-center">Chưa có bản sản xuất nào.</p>';
-      list.scrollTop = prevScroll;
-    }
+    // The backend lists files sorted by workflow_id (a random UUID segment),
+    // which is not chronological at all. Sort by creation time (newest
+    // first) here so the list order is actually meaningful.
+    directorWorkflows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    renderDirectorListFilters();
+    renderDirectorWorkflowList();
     if (syncActive && directorActive) {
       const fresh = directorWorkflows.find(w => w.workflow_id === directorActive.workflow_id);
       if (fresh) { directorActive = fresh; renderDirectorShell(); }
@@ -315,6 +329,51 @@ async function loadDirectorWorkflows(syncActive = false) {
       list.innerHTML = `<p class="text-xs text-red-400">${escapeHtml(error.message)}</p>`;
     }
   }
+}
+
+function setDirectorListFilter(key) {
+  directorListFilter = key;
+  renderDirectorListFilters();
+  renderDirectorWorkflowList();
+}
+
+function renderDirectorListFilters() {
+  const el = document.getElementById('directorListFilters');
+  if (!el) return;
+  el.innerHTML = DIRECTOR_LIST_FILTERS.map(f => {
+    const count = directorWorkflows.filter(w => f.match(w.status)).length;
+    const active = f.key === directorListFilter;
+    return `<button onclick="setDirectorListFilter('${f.key}')" class="px-2 py-1 rounded-full text-[10px] font-medium border transition-colors ${active ? 'bg-purple-600 border-purple-500 text-white' : 'bg-[#0E0C12] border-[#3F3A46] text-slate-400 hover:text-white'}">${f.label} (${count})</button>`;
+  }).join('');
+}
+
+function renderDirectorWorkflowList() {
+  const list = document.getElementById('directorWorkflowList');
+  if (!list) return;
+  const countEl = document.getElementById('directorCount');
+  const activeFilter = DIRECTOR_LIST_FILTERS.find(f => f.key === directorListFilter) || DIRECTOR_LIST_FILTERS[0];
+  const filtered = directorWorkflows.filter(w => activeFilter.match(w.status));
+  if (countEl) countEl.textContent = directorListFilter === 'all' ? `${directorWorkflows.length} quy trình` : `${filtered.length}/${directorWorkflows.length} quy trình`;
+
+  const fp = JSON.stringify(filtered.map(w => [w.workflow_id, w.status, w.updated_at, w.title, (w.steps || []).map(s => s.status)])) + `|${directorActive?.workflow_id || ''}`;
+  if (fp === directorWorkflowsFp) return;
+  directorWorkflowsFp = fp;
+
+  const prevScroll = list.scrollTop;
+  list.innerHTML = filtered.length ? filtered.map(workflow => {
+    const steps = workflow.steps || [];
+    const doneSteps = steps.filter(s => ['completed', 'skipped'].includes(s.status)).length;
+    const progress = steps.length ? Math.round(doneSteps * 100 / steps.length) : 0;
+    const displayName = workflow.title || workflow.project_id;
+    const createdAbs = workflow.created_at ? new Date(workflow.created_at).toLocaleString('vi-VN') : '—';
+    return `<div class="relative"><button onclick="openDirectorWorkflow('${escapeHtml(workflow.workflow_id)}')" class="w-full text-left p-3 pr-10 rounded-lg border ${directorActive?.workflow_id === workflow.workflow_id ? 'border-purple-500' : 'border-[#3F3A46]'} bg-[#0E0C12] hover:bg-[#231F2A]">
+      <div class="flex items-center gap-2 min-w-0">${directorStatusChip(workflow.status)}<strong class="text-xs text-white truncate min-w-0" title="${escapeHtml(workflow.project_id)}">${escapeHtml(displayName)}</strong></div>
+      <div class="mt-1 text-[10px] text-slate-500" title="${escapeHtml(createdAbs)}">Tạo ${escapeHtml(directorRelativeTime(workflow.created_at))}</div>
+      <div class="mt-2 h-1 bg-[#3F3A46] rounded"><div class="h-1 bg-purple-500 rounded" style="width:${progress}%"></div></div>
+      <div class="mt-1 flex justify-between text-[10px] text-slate-500"><span>${escapeHtml(workflow.policy.provider)} / ${escapeHtml(workflow.policy.model || 'mặc định')}</span><span>${doneSteps}/${steps.length} bước · ${progress}%</span></div>
+    </button><button onclick="deleteDirectorProduction('${escapeHtml(workflow.workflow_id)}','${escapeHtml(workflow.project_id)}')" class="absolute right-2 top-2 px-2 py-1 rounded bg-red-950 text-red-300 hover:bg-red-900 text-[10px] font-bold" title="Xóa bản sản xuất và tất cả file liên quan" aria-label="Xóa bản sản xuất ${escapeHtml(displayName)}">Xóa</button></div>`;
+  }).join('') : `<p class="text-xs text-slate-500 py-6 text-center">${directorWorkflows.length ? 'Không có bản sản xuất nào khớp bộ lọc.' : 'Chưa có bản sản xuất nào.'}</p>`;
+  list.scrollTop = prevScroll;
 }
 
 function directorStatusChip(status) {
