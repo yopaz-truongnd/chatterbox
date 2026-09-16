@@ -78,8 +78,26 @@ function copyDirectorScript() {
 async function directorFetch(url, options = {}) {
   const response = await fetch(url, options);
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || body.message || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const err = new Error(body.detail || body.message || `HTTP ${response.status}`);
+    err.status = response.status;
+    throw err;
+  }
   return body;
+}
+
+// Shared handling for "the workflow currently being viewed no longer exists"
+// (e.g. deleted from another session/tab): clear the stale view instead of
+// leaving a raw backend 404 message on screen, or silently failing forever
+// on every poll tick.
+function handleDirectorWorkflowGone() {
+  showToast('warning', 'Bản sản xuất này không còn tồn tại (có thể đã bị xóa). Danh sách đã được làm mới.');
+  directorActive = directorReview = directorSource = directorRevisions = null;
+  directorOperations = [];
+  clearInterval(directorPollTimer);
+  document.getElementById('directorWorkspace')?.classList.add('hidden');
+  document.getElementById('directorEmpty')?.classList.remove('hidden');
+  loadDirectorWorkflows(true).catch(() => {});
 }
 
 function toggleDirectorCreate() {
@@ -448,7 +466,10 @@ async function openDirectorWorkflow(workflowId) {
 
     renderDirectorShell(true);
     scheduleDirectorPolling();
-  } catch (error) { showToast('error', escapeHtml(error.message)); }
+  } catch (error) {
+    if (error.status === 404) handleDirectorWorkflowGone();
+    else showToast('error', escapeHtml(error.message));
+  }
 }
 
 function renderDirectorShell(force = false) {
@@ -1192,6 +1213,13 @@ async function refreshDirectorActive() {
     ]);
     renderDirectorShell(false);
     await loadDirectorWorkflows(false);
+  } catch (error) {
+    // A 404 here means the workflow being polled was deleted (e.g. from
+    // another session/tab) -- clear the stale view once instead of either
+    // dumping the raw backend message or silently failing forever on every
+    // 2.5s poll tick. Other errors (network blips, etc.) stay silent so the
+    // next poll can just retry.
+    if (error.status === 404) handleDirectorWorkflowGone();
   } finally {
     directorRefreshing = false;
   }
