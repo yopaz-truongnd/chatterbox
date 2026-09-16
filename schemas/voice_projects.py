@@ -203,6 +203,10 @@ class DirectorAttemptDecisionRequest(DirectorActorRequest):
     explicit_approval: bool = False
 
 
+class SetDirectorNoteRequest(BaseModel):
+    note: str | None = None
+
+
 class DirectorDirectionPatchRequest(DirectorActorRequest):
     emotion: str | None = None
     energy: float | None = None

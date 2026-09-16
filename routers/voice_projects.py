@@ -38,6 +38,7 @@ from schemas.voice_projects import (
     RegisterDirectorResourceRequest,
     OmitDirectorResourceRequest,
     ReproduceVoiceProjectRequest,
+    SetDirectorNoteRequest,
     UpdateVoiceScriptRequest,
     VoiceProjectArtifactsListResponse,
     VoiceProjectBeatsSummary,
@@ -955,6 +956,17 @@ def cancel_voice_project_job(job_id: str):
 def get_director_review(project_id: str):
     try:
         return get_director_review_service().get_review(project_id).model_dump(mode="json")
+    except Exception as exc:
+        return _handle_domain_error(exc, project_id)
+
+
+@router.patch("/api/v1/voice-projects/{project_id}/director-note", summary="Set Director Note")
+def set_director_note(project_id: str, req: SetDirectorNoteRequest):
+    """Persist a free-text note on the project (e.g. resources the operator still needs to source manually)."""
+    store = get_voice_project_store()
+    try:
+        state = store.set_director_note(project_id, req.note)
+        return {"project_id": project_id, "director_note": state.director_note}
     except Exception as exc:
         return _handle_domain_error(exc, project_id)
 

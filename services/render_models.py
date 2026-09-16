@@ -94,6 +94,7 @@ class ProjectState(BaseModel):
     error: str | None = None
     status: ProjectStateStatus = Field(default_factory=ProjectStateStatus)
     artifacts: ProjectArtifacts = Field(default_factory=ProjectArtifacts)
+    director_note: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 

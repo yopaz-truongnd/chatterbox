@@ -97,6 +97,7 @@ class DirectorProjectReview(BaseModel):
     available_actions: list[str] = Field(default_factory=list)
     artifact_status: list[DirectorArtifactStatus] = Field(default_factory=list)
     revision_summary: DirectorRevisionSummary = Field(default_factory=DirectorRevisionSummary)
+    director_note: str | None = None
 
 
 class DirectorResourceShoppingList(BaseModel):

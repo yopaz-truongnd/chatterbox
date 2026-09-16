@@ -213,6 +213,13 @@ class VoiceProjectStore:
             state_path = proj_dir / "project.yaml"
             self._atomic_write_yaml(state_path, state.to_dict())
 
+    def set_director_note(self, project_id: str, note: str | None) -> ProjectState:
+        """Persist a free-text director note (e.g. resources the operator still needs to source)."""
+        state = self.get_project_state(project_id)
+        state.director_note = note
+        self.save_project_state(state)
+        return state
+
     def read_source_script(self, project_id: str) -> str:
         """Read source/script.txt from disk."""
         self.validate_project_id(project_id)

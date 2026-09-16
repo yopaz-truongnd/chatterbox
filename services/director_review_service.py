@@ -205,6 +205,7 @@ class DirectorReviewService:
             } if required else None,
             available_actions=["review_resources", "review_beats", "update_direction", "reproduce"],
             artifact_status=artifacts,
+            director_note=state.director_note,
             revision_summary=DirectorRevisionSummary(
                 revision_count=len(events),
                 latest_revision_id=events[-1].revision_id if events else None,

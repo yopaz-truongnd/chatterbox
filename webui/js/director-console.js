@@ -607,10 +607,34 @@ function showDirectorView(view, userInitiated = false, force = false) {
   }
 }
 
+function renderDirectorNoteBox() {
+  const note = directorReview?.director_note || '';
+  return `<div class="mb-4 p-3 rounded-lg bg-[#1B1720] border border-amber-700/40">
+    <h4 class="text-xs font-bold text-amber-300 mb-1">📝 Ghi chú của đạo diễn</h4>
+    <p class="text-[9px] text-slate-500 mb-2">Vd: tài nguyên SFX/ambience cần tự tìm kiếm và bổ sung thủ công.</p>
+    <textarea id="directorNoteInput" rows="3" placeholder="Ghi chú tài nguyên cần tìm, lưu ý sản xuất..." class="director-input w-full resize-y">${escapeHtml(note)}</textarea>
+    <div class="flex justify-end mt-2"><button onclick="saveDirectorNote()" class="px-2.5 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white text-[10px]">Lưu ghi chú</button></div>
+  </div>`;
+}
+
+async function saveDirectorNote() {
+  const el = document.getElementById('directorNoteInput');
+  if (!el || !directorActive) return;
+  try {
+    await directorFetch(`/api/v1/voice-projects/${directorActive.project_id}/director-note`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: el.value }),
+    });
+    if (directorReview) directorReview.director_note = el.value;
+    showToast('success', 'Đã lưu ghi chú.');
+  } catch (error) { showToast('error', escapeHtml(error.message)); }
+}
+
 function renderDirectorWorkspace() {
   if (!directorReview) return '<p class="text-xs text-slate-500">Nội dung duyệt sẽ xuất hiện sau khi tạo dự án.</p>';
   const gaps = [...directorReview.required_resource_gaps, ...directorReview.recommended_resource_gaps];
-  return `<h4 class="text-xs font-bold text-white mb-1">Kịch bản gốc (không thể sửa)</h4><p class="text-[9px] text-slate-500 font-mono mb-3">SHA-256 ${escapeHtml(directorSource?.sha256 || directorReview.source_script_sha256)}</p><div class="p-3 rounded bg-[#0E0C12] text-xs text-slate-300 whitespace-pre-wrap">${escapeHtml(directorSource?.script_text || directorReview.script_excerpt)}</div>
+  return `${renderDirectorNoteBox()}<h4 class="text-xs font-bold text-white mb-1">Kịch bản gốc (không thể sửa)</h4><p class="text-[9px] text-slate-500 font-mono mb-3">SHA-256 ${escapeHtml(directorSource?.sha256 || directorReview.source_script_sha256)}</p><div class="p-3 rounded bg-[#0E0C12] text-xs text-slate-300 whitespace-pre-wrap">${escapeHtml(directorSource?.script_text || directorReview.script_excerpt)}</div>
     <div class="grid md:grid-cols-2 gap-3 mt-4"><div><h4 class="text-xs font-bold text-white mb-2">Các đoạn giọng đọc</h4>${sortDirectorBeatsByAttention(directorReview.beats).map(b => `<button onclick="openDirectorBeat('${escapeHtml(b.beat_id)}')" class="block w-full text-left p-2 mb-1 rounded bg-[#0E0C12] text-xs ${directorBeatNeedsAttention(b) ? 'border border-amber-700/50' : ''}"><b class="text-white">${escapeHtml(b.beat_id)}</b> <span class="text-slate-400">${escapeHtml(b.emotion)} · năng lượng ${b.energy} · ${escapeHtml(directorStatusLabel(b.render_status))}</span>${directorBeatNeedsAttention(b) ? ' <span class="text-amber-400 text-[10px]">● cần chú ý</span>' : ''}</button>`).join('')}</div><div>${renderDirectorResourceReadiness(directorReview.resource_readiness, gaps)}</div></div>`;
 }
 

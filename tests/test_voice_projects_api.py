@@ -212,6 +212,32 @@ class TestVoiceProjectsAPI(unittest.TestCase):
         self.assertGreater(len(missing_data["required"]), 0)
         self.assertEqual(missing_data["required"][0]["term"], "Qiongqi")
 
+    def test_director_note_persists_and_appears_in_review(self):
+        """PATCH .../director-note must persist free text and surface it back
+        through GET .../director-review, so the webui can show a durable note
+        (e.g. which SFX/ambience resources the operator still needs to source
+        manually) without any dedicated backend of its own."""
+        self.client.post(
+            "/api/v1/voice-projects",
+            json={"project_id": "note_proj", "script_text": "A quiet morning by the lake."},
+        )
+        plan_resp = self.client.post("/api/v1/voice-projects/note_proj/plan")
+        self._wait_for_op(plan_resp.json()["job_id"])
+
+        get_resp = self.client.get("/api/v1/voice-projects/note_proj/director-review")
+        self.assertIsNone(get_resp.json()["director_note"])
+
+        note_text = "Cần tìm: ambience rừng đêm, tiếng chim cú."
+        patch_resp = self.client.patch(
+            "/api/v1/voice-projects/note_proj/director-note",
+            json={"note": note_text},
+        )
+        self.assertEqual(patch_resp.status_code, 200, patch_resp.text)
+        self.assertEqual(patch_resp.json()["director_note"], note_text)
+
+        review_resp = self.client.get("/api/v1/voice-projects/note_proj/director-review")
+        self.assertEqual(review_resp.json()["director_note"], note_text)
+
     def test_update_script_invalidates_downstream_and_enforces_replan(self):
         self.client.post(
             "/api/v1/voice-projects",
