@@ -110,11 +110,20 @@ class DirectorResourceService:
         self.store.save_voice_plan(project_id, plan)
         self.project_service.check_resources(project_id)
         manifest = self.store.load_manifest(project_id)
+        touched = False
         for beat_id in affected:
             if beat_id in manifest.beats:
                 manifest.beats[beat_id].selected_attempt = None
                 manifest.beats[beat_id].status = RenderStatus.PENDING
-        self.store.save_manifest(project_id, manifest)
+                touched = True
+        # Only persist the manifest if a beat was actually invalidated. Saving
+        # an empty/no-op manifest before the project's first render() call
+        # would pin its resource-report hash to *this* check_resources() run;
+        # any later resource change (e.g. omit_optional's own check_resources()
+        # call) then desyncs that pinned hash, permanently tripping render()'s
+        # staleness guard with no render having ever happened.
+        if touched:
+            self.store.save_manifest(project_id, manifest)
         artifacts = ["selected_attempt", "beat_qc", *MIX_ARTIFACTS]
         steps = ["render_beat", "evaluate", "prepare_mix", "mix", "master", "export"]
         self._audit(project_id, "pronunciation_added", term, affected, artifacts, steps, actor_id, reason, {"phonetic": phonetic})

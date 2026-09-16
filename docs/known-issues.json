@@ -175,6 +175,39 @@
           "note": "Fixed: (1) services/voice_project_service.py's evaluate() now skips re-scoring an attempt whose status is already PASSED via an explicit human approval (direction_summary.director_review.action == 'approved'), and the downstream best-candidate aggregation now keys off attempt.status == PASSED rather than re-deriving purely from qc_result.verdict, so a pinned approval survives repeated evaluate() calls. (2) services/voice_project_workflow.py's _execute_workflow_loop() now runs EVALUATE as its own independent top-level step check (previously nested inside RENDER's if-block), and _STEP_COMPLETION_STAGES no longer includes EVALUATE, so it is always genuinely re-invoked -- and its auto_accept_qc_pass narration_acceptance gate always properly enforced -- on any resume, regardless of whether RENDER itself was skipped via stage-sync. Added regression test test_narration_acceptance_gate_not_skipped_after_out_of_band_approval in tests/test_voice_workflow.py, reproducing the exact scenario (out-of-band explicit beat approval, auto_accept_qc_pass=false, resume) and asserting the gate correctly fires and the pinned approval survives. Full scoped suite (tests/test_voice_workflow.py, tests/test_director_phase16.py, tests/test_voice_orchestration_phase24.py, tests/test_voice_projects_api.py, tests/test_resource_manager.py, tests/test_resource_system_e2e.py, tests/test_mix_plan_builder.py -- 78 tests) passes."
         }
       ]
+    },
+    {
+      "id": "ISSUE-0006",
+      "title": "Resolving a required pronunciation gap before the first render permanently stale-blocks render() with StaleArtifactError",
+      "status": "fixed",
+      "severity": "high",
+      "area": "director-resource-readiness",
+      "reported_by": "hirovjp9999@gmail.com",
+      "reported_at": "2026-09-16",
+      "summary": "Creating a Voice Workflow whose script has a required pronunciation gap (e.g. a proper noun like 'Zhongshan' or 'Zhuyin') pauses the workflow for human resource resolution, exactly as designed. But once the operator confirms the required pronunciation(s) and omits the optional/recommended ambience-SFX gaps and resumes, the workflow's own 'render' step immediately fails with StaleArtifactError('Render manifest is stale relative to current resource report') -- even though the project has never been rendered even once. The workflow is left permanently in status=failed with no supported way to make render() succeed, because every retry hits the exact same staleness guard.",
+      "repro": [
+        "Create a voice project/workflow (POST /api/v1/voice-workflows) whose script contains a proper noun the pronunciation-candidate scanner flags as a required resource gap (e.g. 'Zhongshan', 'Zhuyin')",
+        "Workflow pauses at human_action.action_type == 'resource_required' (check_resources render_blocked)",
+        "In Director Console, click 'Xac nhan tat ca theo chinh ta goc' to add pronunciations for the required gaps -> DirectorResourceService.add_pronunciation() runs",
+        "Click 'Bo qua tat ca khong bat buoc' to omit any recommended/optional ambience-SFX gaps -> DirectorResourceService.omit_optional() runs for each",
+        "Click 'Tiep tuc' to resume the workflow -> check_resources step completes with readiness_score=100, gaps_count=0, but the render step immediately fails: StaleArtifactError: Cannot render project '...': Render manifest is stale relative to current resource report",
+        "Deleting and recreating the production and retrying the exact same sequence reproduces the identical failure every time -- this is not a one-off flake."
+      ],
+      "root_cause": "services/director_resource_service.py's add_pronunciation() (around line 111-117) unconditionally called self.store.load_manifest(project_id) (which returns an empty in-memory RenderManifest(beats={}) when render-manifest.yaml does not exist yet, i.e. before any render() has ever run) and then unconditionally called self.store.save_manifest(project_id, manifest) -- writing that empty manifest to disk for the first time and, per services/voice_project_store.py's save_manifest(), pinning state.artifacts.render_manifest_resource_report_sha256 to whatever resource_report_sha256 happened to be at that exact moment (itself just refreshed by add_pronunciation()'s own check_resources() call one line earlier). Because services/resource_models.py's ResourceReport carries a created_at timestamp (default_factory=datetime.utcnow().isoformat()), every subsequent check_resources() call -- including the ones DirectorResourceService.omit_optional() runs internally for each omitted gap -- produces a resource-report.yaml with a brand-new sha256, even when nothing substantive changed. omit_optional() never touches render-manifest.yaml, so the pinned render_manifest_resource_report_sha256 from the earlier premature save is left permanently behind the real resource_report_sha256. services/voice_project_store.py's check_staleness(for_render=True) then correctly (by its own contract) flags that mismatch as stale on every future render() attempt -- but there was never a real render to actually be stale relative to, so no legitimate call sequence could ever clear it.",
+      "files": [
+        "services/director_resource_service.py:111",
+        "services/voice_project_store.py:343",
+        "services/resource_models.py:338"
+      ],
+      "suggested_fix": "In add_pronunciation(), only call store.save_manifest() when at least one affected beat was actually found (and invalidated) in the loaded manifest -- i.e. skip the manifest write entirely when manifest.beats is empty because nothing has been rendered yet, so no premature render-manifest.yaml (and no premature hash pin) is ever created before the project's first real render().",
+      "workaround": "None available to end users through the UI. Deleting and recreating the production reproduces the same failure as long as the script has a required pronunciation gap, so there was no way to reach a successful first render for such scripts.",
+      "updates": [
+        {
+          "date": "2026-09-16",
+          "by": "hirovjp9999@gmail.com",
+          "note": "Fixed: services/director_resource_service.py's add_pronunciation() now tracks whether any affected beat was actually found in the loaded render manifest (touched = True only inside the `if beat_id in manifest.beats` branch) and calls store.save_manifest() only when touched is True, so no render-manifest.yaml is written -- and no resource-report hash is pinned -- before the project has ever actually been rendered. Added regression test test_pronunciation_resolution_does_not_permanently_stale_block_first_render in tests/test_director_phase16.py, reproducing the exact scenario (required pronunciation gap resolved, a second check_resources() run simulating omit_optional's internal call, then render()) and asserting render() now reaches NARRATION_READY instead of raising StaleArtifactError. Verified end-to-end against the live webui/API: created a fresh Voice Workflow with required pronunciation gaps (Zhongshan, Zhuyin, etc.) plus 9 recommended ambience/SFX gaps, confirmed pronunciations, omitted the optional gaps, resumed the workflow, and render actually started progressing through real TTS synthesis instead of failing instantly. Full scoped suite (tests/test_director_phase16.py -- 31 tests, tests/test_voice_orchestration_phase24.py, tests/test_narration_plan.py, tests/test_voice_project_service.py -- 26 tests) passes."
+        }
+      ]
     }
   ]
 }

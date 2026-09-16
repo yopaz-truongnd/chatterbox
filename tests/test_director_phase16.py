@@ -114,6 +114,32 @@ class TestDirectorPhase16(unittest.TestCase):
         self.assertFalse(result.remaining_required_gaps)
         self.assertEqual((self.store.get_project_dir(project_id) / "source" / "script.txt").read_bytes(), before)
 
+    def test_pronunciation_resolution_does_not_permanently_stale_block_first_render(self):
+        """add_pronunciation() must not pin a render-manifest hash before any render happens.
+
+        Regression for: resolving a required pronunciation gap wrote an empty
+        render-manifest.yaml and pinned its resource-report hash to that
+        moment. Any later operation that re-runs check_resources() (every
+        ResourceReport carries a fresh created_at timestamp, so its hash
+        always changes) then desynced that pinned hash from the current
+        resource report, and render()'s staleness guard raised
+        StaleArtifactError forever afterward, even though nothing had ever
+        actually been rendered.
+        """
+        project_id = "pronunciation_no_stale_block"
+        self.project_service.create_project("The Zhong waited.", project_id=project_id)
+        self.project_service.plan(project_id)
+        report = self.project_service.check_resources(project_id)
+        self.assertTrue(report.render_blocked)
+        DirectorResourceService(self.project_service).add_pronunciation(
+            project_id, "Zhong", "zong", "tester"
+        )
+        # Simulates any later resource operation (e.g. omit_optional) that
+        # re-runs check_resources() without touching the render manifest.
+        self.project_service.check_resources(project_id)
+        result = self.project_service.render(project_id)
+        self.assertEqual(result.stage, ProjectStatus.NARRATION_READY)
+
     def test_resource_gap_description_shows_specific_term_not_generic_category(self):
         """description must surface the specific term/intent, not the generic reason code.
 
