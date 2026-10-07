@@ -469,8 +469,8 @@ function showToastWithUndo(message, undoFn) {
   toast.className = 'pointer-events-auto flex items-center justify-between gap-2 p-3 rounded-xl bg-[#18151E] border border-purple-500/50 shadow-m3-2 text-xs text-white toast-enter';
   toast.innerHTML = `
     <div class="flex items-center gap-2">
-      <span class="material-symbols-outlined text-purple-400 text-[18px]">info</span>
-      <span>${message}</span>
+      <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px]">info</span>
+      <span>${escapeHtml(message)}</span>
     </div>
     <button type="button" id="undoBtnToast" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 font-bold text-white text-xs cursor-pointer shadow-m3-1">Hoàn tác</button>
   `;
@@ -653,24 +653,24 @@ function renderBatchTable() {
       }
 
       tr.innerHTML = `
-        <td class="p-2.5 w-8 text-center"><input type="checkbox" class="batch-row-chk w-4 h-4 rounded text-purple-600 cursor-pointer" data-idx="${idx}" checked></td>
+        <td class="p-2.5 w-8 text-center"><input type="checkbox" aria-label="Chọn dòng ${idx + 1}" class="batch-row-chk w-4 h-4 rounded text-purple-600 cursor-pointer" data-idx="${idx}" checked></td>
         <td class="p-2.5 w-10 font-mono text-purple-400 font-bold text-center">${idx + 1}</td>
         <td class="p-2.5 font-medium text-white max-w-sm">
-          <input type="text" id="batchLineText-${idx}" value="${line.replace(/"/g, '&quot;')}" onchange="updateBatchLineText(${idx}, this.value)" class="w-full bg-[#14101A] border border-[#3F3A46]/70 focus:border-purple-500 rounded p-1.5 text-xs text-white focus:outline-none transition-colors">
+          <input type="text" id="batchLineText-${idx}" aria-label="Lời thoại dòng ${idx + 1}" value="${line.replace(/"/g, '&quot;')}" onchange="updateBatchLineText(${idx}, this.value)" class="w-full bg-[#14101A] border border-[#3F3A46]/70 focus:border-purple-500 rounded p-1.5 text-xs text-white focus:outline-none transition-colors">
         </td>
         <td class="p-2.5 w-52">
           <div class="flex items-center gap-1">
-            <select id="batchLineVoice-${idx}" onchange="updateBatchLineVoice(${idx}, this.value)" class="bg-[#231F2A] border border-[#3F3A46] rounded-lg px-2 py-1.5 text-xs text-white cursor-pointer w-full focus:border-purple-500">
+            <select id="batchLineVoice-${idx}" aria-label="Giọng dòng ${idx + 1}" onchange="updateBatchLineVoice(${idx}, this.value)" class="bg-[#231F2A] border border-[#3F3A46] rounded-lg px-2 py-1.5 text-xs text-white cursor-pointer w-full focus:border-purple-500">
               ${getVoiceOptionsHtml(selectedVoice, idx)}
             </select>
-            <button type="button" onclick="playLineVoicePreview(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white cursor-pointer" title="Nghe thử giọng dòng này">
-              <span class="material-symbols-outlined text-[13px]">volume_up</span>
+            <button aria-label="Nghe thử giọng dòng này" type="button" onclick="playLineVoicePreview(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white cursor-pointer" title="Nghe thử giọng dòng này">
+              <span aria-hidden="true" class="material-symbols-outlined text-[13px]">volume_up</span>
             </button>
           </div>
         </td>
         <td class="p-2.5 w-24 text-center">
           <div class="flex items-center justify-center gap-1">
-            <input type="number" step="0.1" min="0" max="5" value="${linePause.toFixed(1)}" onchange="updateBatchLinePause(${idx}, this.value)" class="w-14 bg-[#14101A] border border-[#3F3A46] rounded px-1.5 py-1 text-xs text-purple-300 text-center font-mono focus:outline-none focus:border-purple-500">
+            <input type="number" aria-label="Khoảng lặng sau dòng ${idx + 1} (giây)" step="0.1" min="0" max="5" value="${linePause.toFixed(1)}" onchange="updateBatchLinePause(${idx}, this.value)" class="w-14 bg-[#14101A] border border-[#3F3A46] rounded px-1.5 py-1 text-xs text-purple-300 text-center font-mono focus:outline-none focus:border-purple-500">
             <span class="text-slate-500 text-[10px]">s</span>
           </div>
         </td>
@@ -678,17 +678,17 @@ function renderBatchTable() {
         <td class="p-2.5 w-28 text-center" id="batchStatus-${idx}">${statusHtml}</td>
         <td class="p-2.5 w-28 text-right">
           <div class="flex items-center justify-end gap-1">
-            <button type="button" onclick="runSingleBatchLine(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white cursor-pointer transition-colors" title="Sinh audio dòng này">
-              <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+            <button aria-label="Sinh audio dòng này" type="button" onclick="runSingleBatchLine(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white cursor-pointer transition-colors" title="Sinh audio dòng này">
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">play_arrow</span>
             </button>
-            <button type="button" id="batchPlayBtn-${idx}" onclick="playBatchLineAudio(${idx})" class="${playBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-emerald-600 text-emerald-300 hover:text-white cursor-pointer transition-colors" title="Phát audio">
-              <span class="material-symbols-outlined text-[16px]">volume_up</span>
+            <button aria-label="Phát audio" type="button" id="batchPlayBtn-${idx}" onclick="playBatchLineAudio(${idx})" class="${playBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-emerald-600 text-emerald-300 hover:text-white cursor-pointer transition-colors" title="Phát audio">
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span>
             </button>
-            <button type="button" id="batchDownloadBtn-${idx}" onclick="downloadBatchLineAudio(${idx})" class="${dlBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-blue-600 text-blue-300 hover:text-white cursor-pointer transition-colors" title="Tải audio dòng này">
-              <span class="material-symbols-outlined text-[16px]">download</span>
+            <button aria-label="Tải audio dòng này" type="button" id="batchDownloadBtn-${idx}" onclick="downloadBatchLineAudio(${idx})" class="${dlBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-blue-600 text-blue-300 hover:text-white cursor-pointer transition-colors" title="Tải audio dòng này">
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">download</span>
             </button>
-            <button type="button" onclick="deleteBatchLine(${idx})" class="p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer transition-colors" title="Xóa dòng">
-              <span class="material-symbols-outlined text-[16px]">delete</span>
+            <button aria-label="Xóa dòng" type="button" onclick="deleteBatchLine(${idx})" class="p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer transition-colors" title="Xóa dòng">
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">delete</span>
             </button>
           </div>
         </td>
@@ -892,7 +892,7 @@ async function runBatchAll(retryContext = {}) {
   if (progressBox) progressBox.classList.remove('hidden');
 
   if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang chạy Batch...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang chạy Batch...</span>';
     btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
     btn.disabled = true;
   }
@@ -1124,7 +1124,7 @@ async function runBatchAll(retryContext = {}) {
     isBatchRunning = false;
     currentBatchJobId = null;
     if (btn) {
-      btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">play_arrow</span><span>Chạy Batch tất cả</span>';
+      btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">play_arrow</span><span>Chạy Batch tất cả</span>';
       btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
       btn.disabled = false;
     }
@@ -1150,7 +1150,7 @@ async function runBatchMergeAll() {
   }
 
   if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang hòa âm ghép nối...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang hòa âm ghép nối...</span>';
     btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
     btn.disabled = true;
   }
@@ -1206,7 +1206,7 @@ async function runBatchMergeAll() {
     showToast('error', 'Lỗi kết nối máy chủ: ' + err.message);
   } finally {
     if (btn) {
-      btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">merge</span><span>Ghép toàn bộ (Merge All)</span>';
+      btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">merge</span><span>Ghép toàn bộ (Merge All)</span>';
       btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
       btn.disabled = false;
     }
@@ -1340,7 +1340,7 @@ function renderBatchSavedProjects() {
     delBtn.type = 'button';
     delBtn.className = 'p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer';
     delBtn.title = 'Xóa';
-    delBtn.innerHTML = '<span class="material-symbols-outlined text-[15px]">delete</span>';
+    delBtn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[15px]">delete</span>';
     delBtn.addEventListener('click', () => deleteBatchProject(p.id));
 
     actionsDiv.appendChild(openBtn);

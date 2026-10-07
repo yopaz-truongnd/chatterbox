@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0E0C12">
   <title>Chatterbox TTS Studio — Material 3 Web GUI</title>
   
   <!-- Favicon -->
@@ -71,23 +72,23 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="stylesheet" href="/static/css/styles.css?v=20261007-a11y">
 </head>
 <body class="bg-[#0E0C12] text-white font-sans min-h-screen flex flex-col antialiased selection:bg-purple-600 selection:text-white relative">
 
   <!-- ==================== TOAST NOTIFICATION CONTAINER ==================== -->
-  <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+  <div id="toastContainer" role="status" aria-live="polite" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
 
   <!-- ==================== TOP APP BAR (Compact 48px Header) ==================== -->
   <header class="sticky top-0 z-40 bg-[#18151E]/95 backdrop-blur-md border-b border-[#3F3A46] px-3 sm:px-6 py-2 flex items-center justify-between shadow-m3-1">
     <div class="flex items-center gap-2.5">
-      <button id="mobileNavToggle" onclick="toggleMobileNav()" class="lg:hidden p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] transition-colors" title="Menu">
-        <span class="material-symbols-outlined text-[20px]">menu</span>
+      <button aria-label="Menu" id="mobileNavToggle" onclick="toggleMobileNav()" class="lg:hidden p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] transition-colors" title="Menu">
+        <span aria-hidden="true" class="material-symbols-outlined text-[20px]">menu</span>
       </button>
 
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-m3-1">
-          <span class="material-symbols-outlined text-[20px]">graphic_eq</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[20px]">graphic_eq</span>
         </div>
         <div>
           <div class="flex items-center gap-1.5">
@@ -109,7 +110,7 @@
 
       <!-- Quick Preset Dropdown -->
       <div class="relative hidden sm:block">
-        <select id="presetSelector" onchange="applyPreset(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-lg px-2.5 py-1 focus:outline-none focus:border-purple-500 cursor-pointer">
+        <select id="presetSelector" aria-label="Cấu hình nhanh" onchange="applyPreset(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded-lg px-2.5 py-1 focus:outline-none focus:border-purple-500 cursor-pointer">
           <option value="default">⚡ Cấu hình: Mặc định</option>
           <option value="news">📰 Đọc tin tức</option>
           <option value="story">📖 Kể chuyện</option>
@@ -121,7 +122,7 @@
       <!-- Notifications Button & Dropdown -->
       <div class="relative">
         <button id="notificationsToggle" onclick="toggleNotificationsPanel()" class="relative p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Thông báo sự kiện (Real-time Events)">
-          <span id="notificationsBellIcon" class="material-symbols-outlined text-[18px]">notifications</span>
+          <span aria-hidden="true" id="notificationsBellIcon" class="material-symbols-outlined text-[18px]">notifications</span>
           <span id="notificationsBadge" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500 animate-ping"></span>
           <span id="notificationsCount" class="hidden absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 text-[9px] font-bold bg-purple-600 text-white rounded-full flex items-center justify-center border border-[#18151E]">0</span>
         </button>
@@ -130,20 +131,20 @@
         <div id="notificationsPanel" class="hidden absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#18151E] border border-[#3F3A46] rounded-xl shadow-m3-3 z-50 overflow-hidden text-xs">
           <div class="px-3.5 py-2.5 bg-[#231F2A] border-b border-[#3F3A46] flex items-center justify-between">
             <div class="flex items-center gap-1.5 font-bold text-white">
-              <span id="notifHeaderIcon" class="material-symbols-outlined text-purple-400 text-[18px]">notifications_active</span>
+              <span aria-hidden="true" id="notifHeaderIcon" class="material-symbols-outlined text-purple-400 text-[18px]">notifications_active</span>
               <span>Sự kiện & Thông báo</span>
               <span id="notifTotalBadge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-600/30 text-purple-300 border border-purple-500/40 font-mono">0</span>
             </div>
             <div class="flex items-center gap-1">
               <button onclick="clearAllNotifications()" class="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-[#18151E] transition-colors cursor-pointer">Xóa hết</button>
-              <button onclick="toggleNotificationsPanel()" class="p-1 text-slate-400 hover:text-white rounded hover:bg-[#18151E] cursor-pointer">
-                <span class="material-symbols-outlined text-[16px]">close</span>
+              <button aria-label="Đóng bảng thông báo" onclick="toggleNotificationsPanel()" class="p-1 text-slate-400 hover:text-white rounded hover:bg-[#18151E] cursor-pointer">
+                <span aria-hidden="true" class="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
           </div>
           <div id="notificationsList" class="max-h-80 overflow-y-auto divide-y divide-[#3F3A46]/40 p-1">
             <div id="notificationsEmpty" class="py-8 text-center text-slate-500 space-y-1">
-              <span class="material-symbols-outlined text-[28px] text-slate-600">notifications_paused</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[28px] text-slate-600">notifications_paused</span>
               <p class="text-xs">Chưa có thông báo sự kiện nào</p>
             </div>
           </div>
@@ -151,13 +152,13 @@
       </div>
 
       <!-- Theme Switcher -->
-      <button id="themeToggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Chuyển chế độ Sáng/Tối">
-        <span id="themeIcon" class="material-symbols-outlined text-[18px]">dark_mode</span>
+      <button aria-label="Chuyển chế độ Sáng/Tối" id="themeToggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Chuyển chế độ Sáng/Tối">
+        <span aria-hidden="true" id="themeIcon" class="material-symbols-outlined text-[18px]">dark_mode</span>
       </button>
 
       <!-- Help / Shortcuts -->
-      <button onclick="openShortcutsModal()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Bảng phím tắt (F1)">
-        <span class="material-symbols-outlined text-[18px]">keyboard</span>
+      <button aria-label="Bảng phím tắt (F1)" onclick="openShortcutsModal()" class="p-1.5 rounded-lg text-slate-300 hover:bg-[#231F2A] hover:text-white transition-colors cursor-pointer" title="Bảng phím tắt (F1)">
+        <span aria-hidden="true" class="material-symbols-outlined text-[18px]">keyboard</span>
       </button>
     </div>
   </header>
@@ -172,55 +173,55 @@
       <nav class="space-y-1 mt-12 lg:mt-0">
         <!-- 1. TTS Studio -->
         <button onclick="switchTab('tts')" data-tab="tts" class="nav-btn active w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-purple-600 text-white font-bold text-xs shadow-m3-1 transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">record_voice_over</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">record_voice_over</span>
           <span>TTS Studio</span>
         </button>
 
         <!-- 2. Batch Studio -->
         <button onclick="switchTab('batch')" data-tab="batch" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">auto_stories</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">auto_stories</span>
           <span>Batch Studio</span>
         </button>
 
         <!-- 3. Multilingual -->
         <button onclick="switchTab('multilingual')" data-tab="multilingual" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">translate</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">translate</span>
           <span>Multilingual TTS</span>
         </button>
 
         <!-- 4. Voice Conversion -->
         <button onclick="switchTab('vc')" data-tab="vc" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">sync_alt</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">sync_alt</span>
           <span>Voice Clone (VC)</span>
         </button>
 
         <!-- 5. Director Console (absorbs the former "Dự án âm thanh" idea-to-script planner as a create-mode) -->
         <button onclick="switchTab('director')" data-tab="director" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">movie_edit</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">movie_edit</span>
           <span>Director Console</span>
         </button>
 
         <!-- 6. Characters -->
         <button onclick="switchTab('characters')" data-tab="characters" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">face</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">face</span>
           <span>Nhân vật (Voices)</span>
         </button>
 
         <!-- 6. History -->
         <button onclick="switchTab('history')" data-tab="history" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">history</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">history</span>
           <span>Lịch sử âm thanh</span>
         </button>
 
         <!-- 7. Connect MCP -->
         <button onclick="switchTab('mcp')" data-tab="mcp" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">integration_instructions</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">integration_instructions</span>
           <span>Kết nối MCP</span>
         </button>
 
         <!-- 8. Feedback / Known Issues -->
         <button onclick="switchTab('feedback')" data-tab="feedback" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">bug_report</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">bug_report</span>
           <span>Feedback</span>
         </button>
       </nav>
@@ -228,7 +229,7 @@
       <!-- Bottom Pinned Section: 7. Settings & Model -->
       <div class="mt-auto pt-2 border-t border-[#3F3A46] space-y-1.5">
         <button onclick="switchTab('settings')" data-tab="settings" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-[#231F2A] hover:text-white text-xs font-medium transition-all cursor-pointer">
-          <span class="material-symbols-outlined text-[19px]">settings</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[19px]">settings</span>
           <span>Cài đặt & Model</span>
         </button>
         <div class="text-center pt-0.5">
@@ -252,18 +253,18 @@
         <div class="h-11 bg-[#18151E] rounded-xl px-3 border border-[#3F3A46] shadow-m3-1 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2" title="Mô hình AI: Chatterbox Turbo (350M - Tốc độ cao, hỗ trợ Tags cảm xúc)">
             <div class="p-1 rounded-md bg-purple-600/20 text-purple-300 border border-purple-500/30">
-              <span class="material-symbols-outlined text-[16px]">smart_toy</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">smart_toy</span>
             </div>
             <span id="modelDescHint" class="text-xs font-bold text-white truncate max-w-[200px] sm:max-w-none">Chatterbox Turbo (350M)</span>
           </div>
           <div class="flex items-center gap-1.5">
-            <select id="ttsQualityPreset" onchange="applyQualityPreset(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-purple-300 rounded px-2 py-1 font-medium cursor-pointer" title="Chọn nhanh Preset chất lượng">
+            <select id="ttsQualityPreset" aria-label="Preset chất lượng" onchange="applyQualityPreset(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-purple-300 rounded px-2 py-1 font-medium cursor-pointer" title="Chọn nhanh Preset chất lượng">
               <option value="">🎯 Preset: Tự chỉnh</option>
               <option value="fast">⚡ Siêu Nhanh (Nano)</option>
               <option value="balanced">⚖️ Cân Bằng</option>
               <option value="expressive">🎭 Biểu Cảm</option>
             </select>
-            <select id="ttsModelSelect" onchange="handleModelChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded px-2 py-1 focus:outline-none focus:border-purple-500 cursor-pointer font-medium">
+            <select id="ttsModelSelect" aria-label="Mô hình TTS" onchange="handleModelChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded px-2 py-1 focus:outline-none focus:border-purple-500 cursor-pointer font-medium">
               <option value="nano">⚡ Nano (110M)</option>
               <option value="turbo">🚀 Turbo (350M)</option>
               <option value="standard">⭐ Standard (500M)</option>
@@ -273,11 +274,11 @@
               <label for="chkLongTextMode" class="text-slate-300 cursor-pointer font-medium text-[11px]">Nối dài</label>
             </div>
             <button onclick="preloadCurrentModel()" class="px-2 py-1 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1 cursor-pointer" title="Nạp sẵn Model vào VRAM">
-              <span class="material-symbols-outlined text-[14px]">download</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[14px]">download</span>
               <span class="hidden md:inline">Nạp</span>
             </button>
-            <button onclick="openModelCompareModal()" class="p-1 rounded bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs font-bold text-purple-300 hover:text-white flex items-center cursor-pointer" title="So sánh các model">
-              <span class="material-symbols-outlined text-[15px]">info</span>
+            <button aria-label="So sánh các model" onclick="openModelCompareModal()" class="p-1 rounded bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs font-bold text-purple-300 hover:text-white flex items-center cursor-pointer" title="So sánh các model">
+              <span aria-hidden="true" class="material-symbols-outlined text-[15px]">info</span>
             </button>
           </div>
         </div>
@@ -292,15 +293,15 @@
             <div class="bg-[#18151E] rounded-xl p-2.5 sm:p-3 border border-[#3F3A46] shadow-m3-1 space-y-2">
               <div class="flex items-center justify-between gap-1.5">
                 <div class="flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-purple-400 text-[18px]">edit_note</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px]">edit_note</span>
                   <h2 class="text-xs font-bold uppercase tracking-wider text-white">Văn bản cần phát âm</h2>
                 </div>
                 <div class="flex items-center gap-1">
                   <button onclick="document.getElementById('importTextInput').click()" class="text-[11px] text-purple-300 hover:text-white px-2 py-0.5 rounded bg-[#231F2A] border border-[#3F3A46] flex items-center gap-0.5 cursor-pointer" title="Nhập file văn bản (.txt, .md, .srt)">
-                    <span class="material-symbols-outlined text-[13px]">file_open</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[13px]">file_open</span>
                     <span>Nhập file</span>
                   </button>
-                  <input type="file" id="importTextInput" accept=".txt,.md,.srt" class="hidden" onchange="handleImportTextFile(this)">
+                  <input type="file" id="importTextInput" aria-label="Nhập file văn bản" accept=".txt,.md,.srt" class="hidden" onchange="handleImportTextFile(this)">
                   <button onclick="cleanPromptText()" class="text-[11px] text-purple-300 hover:text-white px-2 py-0.5 rounded bg-[#231F2A] border border-[#3F3A46] transition-colors cursor-pointer" title="Xóa khoảng trắng thừa">✨ Clean</button>
                   <button onclick="sendToBatchStudio()" class="text-[11px] text-purple-300 hover:text-white px-2 py-0.5 rounded bg-[#231F2A] border border-[#3F3A46] transition-colors cursor-pointer" title="Chuyển sang Batch Studio">➡️ Batch</button>
                   <button onclick="clearPromptText()" class="text-[11px] text-slate-400 hover:text-red-400 px-2 py-0.5 rounded bg-[#231F2A] border border-[#3F3A46] transition-colors cursor-pointer">Xóa</button>
@@ -309,7 +310,7 @@
 
               <!-- Textarea height ~95px -->
               <div class="relative">
-                <textarea id="promptInput" rows="3" placeholder="Nhập văn bản hoặc kéo thả file text (.txt, .md, .srt) vào đây..." class="w-full h-[95px] bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2 text-xs sm:text-sm focus:outline-none transition-all resize-none leading-relaxed font-sans">Hello there! Welcome to Chatterbox TTS Studio [chuckle]. This model supports high quality zero-shot voice cloning.</textarea>
+                <textarea id="promptInput" aria-label="Văn bản cần phát âm" rows="3" placeholder="Nhập văn bản hoặc kéo thả file text (.txt, .md, .srt) vào đây..." class="w-full h-[95px] bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2 text-xs sm:text-sm focus:outline-none transition-all resize-none leading-relaxed font-sans">Hello there! Welcome to Chatterbox TTS Studio [chuckle]. This model supports high quality zero-shot voice cloning.</textarea>
                 <div class="flex justify-between items-center text-[10px] text-slate-400 pt-0.5 px-0.5">
                   <span class="hidden sm:inline">💡 Kéo thả file text trực tiếp</span>
                   <span id="charCount" class="font-mono text-purple-300 font-bold ml-auto">107 / 4000 ký tự</span>
@@ -340,9 +341,9 @@
             <div class="bg-[#18151E] rounded-xl p-2.5 sm:p-3 border border-[#3F3A46] shadow-m3-1 space-y-2">
               <div class="flex flex-wrap items-center justify-between gap-1.5">
                 <div class="flex items-center gap-1.5 flex-1 min-w-[220px]">
-                  <span class="material-symbols-outlined text-purple-400 text-[18px]">mic</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px]">mic</span>
                   <span class="text-xs font-bold text-white uppercase tracking-wider shrink-0">Giọng:</span>
-                  <select id="ttsCharacterSelect" onchange="handleTtsCharacterSelect(this.value)" class="flex-1 bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-1.5 text-xs font-medium cursor-pointer">
+                  <select id="ttsCharacterSelect" aria-label="Giọng" onchange="handleTtsCharacterSelect(this.value)" class="flex-1 bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-1.5 text-xs font-medium cursor-pointer">
                     <option value="">-- Mặc định (Default Speaker) --</option>
                     <optgroup label="🎙️ Thư viện Giọng có sẵn (Built-in)">
                       <option value="builtin:mc_male">🎙️ MC Nam Thời Sự (Trầm ấm)</option>
@@ -359,20 +360,20 @@
                 <!-- Quick Action Buttons -->
                 <div class="flex items-center gap-1 shrink-0">
                   <button type="button" onclick="previewCurrentVoice()" id="btnPreviewVoice" class="px-2 py-1 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-purple-300 hover:text-white text-xs font-medium flex items-center gap-0.5 cursor-pointer" title="Nghe thử giọng đang chọn">
-                    <span class="material-symbols-outlined text-[14px]">volume_up</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[14px]">volume_up</span>
                     <span class="hidden sm:inline">Nghe thử</span>
                   </button>
                   <button type="button" id="micRecordBtn" onclick="toggleMicRecording()" class="px-2 py-1 rounded-lg bg-[#231F2A] hover:bg-red-600 border border-[#3F3A46] text-white text-xs font-medium flex items-center gap-0.5 cursor-pointer transition-colors" title="Ghi âm giọng mẫu từ Micro">
-                    <span id="micIcon" class="material-symbols-outlined text-[14px] text-red-400">mic</span>
+                    <span aria-hidden="true" id="micIcon" class="material-symbols-outlined text-[14px] text-red-400">mic</span>
                     <span id="micLabel" class="hidden sm:inline">Ghi âm</span>
                   </button>
                   <button type="button" onclick="document.getElementById('refAudioInput').click()" class="px-2 py-1 rounded-lg bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-slate-200 hover:text-white text-xs font-medium flex items-center gap-0.5 cursor-pointer" title="Tải file audio mẫu">
-                    <span class="material-symbols-outlined text-[14px] text-purple-400">upload_file</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[14px] text-purple-400">upload_file</span>
                     <span class="hidden sm:inline">Tải file</span>
                   </button>
-                  <input type="file" id="refAudioInput" accept="audio/*" class="hidden" onchange="handleAudioUpload(this)">
-                  <button type="button" onclick="openCreateCharacterModal(true)" class="p-1 rounded-lg bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white text-xs cursor-pointer" title="Lưu thông số & giọng này thành Nhân vật">
-                    <span class="material-symbols-outlined text-[16px]">add_circle</span>
+                  <input type="file" id="refAudioInput" aria-label="Tải file giọng mẫu" accept="audio/*" class="hidden" onchange="handleAudioUpload(this)">
+                  <button aria-label="Lưu thông số & giọng này thành Nhân vật" type="button" onclick="openCreateCharacterModal(true)" class="p-1 rounded-lg bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white text-xs cursor-pointer" title="Lưu thông số & giọng này thành Nhân vật">
+                    <span aria-hidden="true" class="material-symbols-outlined text-[16px]">add_circle</span>
                   </button>
                   <div class="hidden sm:flex items-center gap-1 pl-1">
                     <input type="checkbox" id="useDefaultCharChk" onchange="toggleUseDefaultChar(this.checked)" class="w-3.5 h-3.5 rounded text-amber-500 bg-[#0E0C12] border-[#3F3A46] focus:ring-amber-400 cursor-pointer">
@@ -384,17 +385,17 @@
               <!-- Selected Custom Audio File Pill (if uploaded) -->
               <div id="refAudioCard" class="hidden flex items-center justify-between p-1.5 px-2.5 rounded-lg bg-[#231F2A] border border-[#3F3A46]">
                 <div class="flex items-center gap-2">
-                  <span class="material-symbols-outlined text-purple-400 text-[16px]">audiotrack</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">audiotrack</span>
                   <span id="refAudioName" class="text-xs font-bold text-white truncate max-w-[200px]">sample_voice.wav</span>
                   <span class="text-[10px] font-mono text-purple-300 bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-800">Voice Prompt</span>
                 </div>
                 <div class="flex items-center gap-1">
                   <button onclick="openTrimmerModal()" class="px-2 py-0.5 rounded bg-[#18151E] hover:bg-purple-600 text-[11px] font-medium text-slate-300 hover:text-white border border-[#3F3A46] flex items-center gap-0.5 cursor-pointer">
-                    <span class="material-symbols-outlined text-[12px]">content_cut</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[12px]">content_cut</span>
                     <span>Cắt</span>
                   </button>
-                  <button onclick="removeRefAudio()" class="p-0.5 text-red-400 hover:text-red-300 cursor-pointer" title="Xóa file mẫu">
-                    <span class="material-symbols-outlined text-[16px]">close</span>
+                  <button aria-label="Xóa file mẫu" onclick="removeRefAudio()" class="p-0.5 text-red-400 hover:text-red-300 cursor-pointer" title="Xóa file mẫu">
+                    <span aria-hidden="true" class="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
               </div>
@@ -406,7 +407,7 @@
             <details id="accordionParams" class="group bg-[#18151E] rounded-xl border border-[#3F3A46] shadow-m3-1 overflow-hidden transition-all">
               <summary class="p-2.5 sm:px-3 flex items-center justify-between cursor-pointer list-none select-none hover:bg-[#231F2A]/60 transition-colors">
                 <div class="flex items-center gap-2">
-                  <span class="material-symbols-outlined text-purple-400 text-[18px] transform group-open:rotate-90 transition-transform">chevron_right</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px] transform group-open:rotate-90 transition-transform">chevron_right</span>
                   <span class="text-xs font-bold uppercase tracking-wider text-white">Tùy chỉnh tham số giọng</span>
                 </div>
                 <div class="flex items-center gap-2">
@@ -435,28 +436,28 @@
                       <span class="text-slate-300 font-medium">Biểu cảm (Exaggeration):</span>
                       <span id="valExaggeration" class="font-mono text-purple-300 font-bold">0.50</span>
                     </div>
-                    <input type="range" id="sliderExaggeration" min="0.20" max="1.80" step="0.05" value="0.50" class="w-full">
+                    <input type="range" id="sliderExaggeration" aria-label="Biểu cảm (Exaggeration)" min="0.20" max="1.80" step="0.05" value="0.50" class="w-full">
                   </div>
                   <div class="space-y-0.5">
                     <div class="flex justify-between">
                       <span class="text-slate-300 font-medium">Nhịp đọc (Pace / CFG):</span>
                       <span id="valPace" class="font-mono text-purple-300 font-bold">0.50</span>
                     </div>
-                    <input type="range" id="sliderPace" min="0.10" max="1.00" step="0.05" value="0.50" class="w-full">
+                    <input type="range" id="sliderPace" aria-label="Nhịp đọc (Pace / CFG)" min="0.10" max="1.00" step="0.05" value="0.50" class="w-full">
                   </div>
                   <div class="space-y-0.5">
                     <div class="flex justify-between">
                       <span class="text-slate-300 font-medium">Nhiệt độ (Temperature):</span>
                       <span id="valTemp" class="font-mono text-purple-300 font-bold">0.80</span>
                     </div>
-                    <input type="range" id="sliderTemp" min="0.10" max="2.00" step="0.05" value="0.80" class="w-full">
+                    <input type="range" id="sliderTemp" aria-label="Nhiệt độ (Temperature)" min="0.10" max="2.00" step="0.05" value="0.80" class="w-full">
                   </div>
                   <div class="space-y-0.5">
                     <div class="flex justify-between">
                       <span class="text-slate-300 font-medium">Lọc mẫu (Min-P):</span>
                       <span id="valMinP" class="font-mono text-purple-300 font-bold">0.05</span>
                     </div>
-                    <input type="range" id="sliderMinP" min="0.00" max="0.50" step="0.01" value="0.05" class="w-full">
+                    <input type="range" id="sliderMinP" aria-label="Lọc mẫu (Min-P)" min="0.00" max="0.50" step="0.01" value="0.05" class="w-full">
                   </div>
                 </div>
 
@@ -467,14 +468,14 @@
                       <span class="text-slate-400">Seed ngẫu nhiên:</span>
                       <button onclick="randomizeSeed()" class="text-purple-400 hover:underline cursor-pointer">🎲 Random</button>
                     </div>
-                    <input type="number" id="seedInput" value="0" min="0" max="99999999" class="w-full bg-[#18151E] text-white border border-[#3F3A46] focus:border-purple-500 rounded p-1 font-mono text-xs">
+                    <input type="number" id="seedInput" aria-label="Seed ngẫu nhiên" value="0" min="0" max="99999999" class="w-full bg-[#18151E] text-white border border-[#3F3A46] focus:border-purple-500 rounded p-1 font-mono text-xs">
                   </div>
                   <div class="space-y-0.5">
                     <div class="flex justify-between text-[10px]">
                       <span class="text-slate-400">Tốc độ phát:</span>
                       <span id="valSpeed" class="font-mono text-purple-300 font-bold">1.0x</span>
                     </div>
-                    <input type="range" id="sliderSpeed" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full" oninput="handleSpeedChange(this.value)">
+                    <input type="range" id="sliderSpeed" aria-label="Tốc độ phát" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full" oninput="handleSpeedChange(this.value)">
                   </div>
                   <div class="flex items-center gap-1.5 pt-2 sm:pt-3">
                     <input type="checkbox" id="chkNormalize" checked class="w-3.5 h-3.5 rounded text-purple-600 bg-[#0E0C12] border-[#3F3A46] focus:ring-purple-500 cursor-pointer">
@@ -487,7 +488,7 @@
             <!-- Block 4: Sticky Generate Button & Live Progress -->
             <div class="sticky bottom-0 bg-[#0E0C12]/90 backdrop-blur-md pt-1 pb-1 border-t border-[#3F3A46]/40 z-10 space-y-1.5">
               <button id="generateBtn" onclick="triggerSynthesis()" class="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-m3-2 transition-all cursor-pointer">
-                <span class="material-symbols-outlined text-[18px]">play_circle</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[18px]">play_circle</span>
                 <span>SINH GIỌNG NÓI (Ctrl + Enter)</span>
               </button>
 
@@ -502,7 +503,7 @@
                 </div>
                 <div class="flex justify-end pt-0.5">
                   <button id="ttsCancelJobBtn" onclick="cancelCurrentJob()" class="px-2 py-0.5 rounded bg-red-600/20 hover:bg-red-600 text-[11px] font-medium text-red-300 hover:text-white border border-red-500/40 flex items-center gap-1 cursor-pointer transition-all">
-                    <span class="material-symbols-outlined text-[12px]">cancel</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[12px]">cancel</span>
                     <span>Hủy</span>
                   </button>
                 </div>
@@ -518,7 +519,7 @@
             <div class="bg-[#18151E] rounded-xl p-2.5 sm:p-3 border border-[#3F3A46] shadow-m3-1 space-y-2">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-purple-400 text-[17px]">graphic_eq</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[17px]">graphic_eq</span>
                   <h2 class="text-xs font-bold uppercase tracking-wider text-white">Kết quả âm thanh (Audio Stage)</h2>
                 </div>
                 <span id="playbackTimer" class="font-mono text-[11px] font-bold text-purple-300 bg-[#231F2A] px-2 py-0.5 rounded border border-[#3F3A46]">00:00 / 00:00</span>
@@ -528,7 +529,7 @@
               <div class="bg-[#0E0C12] rounded-lg p-1.5 border border-[#3F3A46] relative overflow-hidden">
                 <canvas id="waveformCanvas" onclick="seekWaveform(event)" class="w-full h-16 rounded cursor-pointer"></canvas>
                 <div id="waveformPlaceholder" class="absolute inset-0 flex items-center justify-center gap-1.5 p-2 bg-[#0E0C12]/90 text-center">
-                  <span class="material-symbols-outlined text-slate-500 text-[18px]">hearing</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-slate-500 text-[18px]">hearing</span>
                   <span class="text-xs text-slate-400 font-medium">Nhấn 'Sinh giọng nói' để render audio</span>
                 </div>
               </div>
@@ -537,31 +538,31 @@
               <div class="flex items-center justify-between gap-1.5 pt-0.5">
                 <div class="flex items-center gap-1">
                   <!-- Play / Pause -->
-                  <button id="btnPlayPause" onclick="togglePlayPause()" class="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-m3-1 hover:bg-purple-700 transition-all cursor-pointer" disabled title="Phát/Tạm dừng">
-                    <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                  <button aria-label="Phát/Tạm dừng" id="btnPlayPause" onclick="togglePlayPause()" class="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-m3-1 hover:bg-purple-700 transition-all cursor-pointer" disabled title="Phát/Tạm dừng">
+                    <span aria-hidden="true" class="material-symbols-outlined text-[18px]">play_arrow</span>
                   </button>
                   <!-- Stop -->
-                  <button id="btnStop" onclick="stopAudio()" class="w-7 h-7 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-white flex items-center justify-center transition-colors cursor-pointer" disabled title="Dừng">
-                    <span class="material-symbols-outlined text-[15px]">stop</span>
+                  <button aria-label="Dừng" id="btnStop" onclick="stopAudio()" class="w-7 h-7 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-white flex items-center justify-center transition-colors cursor-pointer" disabled title="Dừng">
+                    <span aria-hidden="true" class="material-symbols-outlined text-[15px]">stop</span>
                   </button>
                 </div>
 
                 <!-- Volume Slider -->
                 <div class="flex items-center gap-1 flex-1 max-w-[85px]">
-                  <span class="material-symbols-outlined text-slate-400 text-[15px]">volume_up</span>
-                  <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1" class="w-full">
+                  <span aria-hidden="true" class="material-symbols-outlined text-slate-400 text-[15px]">volume_up</span>
+                  <input type="range" id="volSlider" aria-label="Âm lượng" min="0" max="1" step="0.05" value="1" class="w-full">
                 </div>
 
                 <!-- Export Format Selector & Download -->
                 <div class="flex items-center gap-1">
-                  <select id="exportFormatSelect" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded px-1.5 py-1 cursor-pointer">
+                  <select id="exportFormatSelect" aria-label="Định dạng xuất" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded px-1.5 py-1 cursor-pointer">
                     <option value="wav">WAV</option>
                     <option value="mp3">MP3</option>
                     <option value="flac">FLAC</option>
                     <option value="ogg">OGG</option>
                   </select>
-                  <button id="btnDownload" onclick="downloadCurrentWav()" class="p-1 rounded-full bg-[#231F2A] hover:bg-purple-600 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Tải file âm thanh" disabled>
-                    <span class="material-symbols-outlined text-[17px]">download</span>
+                  <button aria-label="Tải file âm thanh" id="btnDownload" onclick="downloadCurrentWav()" class="p-1 rounded-full bg-[#231F2A] hover:bg-purple-600 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Tải file âm thanh" disabled>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[17px]">download</span>
                   </button>
                 </div>
               </div>
@@ -570,7 +571,7 @@
               <div id="benchmarkBadge" class="hidden p-1.5 rounded-lg bg-purple-950/30 border border-purple-500/30 text-xs space-y-0.5">
                 <div class="flex items-center justify-between font-mono text-purple-300 font-bold text-[11px]">
                   <span class="flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[13px] text-amber-400">bolt</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[13px] text-amber-400">bolt</span>
                     <span id="bmSpeedText">Nhanh hơn 2.8x</span>
                   </span>
                   <span id="bmRtfText" class="text-[10px] text-slate-400 font-mono">RTF: 0.35</span>
@@ -599,13 +600,13 @@
             <div class="bg-[#18151E] rounded-xl p-2.5 sm:p-3 border border-[#3F3A46] shadow-m3-1 space-y-2">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-purple-400 text-[17px]">queue_music</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[17px]">queue_music</span>
                   <h2 class="text-xs font-bold uppercase tracking-wider text-white">Lịch sử gần đây</h2>
                 </div>
                 <div class="flex items-center gap-2 text-xs">
-                  <button onclick="refreshHistory()" class="text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer text-[11px]">
-                    <span class="material-symbols-outlined text-[13px]">refresh</span>
-                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                  <button aria-label="Làm mới lịch sử" onclick="refreshHistory()" class="text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer text-[11px]">
+                    <span aria-hidden="true" class="material-symbols-outlined text-[13px]">refresh</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[13px]">arrow_forward</span>
                   </button>
                 </div>
               </div>
@@ -630,7 +631,7 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div class="flex items-center gap-2.5">
               <div class="p-2 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
-                <span class="material-symbols-outlined text-[20px]">auto_stories</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[20px]">auto_stories</span>
               </div>
               <div>
                 <div class="flex items-center gap-2">
@@ -642,22 +643,22 @@
             </div>
             <div class="flex items-center gap-1.5 flex-wrap">
               <button type="button" onclick="loadBatchSampleScript()" class="px-2.5 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-xs font-medium text-purple-300 hover:text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer" title="Nạp kịch bản mẫu đối thoại đa nhân vật">
-                <span class="material-symbols-outlined text-[15px]">auto_fix_high</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[15px]">auto_fix_high</span>
                 <span>Mẫu kịch bản</span>
               </button>
               <button type="button" onclick="toggleBatchSearchReplace()" class="px-2.5 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-xs font-medium text-slate-300 hover:text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer" title="Tìm kiếm & Thay thế từ trong kịch bản">
-                <span class="material-symbols-outlined text-[15px]">find_replace</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[15px]">find_replace</span>
                 <span>Tìm & Thay thế</span>
               </button>
               <button type="button" onclick="openBatchProjectModal()" class="px-2.5 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-xs font-medium text-slate-300 hover:text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer" title="Quản lý lưu / mở dự án Batch">
-                <span class="material-symbols-outlined text-[15px]">folder</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[15px]">folder</span>
                 <span>Dự án</span>
               </button>
               <button type="button" onclick="document.getElementById('batchFileInput').click()" class="px-2.5 py-1.5 rounded-lg bg-[#231F2A] hover:bg-purple-600 text-xs font-bold text-white border border-[#3F3A46] transition-colors flex items-center gap-1 cursor-pointer" title="Nhập file .txt, .srt, .vtt, .csv, .md">
-                <span class="material-symbols-outlined text-[15px]">upload_file</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[15px]">upload_file</span>
                 <span>Nhập file</span>
               </button>
-              <input type="file" id="batchFileInput" accept=".txt,.csv,.srt,.vtt,.md" class="hidden" onchange="handleBatchFileUpload(this)">
+              <input type="file" id="batchFileInput" aria-label="Nhập file kịch bản" accept=".txt,.csv,.srt,.vtt,.md" class="hidden" onchange="handleBatchFileUpload(this)">
             </div>
           </div>
 
@@ -667,19 +668,19 @@
               <div class="flex items-center gap-2 flex-1 min-w-[280px]">
                 <div class="flex items-center gap-1 flex-1">
                   <span class="text-[11px] text-slate-400 font-medium">Tìm:</span>
-                  <input type="text" id="batchFindInput" placeholder="Từ / cụm từ cần tìm..." class="w-full bg-[#18151E] border border-[#3F3A46] focus:border-purple-500 rounded px-2 py-1 text-xs text-white focus:outline-none">
+                  <input type="text" id="batchFindInput" aria-label="Tìm" placeholder="Từ / cụm từ cần tìm..." class="w-full bg-[#18151E] border border-[#3F3A46] focus:border-purple-500 rounded px-2 py-1 text-xs text-white focus:outline-none">
                 </div>
                 <div class="flex items-center gap-1 flex-1">
                   <span class="text-[11px] text-slate-400 font-medium">Thay:</span>
-                  <input type="text" id="batchReplaceInput" placeholder="Thay thế bằng..." class="w-full bg-[#18151E] border border-[#3F3A46] focus:border-purple-500 rounded px-2 py-1 text-xs text-white focus:outline-none">
+                  <input type="text" id="batchReplaceInput" aria-label="Thay thế bằng" placeholder="Thay thế bằng..." class="w-full bg-[#18151E] border border-[#3F3A46] focus:border-purple-500 rounded px-2 py-1 text-xs text-white focus:outline-none">
                 </div>
               </div>
               <div class="flex items-center gap-1.5">
                 <button type="button" onclick="batchFindNext()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-xs text-slate-200 cursor-pointer">Tìm tiếp</button>
                 <button type="button" onclick="batchReplaceCurrent()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-xs text-slate-200 cursor-pointer">Thay thế</button>
                 <button type="button" onclick="batchReplaceAll()" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer">Thay tất cả</button>
-                <button type="button" onclick="toggleBatchSearchReplace()" class="p-1 rounded text-slate-400 hover:text-white cursor-pointer" title="Đóng">
-                  <span class="material-symbols-outlined text-[16px]">close</span>
+                <button aria-label="Đóng" type="button" onclick="toggleBatchSearchReplace()" class="p-1 rounded text-slate-400 hover:text-white cursor-pointer" title="Đóng">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">close</span>
                 </button>
               </div>
             </div>
@@ -688,7 +689,7 @@
 
           <!-- Batch Textarea with Drag & Drop -->
           <div class="space-y-1">
-            <textarea id="batchTextarea" rows="4" oninput="handleBatchTextareaInput()" placeholder="Dán nội dung kịch bản hoặc kéo thả file (.txt, .srt, .vtt, .csv, .md) vào đây...&#10;Hỗ trợ nhận dạng thoại nhân vật tự động:&#10;[Narrator]: Ngày xửa ngày xưa, ở một ngôi làng nhỏ...&#10;[Sarah]: Xin chào mọi người, hôm nay chúng ta bắt đầu cuộc phiêu lưu!" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 text-xs sm:text-sm focus:outline-none transition-all resize-none font-sans leading-relaxed"></textarea>
+            <textarea id="batchTextarea" aria-label="Nội dung kịch bản" rows="4" oninput="handleBatchTextareaInput()" placeholder="Dán nội dung kịch bản hoặc kéo thả file (.txt, .srt, .vtt, .csv, .md) vào đây...&#10;Hỗ trợ nhận dạng thoại nhân vật tự động:&#10;[Narrator]: Ngày xửa ngày xưa, ở một ngôi làng nhỏ...&#10;[Sarah]: Xin chào mọi người, hôm nay chúng ta bắt đầu cuộc phiêu lưu!" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 text-xs sm:text-sm focus:outline-none transition-all resize-none font-sans leading-relaxed"></textarea>
             <div class="flex items-center justify-between text-[10px] text-slate-500 px-0.5">
               <span>💡 Kéo thả trực tiếp file .txt, .csv, .srt, .vtt, .md vào khung trên • Cú pháp: [Tên nhân vật]: Lời thoại</span>
               <span id="batchTextareaWordCount" class="font-mono text-slate-400">0 từ • 0 ký tự</span>
@@ -701,7 +702,7 @@
               <!-- Model Selector for Batch -->
               <div class="flex items-center gap-1">
                 <span class="text-slate-400 font-medium">Model:</span>
-                <select id="batchModelSelect" onchange="updateBatchEstimation()" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-purple-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
+                <select id="batchModelSelect" aria-label="Model" onchange="updateBatchEstimation()" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-purple-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
                   <option value="auto">Auto (Khuyến nghị - Tự động theo phần cứng)</option>
                   <option value="nano">Nano (110M - Siêu nhẹ, an toàn RAM)</option>
                   <option value="turbo">Turbo (350M - Hỗ trợ tags cảm xúc)</option>
@@ -713,7 +714,7 @@
               <!-- Split Rule -->
               <div class="flex items-center gap-1">
                 <span class="text-slate-400 font-medium">Tách:</span>
-                <select id="batchSplitRule" onchange="handleBatchSplitRuleChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded px-2 py-1 focus:outline-none cursor-pointer">
+                <select id="batchSplitRule" aria-label="Quy tắc tách" onchange="handleBatchSplitRuleChange(this.value)" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-white rounded px-2 py-1 focus:outline-none cursor-pointer">
                   <option value="line">Theo dòng (Line break)</option>
                   <option value="sentence">Theo câu (Sentences)</option>
                   <option value="paragraph">Theo đoạn (Paragraph)</option>
@@ -723,18 +724,18 @@
 
               <div id="batchCustomDelimiterBox" class="hidden flex items-center gap-1">
                 <span class="text-slate-400">Ký tự:</span>
-                <input type="text" id="batchCustomDelimiter" value="|" placeholder="Ví dụ: |" class="bg-[#18151E] border border-purple-500 rounded px-1.5 py-0.5 text-xs text-white w-16 font-mono">
+                <input type="text" id="batchCustomDelimiter" aria-label="Ký tự tách" value="|" placeholder="Ví dụ: |" class="bg-[#18151E] border border-purple-500 rounded px-1.5 py-0.5 text-xs text-white w-16 font-mono">
               </div>
 
               <button type="button" onclick="parseBatchLines()" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 font-bold text-white flex items-center gap-1 cursor-pointer" title="Phân tích văn bản thành các dòng thoại và map nhân vật">
-                <span class="material-symbols-outlined text-[15px]">splitscreen</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[15px]">splitscreen</span>
                 <span>Phân tích</span>
               </button>
 
               <!-- Global Voice / Style Preset Select -->
               <div class="flex items-center gap-1.5 pl-2 border-l border-[#3F3A46]">
                 <span class="text-slate-400 font-medium">Giọng chung:</span>
-                <select id="batchGlobalVoiceSelect" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-purple-300 rounded px-2 py-1 focus:outline-none cursor-pointer max-w-[170px] truncate">
+                <select id="batchGlobalVoiceSelect" aria-label="Giọng chung" class="bg-[#231F2A] border border-[#3F3A46] text-xs text-purple-300 rounded px-2 py-1 focus:outline-none cursor-pointer max-w-[170px] truncate">
                   <option value="">-- Mặc định --</option>
                   <optgroup label="🎭 Style Presets (Bộ chỉnh phong cách)">
                     <option value="builtin:mc_male">🎙️ MC Nam Thời Sự</option>
@@ -746,8 +747,8 @@
                   </optgroup>
                   <optgroup label="👤 Nhân vật đã lưu (Characters)" id="batchGlobalOptgroupCharacters"></optgroup>
                 </select>
-                <button type="button" onclick="playGlobalVoicePreview()" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white cursor-pointer" title="Nghe thử giọng mẫu này">
-                  <span class="material-symbols-outlined text-[14px]">volume_up</span>
+                <button aria-label="Nghe thử giọng mẫu này" type="button" onclick="playGlobalVoicePreview()" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white cursor-pointer" title="Nghe thử giọng mẫu này">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[14px]">volume_up</span>
                 </button>
                 <button type="button" onclick="applyGlobalVoiceToAllBatchLines()" class="px-2 py-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-xs text-purple-300 hover:text-white font-medium cursor-pointer" title="Gán giọng này cho tất cả các dòng hiện có">
                   ⚡ Áp dụng tất cả
@@ -766,16 +767,16 @@
           <div id="batchEstimationCard" class="hidden p-2.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] flex flex-wrap items-center justify-between text-xs gap-2">
             <div class="flex items-center gap-2.5 flex-wrap">
               <div class="flex items-center gap-1 text-slate-300 font-mono">
-                <span class="material-symbols-outlined text-purple-400 text-[16px]">analytics</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">analytics</span>
                 <span id="batchEstLinesCount" class="font-bold text-white">0 dòng</span>
                 <span id="batchEstWordsCount" class="text-slate-400">(~0 từ)</span>
               </div>
               <div class="flex items-center gap-1 text-slate-300 font-mono">
-                <span class="material-symbols-outlined text-emerald-400 text-[16px]">timer</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-emerald-400 text-[16px]">timer</span>
                 <span>Ước tính: <strong id="batchEstDuration" class="text-emerald-300">~0 phút</strong></span>
               </div>
               <div class="flex items-center gap-1 text-slate-300 font-mono">
-                <span class="material-symbols-outlined text-blue-400 text-[16px]">save</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-blue-400 text-[16px]">save</span>
                 <span>Dung lượng: <strong id="batchEstAudioSize" class="text-blue-300">~0 MB</strong></span>
               </div>
             </div>
@@ -789,7 +790,7 @@
           <div id="batchProgressBar" class="hidden p-2.5 rounded-lg bg-[#0E0C12] border border-purple-500/40 space-y-1.5">
             <div class="flex items-center justify-between text-xs">
               <div class="flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-purple-400 text-[16px] animate-spin">progress_activity</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px] animate-spin">progress_activity</span>
                 <span id="batchProgressStage" class="text-purple-300 font-medium truncate max-w-xs sm:max-w-md">Đang khởi chạy tiến trình Batch...</span>
               </div>
               <div class="flex items-center gap-2">
@@ -817,11 +818,11 @@
               </div>
               <div class="flex items-center gap-1.5 flex-wrap">
                 <button type="button" onclick="runBatchRetryFailed()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-amber-900/50 border border-[#3F3A46] text-xs text-amber-300 hover:text-white font-medium flex items-center gap-1 cursor-pointer" title="Chỉ chạy lại các dòng đang bị lỗi">
-                  <span class="material-symbols-outlined text-[14px]">refresh</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[14px]">refresh</span>
                   <span>Thử lại dòng lỗi</span>
                 </button>
                 <button type="button" onclick="runBatchResumeUnfinished()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-blue-900/50 border border-[#3F3A46] text-xs text-blue-300 hover:text-white font-medium flex items-center gap-1 cursor-pointer" title="Chạy tiếp các dòng chưa hoàn tất">
-                  <span class="material-symbols-outlined text-[14px]">play_circle</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[14px]">play_circle</span>
                   <span>Tiếp tục phần chưa chạy</span>
                 </button>
               </div>
@@ -832,7 +833,7 @@
               <table class="w-full text-left text-xs">
                 <thead class="bg-[#231F2A] text-slate-300 border-b border-[#3F3A46]">
                   <tr>
-                    <th class="p-2.5 w-8 text-center"><input type="checkbox" id="batchSelectAll" checked onchange="toggleSelectAllBatch(this)"></th>
+                    <th class="p-2.5 w-8 text-center"><input type="checkbox" id="batchSelectAll" aria-label="Chọn tất cả các dòng" checked onchange="toggleSelectAllBatch(this)"></th>
                     <th class="p-2.5 w-10 text-center">#</th>
                     <th class="p-2.5">Nội dung thoại</th>
                     <th class="p-2.5 w-52">Nhân vật / Voice</th>
@@ -862,13 +863,13 @@
                 </div>
                 <div id="bgmControls" class="space-y-2 opacity-40 pointer-events-none transition-opacity">
                   <div class="flex items-center gap-2">
-                    <input type="file" id="bgmFileInput" accept="audio/*" class="hidden" onchange="handleBgmUpload(this)">
+                    <input type="file" id="bgmFileInput" aria-label="File nhạc nền" accept="audio/*" class="hidden" onchange="handleBgmUpload(this)">
                     <button type="button" onclick="document.getElementById('bgmFileInput').click()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-slate-200 border border-[#3F3A46] cursor-pointer text-xs">📁 Chọn BGM...</button>
                     <span id="bgmFileName" class="text-slate-400 truncate max-w-xs text-[11px]">Chưa chọn file</span>
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-slate-400 text-[11px]">Âm lượng:</span>
-                    <input type="range" id="bgmVolSlider" min="0" max="1" step="0.05" value="0.25" class="w-36">
+                    <input type="range" id="bgmVolSlider" aria-label="Âm lượng nhạc nền" min="0" max="1" step="0.05" value="0.25" class="w-36">
                   </div>
                 </div>
               </div>
@@ -880,7 +881,7 @@
                   <div class="flex items-center justify-between text-xs">
                     <span class="text-slate-300">Khoảng lặng mặc định giữa các câu:</span>
                     <div class="flex items-center gap-1.5">
-                      <input type="range" id="batchPauseDuration" min="0.1" max="3.0" step="0.1" value="0.8" class="w-24" oninput="handleGlobalPauseChange(this.value)">
+                      <input type="range" id="batchPauseDuration" aria-label="Khoảng lặng mặc định giữa các câu" min="0.1" max="3.0" step="0.1" value="0.8" class="w-24" oninput="handleGlobalPauseChange(this.value)">
                       <span id="valBatchPause" class="font-mono text-purple-300 font-bold w-8">0.8s</span>
                     </div>
                   </div>
@@ -905,11 +906,11 @@
             <!-- Run Batch Actions & Merge All -->
             <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
               <button id="batchRunAllBtn" type="button" onclick="runBatchAll()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-m3-2 cursor-pointer transition-all">
-                <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[16px]">play_arrow</span>
                 <span>Chạy Batch tất cả</span>
               </button>
               <button id="batchMergeAllBtn" type="button" onclick="runBatchMergeAll()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-m3-2 cursor-pointer transition-all">
-                <span class="material-symbols-outlined text-[16px]">merge</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[16px]">merge</span>
                 <span>Ghép toàn bộ (Merge All)</span>
               </button>
             </div>
@@ -919,7 +920,7 @@
               <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-2">
                   <div class="w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
-                    <span class="material-symbols-outlined text-[16px]">audiotrack</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[16px]">audiotrack</span>
                   </div>
                   <div>
                     <div id="batchMergedTitle" class="text-xs font-bold text-white">chatterbox-batch-merged.wav</div>
@@ -928,15 +929,15 @@
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <a id="batchSrtDownloadLink" href="#" download="chatterbox-subtitles.srt" class="hidden px-2.5 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs font-bold text-purple-300 hover:text-white flex items-center gap-1 cursor-pointer shadow-m3-1" title="Tải phụ đề SRT">
-                    <span class="material-symbols-outlined text-[15px]">subtitles</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[15px]">subtitles</span>
                     <span>Phụ đề (.SRT)</span>
                   </a>
                   <a id="batchZipDownloadLink" href="#" download="chatterbox-package.zip" class="hidden px-2.5 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-xs font-bold text-blue-300 hover:text-white flex items-center gap-1 cursor-pointer shadow-m3-1" title="Tải gói ZIP gồm WAV, SRT, từng dòng và Manifest">
-                    <span class="material-symbols-outlined text-[15px]">archive</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[15px]">archive</span>
                     <span>Gói (.ZIP)</span>
                   </a>
                   <a id="batchMergedDownloadLink" href="#" download="chatterbox-batch-merged.wav" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white flex items-center gap-1 cursor-pointer shadow-m3-1">
-                    <span class="material-symbols-outlined text-[15px]">download</span>
+                    <span aria-hidden="true" class="material-symbols-outlined text-[15px]">download</span>
                     <span>Tải file ghép (.WAV)</span>
                   </a>
                 </div>
@@ -952,16 +953,16 @@
         <div class="bg-[#18151E] border border-[#3F3A46] rounded-xl max-w-md w-full p-4 space-y-3.5 shadow-m3-3">
           <div class="flex items-center justify-between border-b border-[#3F3A46] pb-2">
             <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-purple-400 text-[20px]">folder</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[20px]">folder</span>
               <h3 class="text-sm font-bold text-white">Quản lý Dự án Batch Studio</h3>
             </div>
-            <button type="button" onclick="closeBatchProjectModal()" class="text-slate-400 hover:text-white cursor-pointer">
-              <span class="material-symbols-outlined text-[18px]">close</span>
+            <button aria-label="Đóng" type="button" onclick="closeBatchProjectModal()" class="text-slate-400 hover:text-white cursor-pointer">
+              <span aria-hidden="true" class="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
           <div class="space-y-2.5 text-xs">
             <div>
-              <label class="block text-slate-300 mb-1 font-medium">Tên dự án hiện tại:</label>
+              <label for="batchProjectNameInput" class="block text-slate-300 mb-1 font-medium">Tên dự án hiện tại:</label>
               <div class="flex items-center gap-2">
                 <input type="text" id="batchProjectNameInput" placeholder="Ví dụ: AudioBook_Chuong_1" class="flex-1 bg-[#0E0C12] border border-[#3F3A46] focus:border-purple-500 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none">
                 <button type="button" onclick="saveBatchCurrentProject()" class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer">Lưu dự án</button>
@@ -988,7 +989,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <div class="p-2 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
-                <span class="material-symbols-outlined text-[20px]">translate</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[20px]">translate</span>
               </div>
               <div>
                 <h2 class="text-sm font-bold text-white">Multilingual TTS — Phát âm đa ngôn ngữ (23 Quốc gia)</h2>
@@ -996,21 +997,21 @@
               </div>
             </div>
             <span class="px-2.5 py-1 rounded-full bg-purple-900/40 text-purple-300 border border-purple-700/50 text-[11px] font-semibold flex items-center gap-1">
-              <span class="material-symbols-outlined text-[14px]">public</span> 23 Ngôn ngữ
+              <span aria-hidden="true" class="material-symbols-outlined text-[14px]">public</span> 23 Ngôn ngữ
             </span>
           </div>
 
           <!-- Informative Tip for Vietnamese & Model Status -->
           <div class="space-y-2">
             <div id="mtlModelNotCachedNotice" class="hidden p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/60 flex items-start gap-2.5 text-[11px] text-amber-200">
-              <span class="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">download_for_offline</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">download_for_offline</span>
               <div>
                 <span class="text-amber-300 font-semibold">Chưa tải trọng số mô hình Multilingual:</span> Model Multilingual (500M) chưa có trong thư mục <code>models/</code>. Để tải mô hình về máy lần đầu, vui lòng chạy server với kết nối mạng bằng lệnh: <code class="bg-black/50 px-1.5 py-0.5 rounded text-amber-300 font-mono">HF_HUB_OFFLINE=0 ./run_chatterbox_api.sh</code>
               </div>
             </div>
 
             <div class="p-2.5 rounded-lg bg-[#231F2A] border border-purple-800/40 flex items-start gap-2.5 text-[11px] text-slate-300">
-              <span class="material-symbols-outlined text-purple-400 text-[18px] shrink-0 mt-0.5">info</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px] shrink-0 mt-0.5">info</span>
               <div>
                 <span class="text-purple-300 font-semibold">Lưu ý về ngôn ngữ:</span> Mô hình Multilingual hỗ trợ 23 ngôn ngữ quốc tế. Để sinh giọng <strong class="text-white">Tiếng Việt</strong> có ngữ điệu tự nhiên nhất, vui lòng sử dụng tab <button type="button" onclick="switchTab('tts')" class="text-purple-400 hover:text-purple-300 underline font-semibold cursor-pointer">TTS Studio</button> (chọn model Turbo, Nano hoặc Standard).
               </div>
@@ -1022,7 +1023,7 @@
             <div class="flex items-center justify-between mb-1.5">
               <div class="text-[11px] font-medium text-slate-400">Chọn ngôn ngữ đích (23 ngôn ngữ hỗ trợ):</div>
               <button type="button" onclick="loadMtlSampleText()" class="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer">
-                <span class="material-symbols-outlined text-[14px]">edit_note</span> Nạp câu mẫu theo tiếng
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">edit_note</span> Nạp câu mẫu theo tiếng
               </button>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5" id="mtlLangGrid">
@@ -1058,7 +1059,7 @@
               <span class="text-[11px] font-medium text-slate-400">Văn bản cần đọc:</span>
               <span id="mtlCharCount" class="text-[10px] text-slate-500 font-mono">0 / 4000 ký tự</span>
             </div>
-            <textarea id="mtlPromptInput" rows="3" oninput="updateMtlCharCount()" placeholder="Nhập văn bản hoặc KÉO THẢ FILE TEXT vào đây..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 text-xs sm:text-sm focus:outline-none transition-all resize-none font-sans">Last month, we reached a new milestone with two billion views on our YouTube channel.</textarea>
+            <textarea id="mtlPromptInput" aria-label="Văn bản cần đọc" rows="3" oninput="updateMtlCharCount()" placeholder="Nhập văn bản hoặc KÉO THẢ FILE TEXT vào đây..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2.5 text-xs sm:text-sm focus:outline-none transition-all resize-none font-sans">Last month, we reached a new milestone with two billion views on our YouTube channel.</textarea>
             <div class="text-[10px] text-slate-500 px-0.5">💡 Hỗ trợ kéo thả file text (.txt, .md)</div>
           </div>
 
@@ -1066,8 +1067,8 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-[#3F3A46]/50">
             <!-- Voice / Character Selection -->
             <div class="space-y-1.5">
-              <label class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[16px] text-purple-400">face</span>
+              <label for="mtlCharacterSelect" class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                <span aria-hidden="true" class="material-symbols-outlined text-[16px] text-purple-400">face</span>
                 <span>Nhân vật / Giọng mẫu (Voice Cloning):</span>
               </label>
               <select id="mtlCharacterSelect" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded-lg p-2 text-xs focus:outline-none transition-all cursor-pointer">
@@ -1077,18 +1078,18 @@
 
             <!-- Custom Prompt Audio File Upload -->
             <div class="space-y-1.5">
-              <label class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[16px] text-purple-400">audio_file</span>
+              <label for="mtlAudioPromptInput" class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                <span aria-hidden="true" class="material-symbols-outlined text-[16px] text-purple-400">audio_file</span>
                 <span>File mẫu âm thanh (Tùy chọn):</span>
               </label>
               <div class="flex items-center gap-2">
                 <input type="file" id="mtlAudioPromptInput" accept="audio/*" class="hidden" onchange="updateMtlPromptFileLabel(this)">
                 <button type="button" onclick="document.getElementById('mtlAudioPromptInput').click()" class="flex-1 px-3 py-2 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center justify-between cursor-pointer truncate">
                   <span id="mtlAudioPromptLabel" class="truncate">Chọn file WAV/MP3...</span>
-                  <span class="material-symbols-outlined text-[16px] text-slate-400 shrink-0 ml-1">upload_file</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px] text-slate-400 shrink-0 ml-1">upload_file</span>
                 </button>
-                <button type="button" onclick="clearMtlPromptFile()" title="Xóa file mẫu" class="p-2 rounded-lg bg-[#231F2A] hover:bg-red-950/60 text-slate-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer">
-                  <span class="material-symbols-outlined text-[16px]">close</span>
+                <button aria-label="Xóa file mẫu" type="button" onclick="clearMtlPromptFile()" title="Xóa file mẫu" class="p-2 rounded-lg bg-[#231F2A] hover:bg-red-950/60 text-slate-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">close</span>
                 </button>
               </div>
             </div>
@@ -1101,7 +1102,7 @@
                 <span>Biểu cảm (Exaggeration):</span>
                 <span id="mtlExaggerationVal" class="text-purple-300 font-mono">0.50</span>
               </div>
-              <input type="range" id="mtlExaggeration" min="0.25" max="2.0" step="0.05" value="0.5" oninput="document.getElementById('mtlExaggerationVal').textContent = parseFloat(this.value).toFixed(2)" class="w-full accent-purple-500 cursor-pointer">
+              <input type="range" id="mtlExaggeration" aria-label="Biểu cảm (Exaggeration)" min="0.25" max="2.0" step="0.05" value="0.5" oninput="document.getElementById('mtlExaggerationVal').textContent = parseFloat(this.value).toFixed(2)" class="w-full accent-purple-500 cursor-pointer">
             </div>
 
             <div class="space-y-1">
@@ -1109,7 +1110,7 @@
                 <span>Độ đa dạng (Temperature):</span>
                 <span id="mtlTemperatureVal" class="text-purple-300 font-mono">0.80</span>
               </div>
-              <input type="range" id="mtlTemperature" min="0.05" max="2.0" step="0.05" value="0.8" oninput="document.getElementById('mtlTemperatureVal').textContent = parseFloat(this.value).toFixed(2)" class="w-full accent-purple-500 cursor-pointer">
+              <input type="range" id="mtlTemperature" aria-label="Độ đa dạng (Temperature)" min="0.05" max="2.0" step="0.05" value="0.8" oninput="document.getElementById('mtlTemperatureVal').textContent = parseFloat(this.value).toFixed(2)" class="w-full accent-purple-500 cursor-pointer">
             </div>
 
             <div class="space-y-1">
@@ -1117,12 +1118,12 @@
                 <span>Tốc độ / CFG (Pace):</span>
                 <span id="mtlCfgWeightVal" class="text-purple-300 font-mono">0.50</span>
               </div>
-              <input type="range" id="mtlCfgWeight" min="0.0" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('mtlCfgWeightVal').textContent = parseFloat(this.value).toFixed(2)" class="w-full accent-purple-500 cursor-pointer">
+              <input type="range" id="mtlCfgWeight" aria-label="Tốc độ / CFG (Pace)" min="0.0" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('mtlCfgWeightVal').textContent = parseFloat(this.value).toFixed(2)" class="w-full accent-purple-500 cursor-pointer">
             </div>
           </div>
 
           <button id="mtlGenerateBtn" onclick="triggerMtlSynthesis()" class="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-m3-2 cursor-pointer transition-all">
-            <span class="material-symbols-outlined text-[19px]">record_voice_over</span>
+            <span aria-hidden="true" class="material-symbols-outlined text-[19px]">record_voice_over</span>
             <span>Sinh giọng nói Đa ngôn ngữ</span>
           </button>
         </div>
@@ -1135,7 +1136,7 @@
         <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 space-y-3.5">
           <div class="flex items-center gap-2.5">
             <div class="p-2 rounded-lg bg-orange-600/20 text-orange-400 border border-orange-500/30">
-              <span class="material-symbols-outlined text-[20px]">sync_alt</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[20px]">sync_alt</span>
             </div>
             <div>
               <h2 class="text-sm font-bold text-white">Voice Conversion — Chuyển đổi âm sắc giọng nói</h2>
@@ -1147,9 +1148,9 @@
             <!-- Source Audio -->
             <div class="bg-[#0E0C12] p-3 rounded-lg border border-[#3F3A46] space-y-2 text-center">
               <div class="text-[11px] font-bold text-white uppercase tracking-wider">1. Âm thanh nguồn (Source)</div>
-              <input type="file" id="vcSourceInput" accept="audio/*" class="hidden" onchange="updateVcLabel(this, 'vcSrcLabel')">
+              <input type="file" id="vcSourceInput" aria-label="Âm thanh nguồn (Source)" accept="audio/*" class="hidden" onchange="updateVcLabel(this, 'vcSrcLabel')">
               <button onclick="document.getElementById('vcSourceInput').click()" class="w-full py-5 border border-dashed border-[#3F3A46] hover:border-purple-500 rounded-lg flex flex-col items-center gap-1 group transition-all cursor-pointer">
-                <span class="material-symbols-outlined text-purple-400 text-[24px] group-hover:scale-110 transition-transform">upload_file</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[24px] group-hover:scale-110 transition-transform">upload_file</span>
                 <span id="vcSrcLabel" class="text-xs text-slate-300 font-medium">Chọn file âm thanh nguồn...</span>
               </button>
             </div>
@@ -1157,16 +1158,16 @@
             <!-- Target Voice -->
             <div class="bg-[#0E0C12] p-3 rounded-lg border border-[#3F3A46] space-y-2 text-center">
               <div class="text-[11px] font-bold text-white uppercase tracking-wider">2. Giọng mẫu đích (Target)</div>
-              <input type="file" id="vcTargetInput" accept="audio/*" class="hidden" onchange="updateVcLabel(this, 'vcTgtLabel')">
+              <input type="file" id="vcTargetInput" aria-label="Giọng mẫu đích (Target)" accept="audio/*" class="hidden" onchange="updateVcLabel(this, 'vcTgtLabel')">
               <button onclick="document.getElementById('vcTargetInput').click()" class="w-full py-5 border border-dashed border-[#3F3A46] hover:border-purple-500 rounded-lg flex flex-col items-center gap-1 group transition-all cursor-pointer">
-                <span class="material-symbols-outlined text-purple-400 text-[24px] group-hover:scale-110 transition-transform">record_voice_over</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[24px] group-hover:scale-110 transition-transform">record_voice_over</span>
                 <span id="vcTgtLabel" class="text-xs text-slate-300 font-medium">Chọn file giọng mẫu đích...</span>
               </button>
             </div>
           </div>
 
           <button id="vcGenerateBtn" onclick="triggerVcConversion()" class="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-m3-2 cursor-pointer transition-all">
-            <span class="material-symbols-outlined text-[19px]">sync</span>
+            <span aria-hidden="true" class="material-symbols-outlined text-[19px]">sync</span>
             <span>Chuyển đổi âm sắc giọng nói</span>
           </button>
         </div>
@@ -1178,7 +1179,7 @@
       <section id="panel-director" class="tab-panel space-y-3.5">
         <div class="bg-[#18151E] rounded-xl p-4 border border-[#3F3A46] shadow-m3-1 flex flex-wrap items-center justify-between gap-3">
           <div><h2 class="text-sm font-bold text-white">Bàn điều phối giọng đọc</h2><p class="text-[11px] text-slate-400">Theo dõi và duyệt quy trình sản xuất do máy chủ điều khiển</p></div>
-          <div class="flex gap-2"><button onclick="toggleDirectorCreate()" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Tạo bản thu mới</button><button onclick="loadDirectorWorkflows()" class="p-2 rounded-lg bg-[#231F2A] text-slate-300" title="Làm mới"><span class="material-symbols-outlined text-[18px]">refresh</span></button></div>
+          <div class="flex gap-2"><button onclick="toggleDirectorCreate()" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Tạo bản thu mới</button><button aria-label="Làm mới" onclick="loadDirectorWorkflows()" class="p-2 rounded-lg bg-[#231F2A] text-slate-300" title="Làm mới"><span aria-hidden="true" class="material-symbols-outlined text-[18px]">refresh</span></button></div>
         </div>
         <div id="directorCreate" class="hidden bg-[#18151E] rounded-xl p-4 border border-purple-500/40 space-y-3">
           <div class="flex gap-1.5 p-1 rounded-lg bg-[#0E0C12] border border-[#3F3A46] w-fit">
@@ -1188,8 +1189,8 @@
 
           <!-- MANUAL MODE: paste an already-written script -->
           <div id="directorManualPanel" class="space-y-3">
-            <div class="grid md:grid-cols-4 gap-2"><input id="directorTitle" class="director-input" placeholder="Tên dự án"><input id="directorProjectId" class="director-input" placeholder="Mã dự án (không bắt buộc)"><select id="directorProvider" class="director-input"><option value="local">Chatterbox cục bộ</option><option value="fake">Giả lập (chỉ kiểm thử)</option><option value="gemini">Gemini</option></select><input id="directorModel" class="director-input" placeholder="Model (không bắt buộc)"></div>
-            <textarea id="directorScript" rows="5" class="director-input w-full" placeholder="Kịch bản gốc (không thể sửa sau khi bắt đầu)" oninput="updateDirectorScriptCounter()"></textarea>
+            <div class="grid md:grid-cols-4 gap-2"><input id="directorTitle" aria-label="Tên dự án" class="director-input" placeholder="Tên dự án"><input id="directorProjectId" aria-label="Mã dự án (không bắt buộc)" class="director-input" placeholder="Mã dự án (không bắt buộc)"><select id="directorProvider" aria-label="Nhà cung cấp giọng đọc" class="director-input"><option value="local">Chatterbox cục bộ</option><option value="fake">Giả lập (chỉ kiểm thử)</option><option value="gemini">Gemini</option></select><input id="directorModel" aria-label="Mô hình" class="director-input" placeholder="Model (không bắt buộc)"></div>
+            <textarea id="directorScript" aria-label="Kịch bản gốc" rows="5" class="director-input w-full" placeholder="Kịch bản gốc (không thể sửa sau khi bắt đầu)" oninput="updateDirectorScriptCounter()"></textarea>
             <div class="flex justify-between items-center text-[10px] text-slate-500"><span id="directorScriptCounter">0 ký tự · 0 từ</span><button type="button" onclick="toggleDirectorScriptPreview()" id="directorPreviewToggleBtn" class="text-purple-300 hover:text-purple-200 underline">Xem trước kịch bản</button></div>
             <div id="directorScriptPreview" class="hidden p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46] text-xs text-slate-300 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
 
@@ -1209,12 +1210,12 @@
           <!-- IDEA MODE: generate an English script from a topic first (reuses the two-gate /api/v1/projects planner), then hand it to the workflow above -->
           <div id="directorIdeaPanel" class="hidden space-y-3">
             <div id="directorIdeaStep1" class="space-y-2.5">
-              <label class="block text-xs font-medium text-slate-300">Chủ đề hoặc mô tả yêu cầu sản phẩm:</label>
+              <label for="directorIdeaTopic" class="block text-xs font-medium text-slate-300">Chủ đề hoặc mô tả yêu cầu sản phẩm:</label>
               <textarea id="directorIdeaTopic" rows="3" class="director-input w-full resize-none" placeholder="Ví dụ: Audiobook 3 phút tiếng Anh kể về truyền thuyết Kỳ Lân, giọng kể chuyện trầm ấm, nhạc nền nhẹ..."></textarea>
               <div class="flex items-center justify-between gap-2">
                 <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300"><input type="checkbox" id="directorIdeaAutoDefaults" class="w-4 h-4 rounded border-[#3F3A46] bg-[#0E0C12]"><span>Tự động điền mặc định cho mục không quan trọng</span></label>
                 <button id="directorIdeaPrepareBtn" onclick="directorIdeaPrepare()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-[16px]">psychology</span><span>Phân tích & Khởi tạo</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">psychology</span><span>Phân tích & Khởi tạo</span>
                 </button>
               </div>
             </div>
@@ -1225,11 +1226,11 @@
                 <div id="directorIdeaTags" class="flex flex-wrap gap-1.5 mt-1.5"></div>
               </div>
               <div id="directorIdeaQuestions" class="space-y-3"></div>
-              <input type="text" id="directorIdeaFreeform" class="director-input w-full" placeholder="Hoặc nhập câu trả lời tổng hợp bằng lời nói tự nhiên...">
+              <input type="text" id="directorIdeaFreeform" aria-label="Câu trả lời tổng hợp" class="director-input w-full" placeholder="Hoặc nhập câu trả lời tổng hợp bằng lời nói tự nhiên...">
               <div class="flex items-center justify-between gap-2">
                 <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300"><input type="checkbox" id="directorIdeaAnswersAutoDefaults" checked class="w-4 h-4 rounded border-[#3F3A46] bg-[#0E0C12]"><span>Tự động chọn mặc định các mục còn lại</span></label>
                 <button id="directorIdeaAnswersBtn" onclick="directorIdeaSubmitAnswers()" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-[16px]">send</span><span>Gửi câu trả lời & Tóm tắt</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">send</span><span>Gửi câu trả lời & Tóm tắt</span>
                 </button>
               </div>
             </div>
@@ -1242,14 +1243,14 @@
               <div class="flex items-center justify-end gap-2">
                 <button onclick="directorIdeaConfirm(false)" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-red-950/40 text-red-300 border border-red-500/30 text-xs font-bold">Từ chối / Hủy</button>
                 <button onclick="directorIdeaConfirm(true)" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[16px]">check_circle</span><span>Xác nhận & Phê duyệt</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">check_circle</span><span>Xác nhận & Phê duyệt</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
         <div class="grid lg:grid-cols-12 gap-4">
-          <aside class="lg:col-span-4 bg-[#18151E] rounded-xl border border-[#3F3A46] p-3"><div class="flex justify-between mb-3"><h3 class="text-xs font-bold text-white">Các bản sản xuất</h3><span id="directorCount" class="text-[10px] text-slate-400"></span></div><input id="directorListSearch" type="text" placeholder="🔍 Tìm theo tên dự án..." oninput="renderDirectorWorkflowList()" class="director-input w-full mb-2 text-xs"><div id="directorListFilters" class="flex flex-wrap gap-1.5 mb-3"></div><div id="directorWorkflowList" class="space-y-2 max-h-[68vh] overflow-y-auto"><p class="text-xs text-slate-500">Đang tải…</p></div></aside>
+          <aside class="lg:col-span-4 bg-[#18151E] rounded-xl border border-[#3F3A46] p-3"><div class="flex justify-between mb-3"><h3 class="text-xs font-bold text-white">Các bản sản xuất</h3><span id="directorCount" class="text-[10px] text-slate-400"></span></div><input id="directorListSearch" aria-label="Tìm theo tên dự án" type="text" placeholder="🔍 Tìm theo tên dự án..." oninput="renderDirectorWorkflowList()" class="director-input w-full mb-2 text-xs"><div id="directorListFilters" class="flex flex-wrap gap-1.5 mb-3"></div><div id="directorWorkflowList" class="space-y-2 max-h-[68vh] overflow-y-auto"><p class="text-xs text-slate-500">Đang tải…</p></div></aside>
           <div class="lg:col-span-8 space-y-3">
             <div id="directorEmpty" class="bg-[#18151E] rounded-xl border border-[#3F3A46] p-10 text-center text-sm text-slate-500">Chọn một bản sản xuất ở bên trái để bắt đầu.</div>
             <div id="directorWorkspace" class="hidden space-y-3">
@@ -1264,7 +1265,7 @@
       </section>
 
       <dialog id="directorBeatDialog" class="m-auto w-[min(760px,94vw)] max-h-[90vh] overflow-y-auto rounded-xl bg-[#18151E] text-white border border-[#3F3A46] shadow-m3-3 backdrop:bg-black/70">
-        <div class="sticky top-0 bg-[#18151E] border-b border-[#3F3A46] p-4 flex justify-between items-center z-10"><div><h3 id="directorBeatTitle" class="font-bold"></h3><p class="text-[10px] text-slate-400">Duyệt từng đoạn</p></div><button onclick="closeDirectorBeat()" aria-label="Đóng cửa sổ duyệt"><span class="material-symbols-outlined">close</span></button></div>
+        <div class="sticky top-0 bg-[#18151E] border-b border-[#3F3A46] p-4 flex justify-between items-center z-10"><div><h3 id="directorBeatTitle" class="font-bold"></h3><p class="text-[10px] text-slate-400">Duyệt từng đoạn</p></div><button onclick="closeDirectorBeat()" aria-label="Đóng cửa sổ duyệt"><span aria-hidden="true" class="material-symbols-outlined">close</span></button></div>
         <div id="directorBeatBody" class="p-4 space-y-4"></div>
       </dialog>
 
@@ -1276,7 +1277,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <div class="p-2 rounded-lg bg-pink-600/20 text-pink-400 border border-pink-500/30">
-                <span class="material-symbols-outlined text-[20px]">face</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[20px]">face</span>
               </div>
               <div>
                 <h2 class="text-sm font-bold text-white">Quản lý Nhân vật & Giọng nói (Characters)</h2>
@@ -1284,7 +1285,7 @@
               </div>
             </div>
             <button onclick="openCreateCharacterModal()" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1.5 shadow-m3-1 cursor-pointer">
-              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">add</span>
               <span>Tạo Nhân vật</span>
             </button>
           </div>
@@ -1304,7 +1305,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <div class="p-2 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30">
-                <span class="material-symbols-outlined text-[20px]">history</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[20px]">history</span>
               </div>
               <div>
                 <h2 class="text-sm font-bold text-white">Lịch sử xuất âm thanh (Generation History)</h2>
@@ -1312,7 +1313,7 @@
               </div>
             </div>
             <button onclick="refreshHistory()" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-xs font-bold text-white border border-[#3F3A46] flex items-center gap-1 transition-colors cursor-pointer">
-              <span class="material-symbols-outlined text-[16px]">refresh</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">refresh</span>
               <span>Làm mới</span>
             </button>
           </div>
@@ -1346,7 +1347,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <div class="p-2 rounded-lg bg-slate-600/20 text-slate-300 border border-slate-500/30">
-                <span class="material-symbols-outlined text-[20px]">settings</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[20px]">settings</span>
               </div>
               <div>
                 <h2 class="text-sm font-bold text-white">⚙️ Cài đặt Hệ thống & Quản lý Mô hình AI</h2>
@@ -1354,7 +1355,7 @@
               </div>
             </div>
             <button onclick="saveAllSettings()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white flex items-center gap-1.5 shadow-m3-1 cursor-pointer">
-              <span class="material-symbols-outlined text-[16px]">save</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">save</span>
               <span>Lưu cấu hình</span>
             </button>
           </div>
@@ -1363,22 +1364,22 @@
           <div class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3">
             <div class="flex items-center justify-between">
               <div class="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-purple-400 text-[16px]">folder</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">folder</span>
                 <span>1. Cấu hình Đường dẫn & Lưu trữ</span>
               </div>
               <button onclick="cleanProjectTmpFiles()" class="px-2.5 py-0.5 rounded bg-[#231F2A] hover:bg-purple-600 text-xs font-medium text-slate-300 hover:text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer">
-                <span class="material-symbols-outlined text-[13px]">cleaning_services</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[13px]">cleaning_services</span>
                 <span>Dọn file tạm</span>
               </button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               <div class="space-y-1">
-                <label class="text-slate-300 font-medium">Thư mục xuất âm thanh mặc định:</label>
+                <label for="settingExportDir" class="text-slate-300 font-medium">Thư mục xuất âm thanh mặc định:</label>
                 <input type="text" id="settingExportDir" value="~/Downloads" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-2 font-mono text-xs">
               </div>
               <div class="space-y-1">
-                <label class="text-slate-300 font-medium">Thư mục lưu Cache Model:</label>
+                <label for="settingModelDir" class="text-slate-300 font-medium">Thư mục lưu Cache Model:</label>
                 <input type="text" id="settingModelDir" value="/var/www/chatterbox/models" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-2 font-mono text-xs">
               </div>
             </div>
@@ -1392,14 +1393,14 @@
           <!-- Section 2: Model & Hardware Limits -->
           <div class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3">
             <div class="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-purple-400 text-[16px]">memory</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">memory</span>
               <span>2. Mô hình & Hiệu năng Tính toán</span>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
               <!-- Device -->
               <div class="space-y-1">
-                <label class="text-slate-300 font-medium">Thiết bị tính toán (Device):</label>
+                <label for="settingDevice" class="text-slate-300 font-medium">Thiết bị tính toán (Device):</label>
                 <select id="settingDevice" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-2 cursor-pointer text-xs">
                   <option value="auto">auto (Tự động phát hiện)</option>
                   <option value="cuda">cuda (GPU NVIDIA)</option>
@@ -1410,7 +1411,7 @@
 
               <!-- Default Model -->
               <div class="space-y-1">
-                <label class="text-slate-300 font-medium">Mô hình mặc định:</label>
+                <label for="settingDefaultModel" class="text-slate-300 font-medium">Mô hình mặc định:</label>
                 <select id="settingDefaultModel" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-2 cursor-pointer text-xs">
                   <option value="turbo">Turbo (350M - Fast)</option>
                   <option value="standard">Standard (500M - High Quality)</option>
@@ -1421,7 +1422,7 @@
 
               <!-- CPU Threads -->
               <div class="space-y-1">
-                <label class="text-slate-300 font-medium">Giới hạn số Luồng CPU:</label>
+                <label for="settingCpuThreads" class="text-slate-300 font-medium">Giới hạn số Luồng CPU:</label>
                 <input type="number" id="settingCpuThreads" min="1" max="16" value="4" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-2 font-mono text-xs">
               </div>
             </div>
@@ -1429,13 +1430,13 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-0.5">
               <!-- Max Chunk -->
               <div class="space-y-1">
-                <label class="text-slate-300 font-medium">Số ký tự cắt đoạn tối đa (Max Chunk):</label>
+                <label for="settingMaxChunk" class="text-slate-300 font-medium">Số ký tự cắt đoạn tối đa (Max Chunk):</label>
                 <input type="number" id="settingMaxChunk" min="500" max="10000" step="500" value="4000" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-2 font-mono text-xs">
               </div>
 
               <!-- HuggingFace Token -->
               <div class="space-y-1">
-                <label class="text-slate-300 font-medium">HuggingFace Token (Tùy chọn):</label>
+                <label for="settingHfToken" class="text-slate-300 font-medium">HuggingFace Token (Tùy chọn):</label>
                 <input type="password" id="settingHfToken" placeholder="hf_..." class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-2 font-mono text-xs">
               </div>
             </div>
@@ -1449,7 +1450,7 @@
           <!-- Section 3: Live Model Management & VRAM State -->
           <div class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3">
             <div class="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-purple-400 text-[16px]">developer_board</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">developer_board</span>
               <span>3. Quản lý Trạng thái Nạp VRAM của các Model AI</span>
             </div>
 
@@ -1471,7 +1472,7 @@
                   <div class="flex items-center gap-1">
                     <button onclick="preloadModel('nano')" class="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer" title="Nạp sẵn model vào RAM/VRAM">Nạp</button>
                     <button onclick="unloadModel('nano')" class="px-2 py-0.5 rounded bg-[#231F2A] hover:bg-[#2D2836] text-xs text-slate-300 border border-[#3F3A46] cursor-pointer" title="Gỡ khỏi RAM/VRAM">Gỡ</button>
-                    <button id="btnDeleteDisk-nano" onclick="deleteModelFromDisk('nano')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span class="material-symbols-outlined text-[14px]">delete_forever</span></button>
+                    <button aria-label="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng" id="btnDeleteDisk-nano" onclick="deleteModelFromDisk('nano')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span aria-hidden="true" class="material-symbols-outlined text-[14px]">delete_forever</span></button>
                   </div>
                 </div>
               </div>
@@ -1493,7 +1494,7 @@
                   <div class="flex items-center gap-1">
                     <button onclick="preloadModel('turbo')" class="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer" title="Nạp sẵn model vào RAM/VRAM">Nạp</button>
                     <button onclick="unloadModel('turbo')" class="px-2 py-0.5 rounded bg-[#231F2A] hover:bg-[#2D2836] text-xs text-slate-300 border border-[#3F3A46] cursor-pointer" title="Gỡ khỏi RAM/VRAM">Gỡ</button>
-                    <button id="btnDeleteDisk-turbo" onclick="deleteModelFromDisk('turbo')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span class="material-symbols-outlined text-[14px]">delete_forever</span></button>
+                    <button aria-label="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng" id="btnDeleteDisk-turbo" onclick="deleteModelFromDisk('turbo')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span aria-hidden="true" class="material-symbols-outlined text-[14px]">delete_forever</span></button>
                   </div>
                 </div>
               </div>
@@ -1515,7 +1516,7 @@
                   <div class="flex items-center gap-1">
                     <button onclick="preloadModel('standard')" class="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer" title="Nạp sẵn model vào RAM/VRAM">Nạp</button>
                     <button onclick="unloadModel('standard')" class="px-2 py-0.5 rounded bg-[#231F2A] hover:bg-[#2D2836] text-xs text-slate-300 border border-[#3F3A46] cursor-pointer" title="Gỡ khỏi RAM/VRAM">Gỡ</button>
-                    <button id="btnDeleteDisk-standard" onclick="deleteModelFromDisk('standard')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span class="material-symbols-outlined text-[14px]">delete_forever</span></button>
+                    <button aria-label="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng" id="btnDeleteDisk-standard" onclick="deleteModelFromDisk('standard')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span aria-hidden="true" class="material-symbols-outlined text-[14px]">delete_forever</span></button>
                   </div>
                 </div>
               </div>
@@ -1537,7 +1538,7 @@
                   <div class="flex items-center gap-1">
                     <button onclick="preloadModel('multilingual')" class="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white cursor-pointer" title="Nạp sẵn model vào RAM/VRAM">Nạp</button>
                     <button onclick="unloadModel('multilingual')" class="px-2 py-0.5 rounded bg-[#231F2A] hover:bg-[#2D2836] text-xs text-slate-300 border border-[#3F3A46] cursor-pointer" title="Gỡ khỏi RAM/VRAM">Gỡ</button>
-                    <button id="btnDeleteDisk-multilingual" onclick="deleteModelFromDisk('multilingual')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span class="material-symbols-outlined text-[14px]">delete_forever</span></button>
+                    <button aria-label="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng" id="btnDeleteDisk-multilingual" onclick="deleteModelFromDisk('multilingual')" class="p-1 rounded bg-[#231F2A] hover:bg-red-950 text-red-400 hover:text-red-300 border border-[#3F3A46] cursor-pointer" title="Xóa file checkpoint khỏi ổ đĩa để giải phóng dung lượng"><span aria-hidden="true" class="material-symbols-outlined text-[14px]">delete_forever</span></button>
                   </div>
                 </div>
               </div>
@@ -1554,7 +1555,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <div class="p-2 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30">
-                <span class="material-symbols-outlined text-[20px]">integration_instructions</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[20px]">integration_instructions</span>
               </div>
               <div>
                 <h2 class="text-sm font-bold text-white">🔌 Kết nối Model Context Protocol (MCP)</h2>
@@ -1567,7 +1568,7 @@
           <div class="space-y-4">
             <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs leading-relaxed text-slate-300">
               <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
-                <span class="material-symbols-outlined text-purple-400 text-[16px]">info</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">info</span>
                 <span>Giới thiệu về MCP</span>
               </h3>
               <p>
@@ -1579,7 +1580,7 @@
             <!-- Supported Tools Card -->
             <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs">
               <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
-                <span class="material-symbols-outlined text-purple-400 text-[16px]">build</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">build</span>
                 <span>Danh sách Công cụ MCP Hỗ trợ (10 Tools)</span>
               </h3>
               <p class="text-slate-400 text-[11px]">
@@ -1673,7 +1674,7 @@
             <!-- Configuration Card -->
             <div class="p-4 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-3 text-xs">
               <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-[#3F3A46]/60 pb-1.5">
-                <span class="material-symbols-outlined text-purple-400 text-[16px]">code</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">code</span>
                 <span>Cấu hình tích hợp (Configuration File)</span>
               </h3>
               <p class="text-slate-400 text-[11px]">
@@ -1696,7 +1697,7 @@
   }
 }</pre>
                 <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim()); alert('Đã sao chép vào bộ nhớ tạm!');" class="absolute top-2 right-2 px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-[10px] font-medium text-slate-300 border border-[#3F3A46] cursor-pointer flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[12px]">content_copy</span>
+                  <span aria-hidden="true" class="material-symbols-outlined text-[12px]">content_copy</span>
                   <span>Sao chép</span>
                 </button>
               </div>
@@ -1729,7 +1730,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <div class="p-2 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30">
-                <span class="material-symbols-outlined text-[20px]">bug_report</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[20px]">bug_report</span>
               </div>
               <div>
                 <h2 class="text-sm font-bold text-white">🐞 Feedback &amp; Known Issues</h2>
@@ -1737,7 +1738,7 @@
               </div>
             </div>
             <button onclick="loadFeedback()" class="px-3 py-1.5 rounded-lg bg-[#231F2A] hover:bg-[#2E2938] text-slate-300 text-xs font-medium flex items-center gap-1.5 cursor-pointer">
-              <span class="material-symbols-outlined text-[16px]">refresh</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[16px]">refresh</span>
               <span>Tải lại</span>
             </button>
           </div>
@@ -1756,11 +1757,11 @@
     <div class="bg-[#18151E] rounded-xl p-4 max-w-xl w-full border border-[#3F3A46] shadow-m3-3 space-y-3">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-purple-400 text-[18px]">info</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px]">info</span>
           <h3 class="text-sm font-bold text-white">So sánh các Mô hình AI</h3>
         </div>
-        <button onclick="closeModelCompareModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
-          <span class="material-symbols-outlined text-[18px]">close</span>
+        <button aria-label="Đóng" onclick="closeModelCompareModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span aria-hidden="true" class="material-symbols-outlined text-[18px]">close</span>
         </button>
       </div>
 
@@ -1817,11 +1818,11 @@
     <div class="bg-[#18151E] rounded-xl p-4 max-w-sm w-full border border-[#3F3A46] shadow-m3-3 space-y-3">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-purple-400 text-[18px]">content_cut</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px]">content_cut</span>
           <h3 class="text-sm font-bold text-white">Cắt âm thanh mẫu</h3>
         </div>
-        <button onclick="closeTrimmerModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
-          <span class="material-symbols-outlined text-[18px]">close</span>
+        <button aria-label="Đóng" onclick="closeTrimmerModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span aria-hidden="true" class="material-symbols-outlined text-[18px]">close</span>
         </button>
       </div>
 
@@ -1829,11 +1830,11 @@
         <p class="text-slate-300 text-[11px]">Chọn đoạn từ 3s đến 10s có giọng rõ nhất:</p>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="block text-slate-400 mb-0.5 text-[11px]">Bắt đầu (s):</label>
+            <label for="trimStart" class="block text-slate-400 mb-0.5 text-[11px]">Bắt đầu (s):</label>
             <input type="number" id="trimStart" value="0.0" step="0.5" min="0" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] rounded p-1.5 font-mono text-xs">
           </div>
           <div>
-            <label class="block text-slate-400 mb-0.5 text-[11px]">Kết thúc (s):</label>
+            <label for="trimEnd" class="block text-slate-400 mb-0.5 text-[11px]">Kết thúc (s):</label>
             <input type="number" id="trimEnd" value="6.0" step="0.5" min="1" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] rounded p-1.5 font-mono text-xs">
           </div>
         </div>
@@ -1852,15 +1853,15 @@
       <div class="flex items-center justify-between border-b border-[#3F3A46]/60 pb-2">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
-            <span class="material-symbols-outlined text-[18px]">face</span>
+            <span aria-hidden="true" class="material-symbols-outlined text-[18px]">face</span>
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">Tạo Nhân vật (Character) mới</h3>
             <p class="text-[10px] text-slate-400">Tham số sinh giọng, âm sắc và mẫu audio</p>
           </div>
         </div>
-        <button onclick="closeCreateCharacterModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
-          <span class="material-symbols-outlined text-[18px]">close</span>
+        <button aria-label="Đóng" onclick="closeCreateCharacterModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span aria-hidden="true" class="material-symbols-outlined text-[18px]">close</span>
         </button>
       </div>
 
@@ -1868,11 +1869,11 @@
         <!-- Name & Language -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div>
-            <label class="block text-slate-300 font-medium mb-0.5 text-[11px]">Tên nhân vật *</label>
+            <label for="charNameInput" class="block text-slate-300 font-medium mb-0.5 text-[11px]">Tên nhân vật *</label>
             <input type="text" id="charNameInput" placeholder="Ví dụ: MC Nam Thời Sự..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded p-2 focus:outline-none text-xs">
           </div>
           <div>
-            <label class="block text-slate-300 font-medium mb-0.5 text-[11px]">Ngôn ngữ chính *</label>
+            <label for="charLangSelect" class="block text-slate-300 font-medium mb-0.5 text-[11px]">Ngôn ngữ chính *</label>
             <select id="charLangSelect" onchange="handleCharLangChange(this.value)" class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded p-2 focus:outline-none cursor-pointer text-xs">
               <option value="vi" selected>🇻🇳 vi - Tiếng Việt</option>
               <option value="en">🇬🇧 en - English</option>
@@ -1895,7 +1896,7 @@
         </div>
 
         <div>
-          <label class="block text-slate-300 font-medium mb-0.5 text-[11px]">Mô tả đặc tính giọng đọc</label>
+          <label for="charDescInput" class="block text-slate-300 font-medium mb-0.5 text-[11px]">Mô tả đặc tính giọng đọc</label>
           <input type="text" id="charDescInput" placeholder="Ví dụ: Nam trầm ấm, dõng dạc..." class="w-full bg-[#0E0C12] text-white border border-[#3F3A46] focus:border-purple-500 rounded p-2 focus:outline-none text-xs">
         </div>
 
@@ -1903,19 +1904,19 @@
         <div class="p-2.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="text-slate-300 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
-              <span class="material-symbols-outlined text-[13px] text-purple-400">audiotrack</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[13px] text-purple-400">audiotrack</span>
               <span>Audio mẫu độc quyền (Reference Audio)</span>
             </span>
             <span class="text-[9px] text-slate-500">Tùy chọn</span>
           </div>
-          <input type="file" id="charAudioFileInput" accept="audio/*" class="hidden" onchange="handleCharAudioFileSelected(this)">
+          <input type="file" id="charAudioFileInput" aria-label="File giọng mẫu" accept="audio/*" class="hidden" onchange="handleCharAudioFileSelected(this)">
           <div class="flex items-center gap-1.5">
             <button type="button" onclick="document.getElementById('charAudioFileInput').click()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-[#2D2836] border border-[#3F3A46] text-slate-200 text-xs font-medium flex items-center gap-1 cursor-pointer">
-              <span class="material-symbols-outlined text-[14px] text-purple-400">upload_file</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[14px] text-purple-400">upload_file</span>
               <span id="charAudioBtnLabel">Chọn file...</span>
             </button>
-            <button type="button" onclick="clearCharAudioFile()" id="charAudioClearBtn" class="hidden px-1.5 py-1 rounded bg-red-900/30 hover:bg-red-900/60 border border-red-700/50 text-red-300 text-xs cursor-pointer" title="Bỏ chọn">
-              <span class="material-symbols-outlined text-[14px]">close</span>
+            <button aria-label="Bỏ chọn" type="button" onclick="clearCharAudioFile()" id="charAudioClearBtn" class="hidden px-1.5 py-1 rounded bg-red-900/30 hover:bg-red-900/60 border border-red-700/50 text-red-300 text-xs cursor-pointer" title="Bỏ chọn">
+              <span aria-hidden="true" class="material-symbols-outlined text-[14px]">close</span>
             </button>
             <span id="charAudioFileName" class="text-slate-400 text-xs truncate max-w-[200px]">Chưa chọn file</span>
           </div>
@@ -1924,7 +1925,7 @@
         <!-- Full Generation Parameters Sliders -->
         <div class="p-2.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-2">
           <div class="text-slate-300 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
-            <span class="material-symbols-outlined text-[14px] text-purple-400">tune</span>
+            <span aria-hidden="true" class="material-symbols-outlined text-[14px] text-purple-400">tune</span>
             <span>Tham số sinh giọng (Parameters)</span>
           </div>
           
@@ -1935,7 +1936,7 @@
                 <span class="text-slate-300">Biểu cảm:</span>
                 <span id="valCharExag" class="font-mono text-purple-300 font-bold">0.50</span>
               </div>
-              <input type="range" id="charExagInput" min="0.0" max="1.0" step="0.05" value="0.50" class="w-full" oninput="document.getElementById('valCharExag').textContent = parseFloat(this.value).toFixed(2)">
+              <input type="range" id="charExagInput" aria-label="Biểu cảm" min="0.0" max="1.0" step="0.05" value="0.50" class="w-full" oninput="document.getElementById('valCharExag').textContent = parseFloat(this.value).toFixed(2)">
             </div>
 
             <!-- Pace -->
@@ -1944,7 +1945,7 @@
                 <span class="text-slate-300">Nhịp đọc (Pace):</span>
                 <span id="valCharPace" class="font-mono text-purple-300 font-bold">0.50</span>
               </div>
-              <input type="range" id="charPaceInput" min="0.1" max="1.0" step="0.05" value="0.50" class="w-full" oninput="document.getElementById('valCharPace').textContent = parseFloat(this.value).toFixed(2)">
+              <input type="range" id="charPaceInput" aria-label="Nhịp đọc (Pace)" min="0.1" max="1.0" step="0.05" value="0.50" class="w-full" oninput="document.getElementById('valCharPace').textContent = parseFloat(this.value).toFixed(2)">
             </div>
 
             <!-- Stability -->
@@ -1953,7 +1954,7 @@
                 <span class="text-slate-300">Độ ổn định:</span>
                 <span id="valCharStab" class="font-mono text-purple-300 font-bold">0.70</span>
               </div>
-              <input type="range" id="charStabInput" min="0.0" max="1.0" step="0.05" value="0.70" class="w-full" oninput="document.getElementById('valCharStab').textContent = parseFloat(this.value).toFixed(2)">
+              <input type="range" id="charStabInput" aria-label="Độ ổn định" min="0.0" max="1.0" step="0.05" value="0.70" class="w-full" oninput="document.getElementById('valCharStab').textContent = parseFloat(this.value).toFixed(2)">
             </div>
 
             <!-- Seed -->
@@ -1962,7 +1963,7 @@
                 <span class="text-slate-300">Seed:</span>
                 <button type="button" onclick="document.getElementById('charSeedInput').value = Math.floor(Math.random() * 1000000)" class="text-purple-400 hover:underline cursor-pointer">🎲 Random</button>
               </div>
-              <input type="number" id="charSeedInput" min="0" max="99999999" value="0" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-1 font-mono text-xs">
+              <input type="number" id="charSeedInput" aria-label="Seed" min="0" max="99999999" value="0" class="w-full bg-[#18151E] text-white border border-[#3F3A46] rounded p-1 font-mono text-xs">
             </div>
           </div>
         </div>
@@ -1975,11 +1976,11 @@
 
         <!-- Test Voice Preview Card -->
         <div class="p-2 rounded-lg bg-[#231F2A] border border-[#3F3A46] space-y-1">
-          <label class="block text-slate-300 font-medium text-[11px]">Văn bản đọc thử:</label>
+          <label for="charTestTextInput" class="block text-slate-300 font-medium text-[11px]">Văn bản đọc thử:</label>
           <div class="flex gap-1.5">
             <input type="text" id="charTestTextInput" value="Xin chào, đây là câu đọc thử nghiệm trước khi tạo Character." class="flex-1 bg-[#0E0C12] text-white border border-[#3F3A46] rounded p-1.5 focus:outline-none text-xs">
             <button type="button" id="charTestVoiceBtn" onclick="testCharacterVoice()" class="px-3 py-1.5 rounded bg-[#18151E] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0 text-xs">
-              <span class="material-symbols-outlined text-[15px]">volume_up</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[15px]">volume_up</span>
               <span>Nghe thử</span>
             </button>
           </div>
@@ -1998,11 +1999,11 @@
     <div class="bg-[#18151E] rounded-xl p-4 max-w-sm w-full border border-[#3F3A46] shadow-m3-3 space-y-3">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-purple-400 text-[18px]">keyboard</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px]">keyboard</span>
           <h3 class="text-sm font-bold text-white">Phím tắt (Shortcuts)</h3>
         </div>
-        <button onclick="closeShortcutsModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
-          <span class="material-symbols-outlined text-[18px]">close</span>
+        <button aria-label="Đóng" onclick="closeShortcutsModal()" class="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <span aria-hidden="true" class="material-symbols-outlined text-[18px]">close</span>
         </button>
       </div>
 
@@ -2017,17 +2018,17 @@
   </div>
 
   <!-- ==================== JAVASCRIPT CONTROLLERS (MODULAR) ==================== -->
-  <script src="/static/js/state.js?v=20260913-v25"></script>
-  <script src="/static/js/tts.js?v=20260913-v25"></script>
-  <script src="/static/js/batch.js?v=20260913-v25"></script>
-  <script src="/static/js/multilingual.js?v=20260913-v25"></script>
-  <script src="/static/js/vc.js?v=20260913-v25"></script>
-  <script src="/static/js/director-console.js?v=20260916-v46"></script>
-  <script src="/static/js/characters.js?v=20260913-v25"></script>
-  <script src="/static/js/history.js?v=20260913-v25"></script>
+  <script src="/static/js/state.js?v=20261007-a11y"></script>
+  <script src="/static/js/tts.js?v=20261007-a11y"></script>
+  <script src="/static/js/batch.js?v=20261007-a11y"></script>
+  <script src="/static/js/multilingual.js?v=20261007-a11y"></script>
+  <script src="/static/js/vc.js?v=20261007-a11y"></script>
+  <script src="/static/js/director-console.js?v=20261007-a11y"></script>
+  <script src="/static/js/characters.js?v=20261007-a11y"></script>
+  <script src="/static/js/history.js?v=20261007-a11y"></script>
   <script src="/static/js/settings.js?v=20260913-v25"></script>
   <script src="/static/js/feedback.js?v=20260915-v1"></script>
-  <script src="/static/js/notifications.js?v=20260913-v26"></script>
-  <script src="/static/js/main.js?v=20260916-v26"></script>
+  <script src="/static/js/notifications.js?v=20261007-a11y"></script>
+  <script src="/static/js/main.js?v=20261007-a11y"></script>
 </body>
 </html>

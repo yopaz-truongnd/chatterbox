@@ -17,7 +17,7 @@ async function triggerVcConversion() {
   if (!src || !tgt) return showToast('warning', 'Vui lòng chọn cả File Nguồn và File Mẫu Đích.');
 
   if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang chuyển đổi âm sắc...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang chuyển đổi âm sắc...</span>';
     btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
     btn.disabled = true;
   }
@@ -32,12 +32,12 @@ async function triggerVcConversion() {
       const job = await res.json();
       showToast('info', 'Đã bắt đầu chuyển đổi âm sắc giọng!');
       if (typeof pollJob === 'function') {
-        await pollJob(job.id, btn, 'Chuyển đổi âm sắc giọng nói', '<span class="material-symbols-outlined text-[22px]">sync</span>');
+        await pollJob(job.id, btn, 'Chuyển đổi âm sắc giọng nói', '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">sync</span>');
       }
     } else {
       showToast('error', 'Lỗi Voice Conversion.');
       if (btn) {
-        btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
+        btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
         btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
         btn.disabled = false;
       }
@@ -45,7 +45,7 @@ async function triggerVcConversion() {
   } catch (e) {
     showToast('error', 'Lỗi Voice Conversion: ' + e.message);
     if (btn) {
-      btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
+      btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">sync</span><span>Chuyển đổi âm sắc giọng nói</span>';
       btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
       btn.disabled = false;
     }

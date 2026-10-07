@@ -22,8 +22,8 @@ async function refreshHistory() {
         miniList.innerHTML = jobs.slice(0, 6).map(j => `
           <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0E0C12] hover:bg-[#231F2A] border border-[#3F3A46]/50 transition-colors group">
             <div class="flex items-center gap-3 overflow-hidden">
-              <button onclick="playAudioUrl('${j.audio_url}', '${escapeHtml(j.params?.text || 'Audio')}')" class="w-8 h-8 rounded-full bg-[#231F2A] group-hover:bg-purple-600 group-hover:text-white text-purple-400 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
-                <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+              <button aria-label="Phát" onclick="playAudioUrl('${j.audio_url}', '${escapeHtml(j.params?.text || 'Audio')}')" class="w-8 h-8 rounded-full bg-[#231F2A] group-hover:bg-purple-600 group-hover:text-white text-purple-400 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
+                <span aria-hidden="true" class="material-symbols-outlined text-[18px]">play_arrow</span>
               </button>
               <div class="truncate">
                 <div class="text-xs font-medium text-white truncate">${escapeHtml(j.params?.text || j.type)}</div>
@@ -31,8 +31,8 @@ async function refreshHistory() {
               </div>
             </div>
             ${j.audio_url ? `
-              <a href="${j.audio_url}" download="audio-${j.id}.wav" class="p-1 rounded-full text-slate-400 hover:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span class="material-symbols-outlined text-[18px]">download</span>
+              <a href="${j.audio_url}" download="audio-${j.id}.wav" aria-label="Tải xuống" class="p-1 rounded-full text-slate-400 hover:text-purple-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">
+                <span aria-hidden="true" class="material-symbols-outlined text-[18px]">download</span>
               </a>
             ` : ''}
           </div>
@@ -43,8 +43,8 @@ async function refreshHistory() {
         fullTbody.innerHTML = jobs.map(j => `
           <tr class="hover:bg-[#18151E] transition-colors">
             <td class="p-3.5">
-              <button onclick="playAudioUrl('${j.audio_url}', '${escapeHtml(j.params?.text || 'Audio')}')" class="w-8 h-8 rounded-full bg-[#231F2A] hover:bg-purple-600 text-purple-400 hover:text-white flex items-center justify-center cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
-                <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+              <button aria-label="Phát" onclick="playAudioUrl('${j.audio_url}', '${escapeHtml(j.params?.text || 'Audio')}')" class="w-8 h-8 rounded-full bg-[#231F2A] hover:bg-purple-600 text-purple-400 hover:text-white flex items-center justify-center cursor-pointer" ${!j.audio_url ? 'disabled' : ''}>
+                <span aria-hidden="true" class="material-symbols-outlined text-[18px]">play_arrow</span>
               </button>
             </td>
             <td class="p-3.5 font-medium text-white max-w-md truncate">${escapeHtml(j.params?.text || j.type)}</td>
@@ -57,8 +57,8 @@ async function refreshHistory() {
             </td>
             <td class="p-3.5 text-right">
               ${j.audio_url ? `
-                <a href="${j.audio_url}" download="chatterbox-${j.id}.wav" class="p-1.5 rounded-lg bg-[#231F2A] hover:bg-purple-600 text-white inline-flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[16px]">download</span>
+                <a href="${j.audio_url}" download="chatterbox-${j.id}.wav" aria-label="Tải xuống" class="p-1.5 rounded-lg bg-[#231F2A] hover:bg-purple-600 text-white inline-flex items-center gap-1">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">download</span>
                 </a>
               ` : ''}
             </td>

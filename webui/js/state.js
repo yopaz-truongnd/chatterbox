@@ -129,13 +129,13 @@ function showToast(type, message, title = '') {
 
   toast.className += ` ${borderClass}`;
   toast.innerHTML = `
-    <span class="material-symbols-outlined text-[20px] ${iconColor} flex-shrink-0 mt-0.5">${icon}</span>
+    <span aria-hidden="true" class="material-symbols-outlined text-[20px] ${iconColor} flex-shrink-0 mt-0.5">${icon}</span>
     <div class="flex-1">
-      <div class="font-bold text-sm mb-0.5">${title}</div>
-      <div class="text-slate-300 leading-relaxed">${message}</div>
+      <div class="font-bold text-sm mb-0.5">${escapeHtml(title)}</div>
+      <div class="text-slate-300 leading-relaxed">${escapeHtml(message)}</div>
     </div>
-    <button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-white cursor-pointer flex-shrink-0">
-      <span class="material-symbols-outlined text-[16px]">close</span>
+    <button type="button" aria-label="Đóng thông báo" onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-white cursor-pointer flex-shrink-0">
+      <span aria-hidden="true" class="material-symbols-outlined text-[16px]">close</span>
     </button>
   `;
 
@@ -240,16 +240,19 @@ function toggleMobileNav() {
 
 // ==================== THEME & SHORTCUTS ====================
 function updateThemeUI(isDark) {
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#0E0C12' : '#F8FAFC');
   const icon = document.getElementById('themeIcon');
   const toggleBtn = document.getElementById('themeToggle');
   if (isDark) {
     document.documentElement.classList.add('dark');
     if (icon) icon.textContent = 'light_mode';
     if (toggleBtn) toggleBtn.title = 'Chuyển sang chế độ Sáng';
+    if (toggleBtn) toggleBtn.setAttribute('aria-label', 'Chuyển sang chế độ Sáng');
   } else {
     document.documentElement.classList.remove('dark');
     if (icon) icon.textContent = 'dark_mode';
     if (toggleBtn) toggleBtn.title = 'Chuyển sang chế độ Tối';
+    if (toggleBtn) toggleBtn.setAttribute('aria-label', 'Chuyển sang chế độ Tối');
   }
 }
 

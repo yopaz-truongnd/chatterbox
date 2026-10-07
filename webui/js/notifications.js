@@ -233,7 +233,7 @@ function renderNotificationsList() {
   if (eventNotifications.length === 0) {
     container.innerHTML = `
       <div id="notificationsEmpty" class="py-8 text-center text-slate-500 space-y-1">
-        <span class="material-symbols-outlined text-[28px] text-slate-600">notifications_paused</span>
+        <span aria-hidden="true" class="material-symbols-outlined text-[28px] text-slate-600">notifications_paused</span>
         <p class="text-xs">Chưa có thông báo sự kiện nào</p>
       </div>
     `;
@@ -251,15 +251,15 @@ function renderNotificationsList() {
     return `
       <div class="p-2.5 hover:bg-[#231F2A] transition-colors rounded-lg flex items-start gap-2.5 group">
         <div class="w-7 h-7 rounded-lg ${meta.bg} border flex items-center justify-center shrink-0 mt-0.5">
-          <span class="material-symbols-outlined text-[16px] ${meta.color}">${meta.icon}</span>
+          <span aria-hidden="true" class="material-symbols-outlined text-[16px] ${meta.color}">${meta.icon}</span>
         </div>
         <div class="flex-1 min-w-0 space-y-0.5">
           <div class="flex items-center justify-between gap-1">
             <span class="font-bold text-white text-xs truncate">${title}</span>
             <div class="flex items-center gap-1.5 shrink-0">
               <span class="text-[10px] text-slate-400 font-mono">${timeStr}</span>
-              <button onclick="dismissNotification(${itemId}, event)" class="p-0.5 text-slate-500 hover:text-rose-400 rounded hover:bg-[#18151E] transition-colors cursor-pointer" title="Xóa thông báo này">
-                <span class="material-symbols-outlined text-[14px]">close</span>
+              <button aria-label="Xóa thông báo này" onclick="dismissNotification(${itemId}, event)" class="p-0.5 text-slate-500 hover:text-rose-400 rounded hover:bg-[#18151E] transition-colors cursor-pointer" title="Xóa thông báo này">
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">close</span>
               </button>
             </div>
           </div>
@@ -271,7 +271,7 @@ function renderNotificationsList() {
           ${audioUrl ? `
             <div class="pt-1 flex items-center gap-2">
               <button onclick="playNotificationAudio('${audioUrl}')" class="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] flex items-center gap-1">
-                <span class="material-symbols-outlined text-[13px]">play_arrow</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[13px]">play_arrow</span>
                 <span>Nghe Audio</span>
               </button>
             </div>

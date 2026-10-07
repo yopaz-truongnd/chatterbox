@@ -55,6 +55,9 @@ html, body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+html.dark { color-scheme: dark; }
+html:not(.dark) { color-scheme: light; }
+
 html.dark, html.dark body {
   background-color: #0E0C12 !important;
   color: #FFFFFF !important;
@@ -121,10 +124,10 @@ html:not(.dark) select {
   color: #0F172A !important;
   border-color: #CBD5E1 !important;
 }
-html:not(.dark) textarea:focus,
-html:not(.dark) input[type="text"]:focus,
-html:not(.dark) input[type="number"]:focus,
-html:not(.dark) select:focus {
+html:not(.dark) textarea:focus-visible,
+html:not(.dark) input[type="text"]:focus-visible,
+html:not(.dark) input[type="number"]:focus-visible,
+html:not(.dark) select:focus-visible {
   border-color: #7C3AED !important;
   box-shadow: 0 0 0 1px #7C3AED !important;
 }
@@ -194,4 +197,25 @@ html:not(.dark) .bg-emerald-600 *,
 html:not(.dark) .bg-red-600 *,
 html:not(.dark) .bg-blue-600 * {
   color: #FFFFFF !important;
+}
+
+/* ==================== KEYBOARD FOCUS ==================== */
+/* !important: Tailwind's focus:outline-none would otherwise hide the ring for keyboard users. */
+:focus-visible {
+  outline: 2px solid #A78BFA !important;
+  outline-offset: 2px !important;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline-offset: 0 !important;
+}
+html:not(.dark) :focus-visible { outline-color: #7C3AED !important; }
+
+/* ==================== REDUCED MOTION ==================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

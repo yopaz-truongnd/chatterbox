@@ -80,7 +80,7 @@ async function triggerMtlSynthesis() {
   if (!text) return showToast('warning', 'Vui lòng nhập văn bản.');
 
   if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
     btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
     btn.disabled = true;
   }
@@ -120,7 +120,7 @@ async function triggerMtlSynthesis() {
       const job = await res.json();
       showToast('info', 'Đã gửi tác vụ đa ngôn ngữ vào hàng đợi!');
       if (typeof pollJob === 'function') {
-        await pollJob(job.id, btn, 'Sinh giọng nói Đa ngôn ngữ', '<span class="material-symbols-outlined text-[22px]">record_voice_over</span>');
+        await pollJob(job.id, btn, 'Sinh giọng nói Đa ngôn ngữ', '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">record_voice_over</span>');
       }
     } else {
       let errDetail = 'Lỗi khi gửi tác vụ đa ngôn ngữ.';
@@ -138,7 +138,7 @@ async function triggerMtlSynthesis() {
       } catch (_) {}
       showToast('error', errDetail);
       if (btn) {
-        btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
+        btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
         btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
         btn.disabled = false;
       }
@@ -146,7 +146,7 @@ async function triggerMtlSynthesis() {
   } catch (e) {
     showToast('error', 'Lỗi kết nối: ' + e.message);
     if (btn) {
-      btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
+      btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
       btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
       btn.disabled = false;
     }

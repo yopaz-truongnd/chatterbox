@@ -344,11 +344,11 @@ function togglePlayPause() {
   if (audioElement.src && !audioElement.paused) {
     audioElement.pause();
     isPlaying = false;
-    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
+    if (btn) btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">play_arrow</span>';
   } else if (audioElement.src) {
     audioElement.play().catch(() => {});
     isPlaying = true;
-    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
+    if (btn) btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">pause</span>';
   }
 }
 
@@ -359,7 +359,7 @@ function stopAudio() {
     audioElement.currentTime = 0;
   }
   const btn = document.getElementById('btnPlayPause');
-  if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
+  if (btn) btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">play_arrow</span>';
   const timer = document.getElementById('playbackTimer');
   if (timer) timer.textContent = '00:00 / 00:00';
   drawWaveform(0);
@@ -380,7 +380,7 @@ function playAudioUrl(url, title = "Generated Audio") {
 
   audioElement.play().catch(() => {});
   isPlaying = true;
-  if (btnPlay) btnPlay.innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
+  if (btnPlay) btnPlay.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">pause</span>';
 }
 
 function downloadCurrentWav() {
@@ -491,7 +491,7 @@ async function triggerSynthesis() {
   const stageMsg = document.getElementById('ttsStageMessage');
 
   if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang xử lý...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang xử lý...</span>';
     btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
     btn.disabled = true;
   }
@@ -527,19 +527,19 @@ async function triggerSynthesis() {
     if (response.ok) {
       const job = await response.json();
       currentActiveJobId = job.id;
-      await pollJob(job.id, btn, 'SINH GIỌNG NÓI (Ctrl + Enter)', '<span class="material-symbols-outlined text-[22px]">play_circle</span>');
+      await pollJob(job.id, btn, 'SINH GIỌNG NÓI (Ctrl + Enter)', '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>');
     } else {
       const errData = await response.json().catch(() => ({}));
       showToast('error', 'Lỗi khi gửi yêu cầu tới server API: ' + (errData.detail || response.statusText));
-      resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
+      resetTtsUi(btn, '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
     }
   } catch (err) {
     showToast('error', 'Không thể kết nối tới server API: ' + err.message);
-    resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
+    resetTtsUi(btn, '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
   }
 }
 
-async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + Enter)', origIcon = '<span class="material-symbols-outlined text-[22px]">play_circle</span>') {
+async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + Enter)', origIcon = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>') {
   const generateBtn = btn || document.getElementById('generateBtn');
   const progressFill = document.getElementById('ttsProgressFill');
   const progressPercent = document.getElementById('ttsProgressPercent');

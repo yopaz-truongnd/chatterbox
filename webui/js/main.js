@@ -72,7 +72,7 @@ audioElement.addEventListener('timeupdate', () => {
 audioElement.addEventListener('ended', () => {
   isPlaying = false;
   const btn = document.getElementById('btnPlayPause');
-  if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
+  if (btn) btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">play_arrow</span>';
   if (typeof drawWaveform === 'function') {
     drawWaveform(0);
   }
@@ -102,7 +102,8 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'F1') {
     e.preventDefault();
     if (typeof openShortcutsModal === 'function') openShortcutsModal();
-  } else if (e.key === ' ' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+  } else if (e.key === ' ' && !e.target.closest('input, textarea, select, button, a, summary, [contenteditable], [role="button"]')) {
+    // Space on a focused control must activate that control, not toggle playback.
     e.preventDefault();
     if (typeof togglePlayPause === 'function') togglePlayPause();
   }

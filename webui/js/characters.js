@@ -132,7 +132,7 @@ async function loadCharacters() {
                   <div>
                     <div class="font-bold text-sm text-white flex items-center gap-1.5">
                       <span>${c.name}</span>
-                      ${c.is_default ? '<span class="material-symbols-outlined text-amber-400 text-[16px]" title="Nhân vật mặc định">star</span>' : ''}
+                      ${c.is_default ? '<span aria-hidden="true" class="material-symbols-outlined text-amber-400 text-[16px]" title="Nhân vật mặc định">star</span>' : ''}
                     </div>
                     <div class="text-[10px] text-slate-400 uppercase font-mono">${c.language || 'vi'} • ${c.has_reference_audio ? '🎙️ Giọng mẫu độc quyền' : '⚡ Mặc định'}</div>
                   </div>
@@ -149,15 +149,15 @@ async function loadCharacters() {
 
             <div class="flex justify-between items-center pt-2.5 border-t border-[#3F3A46]/50 gap-2">
               <button onclick="useCharacterInTts('${c.id}')" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer">
-                <span class="material-symbols-outlined text-[14px]">record_voice_over</span>
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">record_voice_over</span>
                 <span>Dùng trong TTS</span>
               </button>
               <div class="flex items-center gap-1">
-                <button onclick="toggleDefaultCharacter('${c.id}', ${!c.is_default})" class="p-1 rounded text-slate-300 hover:text-amber-400 hover:bg-[#231F2A] cursor-pointer" title="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}">
-                  <span class="material-symbols-outlined text-[16px]">${c.is_default ? 'star' : 'star_border'}</span>
+                <button aria-label="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}" onclick="toggleDefaultCharacter('${c.id}', ${!c.is_default})" class="p-1 rounded text-slate-300 hover:text-amber-400 hover:bg-[#231F2A] cursor-pointer" title="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">${c.is_default ? 'star' : 'star_border'}</span>
                 </button>
-                <button onclick="deleteCharacter('${c.id}')" class="p-1 rounded text-red-400 hover:bg-red-900/30 cursor-pointer" title="Xóa nhân vật">
-                  <span class="material-symbols-outlined text-[16px]">delete</span>
+                <button aria-label="Xóa nhân vật" onclick="deleteCharacter('${c.id}')" class="p-1 rounded text-red-400 hover:bg-red-900/30 cursor-pointer" title="Xóa nhân vật">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">delete</span>
                 </button>
               </div>
             </div>
@@ -234,7 +234,7 @@ async function testCharacterVoice() {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang tạo...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang tạo...</span>';
   }
 
   try {
@@ -253,20 +253,20 @@ async function testCharacterVoice() {
     if (res.ok) {
       const job = await res.json();
       if (typeof pollJob === 'function') {
-        await pollJob(job.id, btn, 'Nghe thử', '<span class="material-symbols-outlined text-[16px]">volume_up</span>');
+        await pollJob(job.id, btn, 'Nghe thử', '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span>');
       }
     } else {
       showToast('error', 'Lỗi khi sinh giọng thử nghiệm.');
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
+        btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
       }
     }
   } catch (err) {
     showToast('error', 'Lỗi đọc thử: ' + err.message);
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
+      btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
     }
   }
 }
@@ -286,7 +286,7 @@ async function saveNewCharacter() {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang lưu...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang lưu...</span>';
   }
 
   try {

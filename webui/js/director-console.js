@@ -214,7 +214,7 @@ function directorIdeaRenderQuestions(questions) {
     }
     qCard.innerHTML = `
       <div class="flex items-start justify-between gap-2">
-        <label class="text-xs font-semibold text-white flex items-center gap-1.5">
+        <label for="director_idea_q_${q.id}" class="text-xs font-semibold text-white flex items-center gap-1.5">
           <span class="w-4 h-4 rounded-full bg-amber-600 text-white font-mono text-[10px] flex items-center justify-center">${idx + 1}</span>
           <span>${escapeHtml(q.question || q.id)}</span>
           ${q.required ? '<span class="text-red-400 font-bold">*</span>' : '<span class="text-slate-500 text-[10px]">(Khuyến nghị)</span>'}
@@ -298,7 +298,7 @@ async function directorIdeaPrepare() {
   const topic = document.getElementById('directorIdeaTopic')?.value.trim();
   if (!topic) return showToast('warning', 'Vui lòng nhập chủ đề dự án âm thanh.');
   const autoDefaults = document.getElementById('directorIdeaAutoDefaults')?.checked ?? true;
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang phân tích...</span>'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang phân tích...</span>'; }
   try {
     const data = await directorFetch('/api/v1/projects/prepare', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -308,7 +308,7 @@ async function directorIdeaPrepare() {
   } catch (error) {
     showToast('error', escapeHtml(error.message));
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">psychology</span><span>Phân tích & Khởi tạo</span>'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">psychology</span><span>Phân tích & Khởi tạo</span>'; }
   }
 }
 
@@ -322,7 +322,7 @@ async function directorIdeaSubmitAnswers() {
   });
   const freeform = document.getElementById('directorIdeaFreeform')?.value.trim();
   const autoDefaults = document.getElementById('directorIdeaAnswersAutoDefaults')?.checked ?? true;
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang cập nhật...</span>'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang cập nhật...</span>'; }
   try {
     const data = await directorFetch(`/api/v1/projects/${directorIdeaProjectId}/answer`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -332,7 +332,7 @@ async function directorIdeaSubmitAnswers() {
   } catch (error) {
     showToast('error', escapeHtml(error.message));
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">send</span><span>Gửi câu trả lời & Tóm tắt</span>'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">send</span><span>Gửi câu trả lời & Tóm tắt</span>'; }
   }
 }
 
@@ -612,7 +612,7 @@ function renderDirectorNoteBox() {
   return `<div class="mb-4 p-3 rounded-lg bg-[#1B1720] border border-amber-700/40">
     <h4 class="text-xs font-bold text-amber-300 mb-1">📝 Ghi chú của đạo diễn</h4>
     <p class="text-[9px] text-slate-500 mb-2">Vd: tài nguyên SFX/ambience cần tự tìm kiếm và bổ sung thủ công.</p>
-    <textarea id="directorNoteInput" rows="3" placeholder="Ghi chú tài nguyên cần tìm, lưu ý sản xuất..." class="director-input w-full resize-y">${escapeHtml(note)}</textarea>
+    <textarea id="directorNoteInput" aria-label="Ghi chú của đạo diễn" rows="3" placeholder="Ghi chú tài nguyên cần tìm, lưu ý sản xuất..." class="director-input w-full resize-y">${escapeHtml(note)}</textarea>
     <div class="flex justify-end mt-2"><button onclick="saveDirectorNote()" class="px-2.5 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white text-[10px]">Lưu ghi chú</button></div>
   </div>`;
 }
@@ -669,7 +669,7 @@ function renderDirectorPronunciationGap(gap) {
   if (!gap.term) return `<p class="text-[10px] text-slate-500">Chưa có từ cần xác nhận phát âm.</p>`;
   return `<div class="flex items-center gap-1.5 p-1.5 rounded border ${required ? 'bg-red-950/30 border-red-800/60' : 'bg-amber-950/30 border-amber-800/60'}" data-pron-term="${escapeHtml(gap.term)}">
     <b class="text-white text-xs shrink-0" title="Thuật ngữ cần xác nhận phát âm">${escapeHtml(gap.term)}</b>
-    <input class="director-input flex-1 min-w-0" value="${escapeHtml(gap.term)}" placeholder="Cách phát âm đã xác nhận..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.nextElementSibling.click();}">
+    <input class="director-input flex-1 min-w-0" aria-label="Cách phát âm cho ${escapeHtml(gap.term)}" value="${escapeHtml(gap.term)}" placeholder="Cách phát âm đã xác nhận..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.nextElementSibling.click();}">
     <button onclick="resolveDirectorPronunciation('${escapeHtml(gap.term)}',this)" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Xác nhận</button>
   </div>`;
 }
@@ -745,7 +745,7 @@ function renderDirectorAssetGap(gap) {
   return `<div class="director-asset-gap p-2 rounded border ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} text-xs text-amber-200" data-resource-id="${escapeHtml(gap.resource_id)}" data-required="${required}">
     <div class="flex justify-between items-start gap-2"><b class="text-white">${escapeHtml(label)}</b><b class="text-[9px] uppercase shrink-0">${escapeHtml(gap.priority)}</b></div>
     ${details}
-    <div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button>${suggestBtn}${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-[#231F2A] text-[10px]">Bỏ qua</button>`}</div>
+    <div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" aria-label="Mã tài nguyên hiện có cho ${escapeHtml(label)}" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button>${suggestBtn}${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-[#231F2A] text-[10px]">Bỏ qua</button>`}</div>
     <div class="director-asset-suggestions mt-2 space-y-1"></div>
   </div>`;
 }
@@ -761,7 +761,7 @@ async function directorFindAssetSuggestions(resourceId, button) {
   if (!gap || !container) return;
   button.disabled = true;
   const originalLabel = button.innerHTML;
-  button.innerHTML = '<span class="material-symbols-outlined animate-spin text-[12px] align-middle">progress_activity</span> Đang tìm...';
+  button.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[12px] align-middle">progress_activity</span> Đang tìm...';
   try {
     const wanted = gap.wanted || {};
     const results = await directorFetch('/api/v1/voice-assets/match', {
@@ -805,7 +805,7 @@ function renderDirectorReview() {
       const btnClass = isApproved ? 'bg-emerald-700' : needsApproval ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#231F2A] hover:bg-[#2d2838]';
       const btnLabel = isApproved ? `✓ Bản ${a.attempt_id} · đã duyệt` : needsApproval ? `Bản ${a.attempt_id} · cần duyệt` : `Bản ${a.attempt_id}`;
       const btnTitle = isApproved ? 'Đã được duyệt tường minh, sẵn sàng dùng cho bản phối cuối' : needsApproval ? 'Đang là bản được chọn nhưng CHƯA được duyệt tường minh -- bấm để duyệt' : 'Bấm để chọn và duyệt tường minh bản ghi âm này';
-      return `<div class="flex items-center gap-1"><audio controls preload="none" class="h-8 w-44" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.artifact_id)}"></audio><button onclick="selectDirectorAttempt('${escapeHtml(beat.beat_id)}',${a.attempt_id})" title="${btnTitle}" class="px-2 py-1 rounded ${btnClass} text-[10px] text-white">${btnLabel}</button></div>`;
+      return `<div class="flex items-center gap-1"><audio controls preload="none" class="h-8 w-44" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.artifact_id)}"></audio><button aria-label="${btnTitle}" onclick="selectDirectorAttempt('${escapeHtml(beat.beat_id)}',${a.attempt_id})" title="${btnTitle}" class="px-2 py-1 rounded ${btnClass} text-[10px] text-white">${btnLabel}</button></div>`;
     }).join('')}</div>
     <div class="flex flex-wrap items-center gap-1.5 mt-3"><label class="text-[10px] text-slate-400 shrink-0">Giọng nhân vật:</label><select id="directorVoiceSelect_${escapeHtml(beat.beat_id)}" class="director-input flex-1 min-w-32">${directorVoiceOptionsHtml(beat.character_id)}</select><button onclick="saveDirectorBeatVoice('${escapeHtml(beat.beat_id)}',document.getElementById('directorVoiceSelect_${escapeHtml(beat.beat_id)}').value)" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Lưu giọng</button></div>
     <div class="flex gap-2 mt-3"><button onclick="openDirectorBeat('${escapeHtml(beat.beat_id)}')" class="px-3 py-1 rounded bg-purple-600 text-white text-[10px]">Mở chi tiết đoạn</button></div></article>`).join('')}</div>`;
@@ -865,7 +865,7 @@ async function renderDirectorDelivery(content, force = false, userInitiated = fa
       const valid = lineage?.exists && lineage?.fresh && lineage?.sha256 === a.sha256;
       const label = valid ? 'ĐÃ XÁC MINH' : lineage?.exists && !lineage?.fresh ? 'ĐÃ CŨ' : 'CHƯA XÁC MINH';
       const downloadUrl = escapeHtml(lineage?.download_url || a.download_url || `/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.id)}`);
-      const download = valid ? `<a class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold inline-flex items-center gap-1" href="${downloadUrl}" download><span class="material-symbols-outlined text-[14px]">download</span> Tải xuống</a>` : '<span class="px-3 py-1 rounded bg-[#231F2A] text-slate-500 text-xs">Chưa thể tải</span>';
+      const download = valid ? `<a class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold inline-flex items-center gap-1" href="${downloadUrl}" download><span aria-hidden="true" class="material-symbols-outlined text-[14px]">download</span> Tải xuống</a>` : '<span class="px-3 py-1 rounded bg-[#231F2A] text-slate-500 text-xs">Chưa thể tải</span>';
       const isAudio = a.type === 'final_wav' || a.type === 'final_mp3' || a.id.endsWith('_wav') || a.id.endsWith('_mp3') || /\.(wav|mp3)$/i.test(a.filename || '');
       const audioPlayer = isAudio ? `<div class="mt-2 w-full pt-2 border-t border-[#231F2A]"><div class="flex items-center justify-between text-[10px] text-slate-400 mb-1"><span>Nghe trực tiếp ${escapeHtml(a.filename || a.id)}</span><span>${formatDirectorBytes(a.size_bytes)}</span></div><audio controls preload="metadata" class="w-full h-8" src="${downloadUrl}"></audio></div>` : '';
 
@@ -924,7 +924,7 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
             <span class="ml-2 text-[10px] ${isVerified ? 'text-emerald-400' : 'text-amber-400'} font-semibold">${isVerified ? '✓ ĐÃ XÁC MINH' : 'CHƯA XÁC MINH'}</span>
           </div>
           <a href="${downloadUrl}" download class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold inline-flex items-center gap-1">
-            <span class="material-symbols-outlined text-[13px]">download</span> Tải file
+            <span aria-hidden="true" class="material-symbols-outlined text-[13px]">download</span> Tải file
           </a>
         </div>
         <audio controls preload="metadata" class="w-full h-8" src="${downloadUrl}"></audio>
@@ -1001,7 +1001,7 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
         <div>
           <div class="flex items-center justify-between mb-2">
             <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-purple-400 text-[16px]">play_circle</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">play_circle</span>
               Thẻ nghe bản phát hành hoàn chỉnh (Master / Export)
             </h4>
             <span class="text-[10px] text-slate-400">Nghe trực tiếp trước khi phân phối</span>
@@ -1019,7 +1019,7 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
               <p class="text-[9px] text-slate-400 font-mono mt-0.5">SHA-256: ${escapeHtml(scriptSha)} · ${wordCount} từ · ${scriptText.length} ký tự</p>
             </div>
             <button onclick="copyDirectorScript()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-800 text-white text-[10px] font-medium inline-flex items-center gap-1">
-              <span class="material-symbols-outlined text-[13px]">content_copy</span> Sao chép kịch bản
+              <span aria-hidden="true" class="material-symbols-outlined text-[13px]">content_copy</span> Sao chép kịch bản
             </button>
           </div>
           <div class="p-3 rounded bg-[#18151E] text-slate-200 text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto border border-[#231F2A]">${escapeHtml(scriptText)}</div>
@@ -1028,7 +1028,7 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
         <!-- Beat by Beat Table -->
         <div>
           <h4 class="text-xs font-bold text-white mb-2 flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-purple-400 text-[16px]">list_alt</span>
+            <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">list_alt</span>
             Bảng tra soát chi tiết từng câu thoại (Beat Audit Matrix)
           </h4>
           <div class="overflow-x-auto rounded-lg border border-[#3F3A46] bg-[#0E0C12]">
