@@ -151,13 +151,13 @@ async function fetchModelsStatus() {
 
       if (diskEl) {
         if (m.cached_on_disk && m.size_mb > 0) {
-          diskEl.innerHTML = `<span class="text-emerald-400 font-mono">${m.size_mb} MB</span> trên ổ đĩa`;
+          diskEl.innerHTML = `<span class="text-emerald-400 font-medium">Đã tải</span> · <span class="tabular-nums">${new Intl.NumberFormat('vi-VN').format(m.size_mb)}&nbsp;MB</span>`;
           if (delBtn) delBtn.disabled = false;
         } else if (m.cached_on_disk) {
-          diskEl.innerHTML = `<span class="text-emerald-400 font-mono">Đã có</span> trên ổ đĩa`;
+          diskEl.innerHTML = `<span class="text-emerald-400 font-medium">Đã tải</span> về ổ đĩa`;
           if (delBtn) delBtn.disabled = false;
         } else {
-          diskEl.innerHTML = `<span class="text-amber-400 font-mono">Chưa tải</span> về ổ đĩa`;
+          diskEl.innerHTML = `<span class="text-amber-400 font-medium">Chưa tải</span> về ổ đĩa`;
           if (delBtn) delBtn.disabled = true;
         }
       }

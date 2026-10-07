@@ -176,8 +176,10 @@ function setDirectorCreateMode(mode) {
   const isIdea = mode === 'idea';
   manualPanel.classList.toggle('hidden', isIdea);
   ideaPanel.classList.toggle('hidden', !isIdea);
-  manualBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'text-foreground font-medium' : 'bg-primary text-primary-foreground'}`;
-  ideaBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'bg-primary text-primary-foreground' : 'text-foreground font-medium'}`;
+  manualBtn.className = `px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isIdea ? 'text-muted-foreground hover:text-foreground' : 'bg-background text-foreground shadow-m3-2'}`;
+  ideaBtn.className = `px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isIdea ? 'bg-background text-foreground shadow-m3-2' : 'text-muted-foreground hover:text-foreground'}`;
+  manualBtn.setAttribute('aria-pressed', String(!isIdea));
+  ideaBtn.setAttribute('aria-pressed', String(isIdea));
 }
 
 function directorIdeaStepVisibility(step) {
@@ -562,7 +564,9 @@ function showDirectorView(view, userInitiated = false, force = false) {
   }
   directorView = view;
   document.querySelectorAll('#directorViews button').forEach(button => {
-    button.className = `px-3 py-2 rounded-lg text-xs whitespace-nowrap ${button.dataset.view === view ? 'bg-primary text-primary-foreground font-bold' : 'bg-muted text-foreground'}`;
+    const selected = button.dataset.view === view;
+    button.className = `px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${selected ? 'bg-background text-foreground shadow-m3-2' : 'text-muted-foreground hover:text-foreground'}`;
+    if (selected) button.setAttribute('aria-current', 'true'); else button.removeAttribute('aria-current');
   });
   const content = document.getElementById('directorViewContent');
   if (!directorActive || !content) return;
