@@ -105,22 +105,22 @@ function showToast(type, message, title = '') {
   toast.className = 'toast-enter p-3 rounded-xl shadow-m3-3 text-xs flex items-center justify-between gap-3 border pointer-events-auto transition-all max-w-sm';
 
   let icon = 'info';
-  let borderClass = 'border-purple-500/50 bg-[#18151E] text-white';
-  let iconColor = 'text-purple-400';
+  let borderClass = 'border-border bg-card text-foreground';
+  let iconColor = 'text-foreground';
 
   if (type === 'error') {
     icon = 'error';
-    borderClass = 'border-red-500/50 bg-[#1F1215] text-white';
+    borderClass = 'border-red-500/50 bg-card text-foreground';
     iconColor = 'text-red-400';
     title = title || 'Lỗi xử lý';
   } else if (type === 'success') {
     icon = 'check_circle';
-    borderClass = 'border-emerald-500/50 bg-[#0F1B16] text-white';
+    borderClass = 'border-emerald-500/50 bg-card text-foreground';
     iconColor = 'text-emerald-400';
     title = title || 'Thành công';
   } else if (type === 'warning') {
     icon = 'warning';
-    borderClass = 'border-amber-500/50 bg-[#1F1912] text-white';
+    borderClass = 'border-amber-500/50 bg-card text-foreground';
     iconColor = 'text-amber-400';
     title = title || 'Cảnh báo';
   } else {
@@ -132,9 +132,9 @@ function showToast(type, message, title = '') {
     <span aria-hidden="true" class="material-symbols-outlined text-[20px] ${iconColor} flex-shrink-0 mt-0.5">${icon}</span>
     <div class="flex-1">
       <div class="font-bold text-sm mb-0.5">${escapeHtml(title)}</div>
-      <div class="text-slate-300 leading-relaxed">${escapeHtml(message)}</div>
+      <div class="text-foreground leading-relaxed">${escapeHtml(message)}</div>
     </div>
-    <button type="button" aria-label="Đóng thông báo" onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-white cursor-pointer flex-shrink-0">
+    <button type="button" aria-label="Đóng thông báo" onclick="this.parentElement.remove()" class="p-1 text-muted-foreground hover:text-foreground cursor-pointer flex-shrink-0">
       <span aria-hidden="true" class="material-symbols-outlined text-[16px]">close</span>
     </button>
   `;
@@ -159,11 +159,13 @@ function switchTab(tabId, updateUrl = true) {
   // Update Active Navigation Button Styling
   document.querySelectorAll('.nav-btn').forEach(btn => {
     if (btn.getAttribute('data-tab') === tabId) {
-      btn.classList.add('active', 'bg-purple-600', 'text-white', 'font-bold', 'shadow-m3-1');
-      btn.classList.remove('text-slate-400', 'hover:bg-[#231F2A]');
+      btn.classList.add('active', 'bg-accent', 'text-foreground');
+      btn.classList.remove('text-muted-foreground', 'hover:bg-accent');
+      btn.setAttribute('aria-current', 'page');
     } else {
-      btn.classList.remove('active', 'bg-purple-600', 'text-white', 'font-bold', 'shadow-m3-1');
-      btn.classList.add('text-slate-400', 'hover:bg-[#231F2A]');
+      btn.classList.remove('active', 'bg-accent', 'text-foreground');
+      btn.classList.add('text-muted-foreground', 'hover:bg-accent');
+      btn.removeAttribute('aria-current');
     }
   });
 
@@ -240,7 +242,7 @@ function toggleMobileNav() {
 
 // ==================== THEME & SHORTCUTS ====================
 function updateThemeUI(isDark) {
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#0E0C12' : '#F8FAFC');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#09090B' : '#FFFFFF');
   const icon = document.getElementById('themeIcon');
   const toggleBtn = document.getElementById('themeToggle');
   if (isDark) {
@@ -263,6 +265,11 @@ function toggleTheme() {
     localStorage.setItem('chatterbox_theme', willBeDark ? 'dark' : 'light');
   } catch (e) {}
   updateThemeUI(willBeDark);
+  // The waveform canvas reads theme tokens at draw time, so repaint it.
+  const placeholder = document.getElementById('waveformPlaceholder');
+  if (placeholder?.classList.contains('hidden') && typeof drawWaveform === 'function') {
+    drawWaveform(audioElement.duration ? (audioElement.currentTime / audioElement.duration) : 0);
+  }
   showToast('info', willBeDark ? 'Đã chuyển sang chế độ Tối (Dark Mode)' : 'Đã chuyển sang chế độ Sáng (Light Mode)');
 }
 

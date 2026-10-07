@@ -72,19 +72,19 @@ function getEventIconAndColor(type) {
     case 'approved':
       return { icon: 'verified', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
     case 'render_started':
-      return { icon: 'play_circle', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30' };
+      return { icon: 'play_circle', color: 'text-foreground', bg: 'bg-accent border-border' };
     case 'render_progress':
-      return { icon: 'hourglass_top', color: 'text-purple-300', bg: 'bg-purple-500/10 border-purple-500/30' };
+      return { icon: 'hourglass_top', color: 'text-foreground', bg: 'bg-accent border-border' };
     case 'evaluating':
       return { icon: 'equalizer', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' };
     case 'auto_fixing':
-      return { icon: 'auto_fix_high', color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/30' };
+      return { icon: 'auto_fix_high', color: 'text-foreground', bg: 'bg-accent border-border' };
     case 'completed':
       return { icon: 'task_alt', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
     case 'failed':
       return { icon: 'error_outline', color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' };
     default:
-      return { icon: 'notifications', color: 'text-slate-300', bg: 'bg-slate-800 border-slate-700' };
+      return { icon: 'notifications', color: 'text-foreground', bg: 'bg-slate-800 border-slate-700' };
   }
 }
 
@@ -133,24 +133,24 @@ function updateNotificationBadge() {
     }
     if (bellIcon) {
       bellIcon.textContent = 'notifications_active';
-      bellIcon.className = 'material-symbols-outlined text-[18px] text-purple-400';
+      bellIcon.className = 'material-symbols-outlined text-[18px] text-foreground';
     }
   } else {
     if (badge) badge.classList.add('hidden');
     if (countBadge) countBadge.classList.add('hidden');
     if (bellIcon) {
       bellIcon.textContent = 'notifications';
-      bellIcon.className = 'material-symbols-outlined text-[18px] text-slate-300';
+      bellIcon.className = 'material-symbols-outlined text-[18px] text-foreground';
     }
   }
 
   if (headerIcon) {
     if (eventNotifications.length > 0) {
       headerIcon.textContent = 'notifications_active';
-      headerIcon.className = 'material-symbols-outlined text-purple-400 text-[18px]';
+      headerIcon.className = 'material-symbols-outlined text-foreground text-[18px]';
     } else {
       headerIcon.textContent = 'notifications_none';
-      headerIcon.className = 'material-symbols-outlined text-slate-400 text-[18px]';
+      headerIcon.className = 'material-symbols-outlined text-muted-foreground text-[18px]';
     }
   }
 }
@@ -232,8 +232,8 @@ function renderNotificationsList() {
 
   if (eventNotifications.length === 0) {
     container.innerHTML = `
-      <div id="notificationsEmpty" class="py-8 text-center text-slate-500 space-y-1">
-        <span aria-hidden="true" class="material-symbols-outlined text-[28px] text-slate-600">notifications_paused</span>
+      <div id="notificationsEmpty" class="py-8 text-center text-muted-foreground space-y-1">
+        <span aria-hidden="true" class="material-symbols-outlined text-[28px] text-muted-foreground">notifications_paused</span>
         <p class="text-xs">Chưa có thông báo sự kiện nào</p>
       </div>
     `;
@@ -243,34 +243,34 @@ function renderNotificationsList() {
   container.innerHTML = eventNotifications.map((ev, idx) => {
     const meta = getEventIconAndColor(ev.type);
     const title = getEventTitle(ev);
-    const timeStr = ev.timestamp ? new Date(ev.timestamp * 1000).toLocaleTimeString() : '';
-    const projId = ev.project_id ? `<span class="font-mono text-[10px] text-purple-300 bg-purple-950/60 px-1 rounded">${ev.project_id}</span>` : '';
+    const timeStr = ev.timestamp ? new Date(ev.timestamp * 1000).toLocaleTimeString('vi-VN') : '';
+    const projId = ev.project_id ? `<span class="font-mono text-xs text-foreground bg-accent px-1 rounded">${ev.project_id}</span>` : '';
     const audioUrl = ev.data && ev.data.audio_url ? ev.data.audio_url : null;
     const itemId = ev.id !== undefined ? ev.id : (ev._tempId || idx);
 
     return `
-      <div class="p-2.5 hover:bg-[#231F2A] transition-colors rounded-lg flex items-start gap-2.5 group">
+      <div class="p-2.5 hover:bg-muted transition-colors rounded-lg flex items-start gap-2.5 group">
         <div class="w-7 h-7 rounded-lg ${meta.bg} border flex items-center justify-center shrink-0 mt-0.5">
           <span aria-hidden="true" class="material-symbols-outlined text-[16px] ${meta.color}">${meta.icon}</span>
         </div>
         <div class="flex-1 min-w-0 space-y-0.5">
           <div class="flex items-center justify-between gap-1">
-            <span class="font-bold text-white text-xs truncate">${title}</span>
+            <span class="font-bold text-foreground text-xs truncate">${title}</span>
             <div class="flex items-center gap-1.5 shrink-0">
-              <span class="text-[10px] text-slate-400 font-mono">${timeStr}</span>
-              <button aria-label="Xóa thông báo này" onclick="dismissNotification(${itemId}, event)" class="p-0.5 text-slate-500 hover:text-rose-400 rounded hover:bg-[#18151E] transition-colors cursor-pointer" title="Xóa thông báo này">
+              <span class="text-xs text-muted-foreground font-mono">${timeStr}</span>
+              <button aria-label="Xóa thông báo này" onclick="dismissNotification(${itemId}, event)" class="p-0.5 text-muted-foreground hover:text-rose-400 rounded hover:bg-card transition-colors cursor-pointer" title="Xóa thông báo này">
                 <span aria-hidden="true" class="material-symbols-outlined text-[14px]">close</span>
               </button>
             </div>
           </div>
-          <div class="flex items-center gap-1.5 text-[11px] text-slate-400">
+          <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             ${projId}
-            ${ev.status ? `<span class="capitalize text-slate-300">Trạng thái: <b>${ev.status}</b></span>` : ''}
+            ${ev.status ? `<span class="capitalize text-foreground">Trạng thái: <b>${ev.status}</b></span>` : ''}
           </div>
           ${ev.data && ev.data.error ? `<p class="text-xs text-rose-400">${ev.data.error}</p>` : ''}
           ${audioUrl ? `
             <div class="pt-1 flex items-center gap-2">
-              <button onclick="playNotificationAudio('${audioUrl}')" class="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] flex items-center gap-1">
+              <button onclick="playNotificationAudio('${audioUrl}')" class="px-2 py-0.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs flex items-center gap-1">
                 <span aria-hidden="true" class="material-symbols-outlined text-[13px]">play_arrow</span>
                 <span>Nghe Audio</span>
               </button>

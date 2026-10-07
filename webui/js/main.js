@@ -17,7 +17,7 @@ async function checkSystemHealth() {
     if (res.ok) {
       const data = await res.json();
       if (indicator) indicator.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
-      if (chip) chip.className = 'flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#231F2A] border border-[#3F3A46] text-xs font-mono text-emerald-400';
+      if (chip) chip.className = 'flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted border border-border text-xs font-mono text-emerald-400';
 
       if (status) {
         const deviceLabel = (data.device || 'cpu').toUpperCase();

@@ -59,7 +59,7 @@ async function cleanProjectTmpFiles() {
 async function preloadModel(modelName) {
   const statusEl = document.getElementById(`modelStatus-${modelName}`);
   const oldHtml = statusEl ? statusEl.innerHTML : '';
-  if (statusEl) statusEl.innerHTML = '<span class="text-purple-400 animate-pulse">⏳ Đang nạp...</span>';
+  if (statusEl) statusEl.innerHTML = '<span class="text-foreground animate-pulse">Đang nạp...</span>';
   try {
     const res = await fetch(`/api/v1/models/${modelName}/load`, { method: 'POST' });
     const data = await res.json().catch(() => ({}));
@@ -67,12 +67,12 @@ async function preloadModel(modelName) {
       if (statusEl) statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1"></span> Đã nạp';
       showToast('success', data.message || `Mô hình ${modelName} đã được nạp sẵn sàng!`);
     } else {
-      if (statusEl) statusEl.innerHTML = oldHtml || '<span class="text-slate-400">Chưa nạp</span>';
+      if (statusEl) statusEl.innerHTML = oldHtml || '<span class="text-muted-foreground">Chưa nạp</span>';
       showToast('error', data.detail || `Lỗi khi nạp mô hình ${modelName}`);
     }
     fetchModelsStatus();
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = oldHtml || '<span class="text-slate-400">Chưa nạp</span>';
+    if (statusEl) statusEl.innerHTML = oldHtml || '<span class="text-muted-foreground">Chưa nạp</span>';
     showToast('error', 'Lỗi nạp model: ' + e.message);
     fetchModelsStatus();
   }
@@ -84,7 +84,7 @@ async function unloadModel(modelName) {
     const res = await fetch(`/api/v1/models/${modelName}`, { method: 'DELETE' });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      if (statusEl) statusEl.innerHTML = '<span class="text-slate-400">Chưa nạp</span>';
+      if (statusEl) statusEl.innerHTML = '<span class="text-muted-foreground">Chưa nạp</span>';
       showToast('info', data.message || `Đã giải phóng mô hình ${modelName} khỏi bộ nhớ.`);
     } else {
       showToast('error', data.detail || `Lỗi khi giải phóng mô hình ${modelName}`);
@@ -103,12 +103,12 @@ async function deleteModelFromDisk(modelName) {
     : modelName === 'multilingual' ? 'Chatterbox Multilingual (500M)'
     : modelName;
 
-  if (!confirm(`⚠️ XÁC NHẬN XÓA CHECKPOINT KHỎI Ổ ĐĨA:\n\nBạn có chắc chắn muốn xóa toàn bộ file checkpoint của "${label}" khỏi thư mục models/?\n\n• Thao tác này sẽ giải phóng dung lượng ổ đĩa.\n• Bạn có thể tải lại bất cứ lúc nào qua nút "Nạp" hoặc lệnh HF_HUB_OFFLINE=0.`)) {
+  if (!confirm(`XÁC NHẬN XÓA CHECKPOINT KHỎI Ổ ĐĨA:\n\nBạn có chắc chắn muốn xóa toàn bộ file checkpoint của "${label}" khỏi thư mục models/?\n\n• Thao tác này sẽ giải phóng dung lượng ổ đĩa.\n• Bạn có thể tải lại bất cứ lúc nào qua nút "Nạp" hoặc lệnh HF_HUB_OFFLINE=0.`)) {
     return;
   }
 
   const diskEl = document.getElementById(`modelDisk-${modelName}`);
-  if (diskEl) diskEl.innerHTML = '<span class="text-amber-400 animate-pulse">⏳ Đang xóa file...</span>';
+  if (diskEl) diskEl.innerHTML = '<span class="text-amber-400 animate-pulse">Đang xóa file...</span>';
 
   try {
     const res = await fetch(`/api/v1/models/${modelName}/disk`, { method: 'DELETE' });
@@ -145,19 +145,19 @@ async function fetchModelsStatus() {
           statusEl.className = 'text-[11px] text-emerald-400 flex items-center gap-1 font-semibold';
         } else {
           statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block mr-1"></span> Chưa nạp RAM';
-          statusEl.className = 'text-[11px] text-slate-400 flex items-center gap-1';
+          statusEl.className = 'text-[11px] text-muted-foreground flex items-center gap-1';
         }
       }
 
       if (diskEl) {
         if (m.cached_on_disk && m.size_mb > 0) {
-          diskEl.innerHTML = `<span class="text-emerald-400 font-mono">💾 ${m.size_mb} MB</span> trên ổ đĩa`;
+          diskEl.innerHTML = `<span class="text-emerald-400 font-mono">${m.size_mb} MB</span> trên ổ đĩa`;
           if (delBtn) delBtn.disabled = false;
         } else if (m.cached_on_disk) {
-          diskEl.innerHTML = `<span class="text-emerald-400 font-mono">💾 Đã có</span> trên ổ đĩa`;
+          diskEl.innerHTML = `<span class="text-emerald-400 font-mono">Đã có</span> trên ổ đĩa`;
           if (delBtn) delBtn.disabled = false;
         } else {
-          diskEl.innerHTML = `<span class="text-amber-400 font-mono">❌ Chưa tải</span> về ổ đĩa`;
+          diskEl.innerHTML = `<span class="text-amber-400 font-mono">Chưa tải</span> về ổ đĩa`;
           if (delBtn) delBtn.disabled = true;
         }
       }

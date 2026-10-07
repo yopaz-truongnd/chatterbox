@@ -21,7 +21,7 @@ let directorOperationsFp = '';
 let directorRevisionsFp = '';
 let directorContentFp = { workspace: '', review: '', mix: '', delivery: '', final: '' };
 
-const directorInputClass = 'bg-[#0E0C12] border border-[#3F3A46] rounded-lg px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-hidden';
+const directorInputClass = 'bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-ring focus:outline-hidden';
 const directorStatusLabels = {queued:'đang chờ', running:'đang xử lý', waiting_for_human:'chờ bạn duyệt', completed:'hoàn tất', failed:'thất bại', cancelled:'đã hủy', cancelling:'đang hủy', interrupted:'bị gián đoạn', pending:'chưa chạy', skipped:'bỏ qua'};
 const directorStepLabels = {create_project:'Tạo dự án', plan:'Lập kế hoạch', check_resources:'Kiểm tra tài nguyên', render:'Tạo giọng đọc', evaluate:'Kiểm tra chất lượng', prepare_mix:'Chuẩn bị phối', mix:'Phối âm', master:'Tạo master', export:'Xuất file'};
 const directorStatusLabel = status => directorStatusLabels[status] || status;
@@ -176,8 +176,8 @@ function setDirectorCreateMode(mode) {
   const isIdea = mode === 'idea';
   manualPanel.classList.toggle('hidden', isIdea);
   ideaPanel.classList.toggle('hidden', !isIdea);
-  manualBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'text-slate-300 font-medium' : 'bg-purple-600 text-white'}`;
-  ideaBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'bg-purple-600 text-white' : 'text-slate-300 font-medium'}`;
+  manualBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'text-foreground font-medium' : 'bg-primary text-primary-foreground'}`;
+  ideaBtn.className = `px-3 py-1.5 rounded-md text-xs font-bold ${isIdea ? 'bg-primary text-primary-foreground' : 'text-foreground font-medium'}`;
 }
 
 function directorIdeaStepVisibility(step) {
@@ -189,9 +189,9 @@ function directorIdeaStepVisibility(step) {
 function directorIdeaSummaryMarkdown(summary) {
   if (!summary) return 'Chưa có cấu hình tóm tắt.';
   return escapeHtml(summary)
-    .replace(/^### (.+)$/gm, '<h3 class="text-xs font-bold text-white mb-2">$1</h3>')
-    .replace(/^\* \*\*([^*]+)\*\*: (.*)$/gm, '<div class="text-xs text-slate-200 py-0.5"><strong class="text-purple-400">$1:</strong> $2</div>')
-    .replace(/^\* (.*)$/gm, '<div class="text-xs text-slate-300 py-0.5">• $1</div>')
+    .replace(/^### (.+)$/gm, '<h3 class="text-xs font-bold text-foreground mb-2">$1</h3>')
+    .replace(/^\* \*\*([^*]+)\*\*: (.*)$/gm, '<div class="text-xs text-foreground py-0.5"><strong class="text-foreground">$1:</strong> $2</div>')
+    .replace(/^\* (.*)$/gm, '<div class="text-xs text-foreground py-0.5">• $1</div>')
     .replace(/\n/g, '<br/>');
 }
 
@@ -200,24 +200,24 @@ function directorIdeaRenderQuestions(questions) {
   if (!container) return;
   container.innerHTML = '';
   if (!questions || questions.length === 0) {
-    container.innerHTML = '<div class="text-slate-400 text-xs italic">Tất cả thông số cơ bản đã đầy đủ. Vui lòng bấm tiếp tục!</div>';
+    container.innerHTML = '<div class="text-muted-foreground text-xs italic">Tất cả thông số cơ bản đã đầy đủ. Vui lòng bấm tiếp tục!</div>';
     return;
   }
   questions.forEach((q, idx) => {
     const qCard = document.createElement('div');
-    qCard.className = 'p-3 rounded-xl bg-[#0E0C12] border border-[#3F3A46]/60 space-y-2';
+    qCard.className = 'p-3 rounded-xl bg-background border border-border/60 space-y-2';
     let optionsHtml = '';
     if (q.options && q.options.length > 0) {
       optionsHtml = `<div class="flex flex-wrap gap-1.5 pt-1">${q.options.map(opt =>
-        `<button type="button" onclick="selectDirectorIdeaOption('${q.id}', '${opt.replace(/'/g, "\\'")}')" class="director-idea-opt-${q.id} px-2.5 py-1 rounded-md text-[11px] border border-[#3F3A46] bg-[#18151E] hover:bg-purple-900/30 text-slate-300 cursor-pointer">${escapeHtml(opt)}</button>`
+        `<button type="button" onclick="selectDirectorIdeaOption('${q.id}', '${opt.replace(/'/g, "\\'")}')" class="director-idea-opt-${q.id} px-2.5 py-1 rounded-md text-[11px] border border-border bg-card hover:bg-accent text-foreground cursor-pointer">${escapeHtml(opt)}</button>`
       ).join('')}</div>`;
     }
     qCard.innerHTML = `
       <div class="flex items-start justify-between gap-2">
-        <label for="director_idea_q_${q.id}" class="text-xs font-semibold text-white flex items-center gap-1.5">
-          <span class="w-4 h-4 rounded-full bg-amber-600 text-white font-mono text-[10px] flex items-center justify-center">${idx + 1}</span>
+        <label for="director_idea_q_${q.id}" class="text-xs font-semibold text-foreground flex items-center gap-1.5">
+          <span class="w-4 h-4 rounded-full bg-amber-600 text-white font-mono text-xs flex items-center justify-center">${idx + 1}</span>
           <span>${escapeHtml(q.question || q.id)}</span>
-          ${q.required ? '<span class="text-red-400 font-bold">*</span>' : '<span class="text-slate-500 text-[10px]">(Khuyến nghị)</span>'}
+          ${q.required ? '<span class="text-red-400 font-bold">*</span>' : '<span class="text-muted-foreground text-xs">(Khuyến nghị)</span>'}
         </label>
       </div>
       ${optionsHtml}
@@ -232,7 +232,7 @@ function selectDirectorIdeaOption(qid, val) {
   if (input) input.value = val;
   document.querySelectorAll(`.director-idea-opt-${qid}`).forEach(btn => {
     const active = btn.textContent.trim() === val;
-    btn.className = `director-idea-opt-${qid} px-2.5 py-1 rounded-md text-[11px] border cursor-pointer ${active ? 'border-amber-500 bg-amber-600 text-white font-bold' : 'border-[#3F3A46] bg-[#18151E] hover:bg-amber-900/30 text-slate-300'}`;
+    btn.className = `director-idea-opt-${qid} px-2.5 py-1 rounded-md text-[11px] border cursor-pointer ${active ? 'border-amber-500 bg-amber-600 text-white font-bold' : 'border-border bg-card hover:bg-amber-900/30 text-foreground'}`;
   });
 }
 
@@ -268,8 +268,8 @@ function directorIdeaRenderState(data) {
     if (tagsBox) {
       const entries = Object.entries(data.requirements || {}).filter(([, v]) => Boolean(v));
       tagsBox.innerHTML = entries.length
-        ? entries.map(([k, v]) => `<span class="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-[10px]">✓ ${escapeHtml(k)}: ${escapeHtml(Array.isArray(v) ? v.join(', ') : String(v))}</span>`).join('')
-        : '<span class="text-slate-500 text-[11px]">Chưa nhận diện được thông số</span>';
+        ? entries.map(([k, v]) => `<span class="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-xs">✓ ${escapeHtml(k)}: ${escapeHtml(Array.isArray(v) ? v.join(', ') : String(v))}</span>`).join('')
+        : '<span class="text-muted-foreground text-[11px]">Chưa nhận diện được thông số</span>';
     }
     directorIdeaRenderQuestions(data.questions || []);
   } else if (status === 'awaiting_requirements_confirmation' || status === 'awaiting_confirmation' || status === 'awaiting_script_confirmation') {
@@ -278,7 +278,7 @@ function directorIdeaRenderState(data) {
     const gateLabel = document.getElementById('directorIdeaGateLabel');
     if (gateLabel) {
       gateLabel.textContent = isGate2 ? 'Gate 2: Xác nhận kịch bản' : 'Gate 1: Xác nhận yêu cầu';
-      gateLabel.className = `px-2 py-0.5 rounded text-[10px] font-bold border ${isGate2 ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/30' : 'bg-blue-600/20 text-blue-300 border-blue-500/30'}`;
+      gateLabel.className = `px-2 py-0.5 rounded text-xs font-bold border ${isGate2 ? 'bg-accent text-foreground border-border' : 'bg-blue-600/20 text-blue-300 border-blue-500/30'}`;
     }
     const summaryBox = document.getElementById('directorIdeaSummaryBox');
     if (summaryBox) summaryBox.innerHTML = directorIdeaSummaryMarkdown(data.summary);
@@ -392,7 +392,7 @@ function renderDirectorListFilters() {
   el.innerHTML = DIRECTOR_LIST_FILTERS.map(f => {
     const count = directorWorkflows.filter(w => f.match(w.status)).length;
     const active = f.key === directorListFilter;
-    return `<button onclick="setDirectorListFilter('${f.key}')" class="px-2 py-1 rounded-full text-[10px] font-medium border transition-colors ${active ? 'bg-purple-600 border-purple-500 text-white' : 'bg-[#0E0C12] border-[#3F3A46] text-slate-400 hover:text-white'}">${f.label} (${count})</button>`;
+    return `<button onclick="setDirectorListFilter('${f.key}')" class="px-2 py-1 rounded-full text-xs font-medium border transition-colors ${active ? 'bg-primary border-ring text-primary-foreground' : 'bg-background border-border text-muted-foreground hover:text-foreground'}">${f.label} (${count})</button>`;
   }).join('');
 }
 
@@ -419,19 +419,19 @@ function renderDirectorWorkflowList() {
     const progress = steps.length ? Math.round(doneSteps * 100 / steps.length) : 0;
     const displayName = workflow.title || workflow.project_id;
     const createdAbs = workflow.created_at ? new Date(workflow.created_at).toLocaleString('vi-VN') : '—';
-    return `<div class="relative"><button onclick="openDirectorWorkflow('${escapeHtml(workflow.workflow_id)}')" class="w-full text-left p-3 pr-10 rounded-lg border ${directorActive?.workflow_id === workflow.workflow_id ? 'border-purple-500' : 'border-[#3F3A46]'} bg-[#0E0C12] hover:bg-[#231F2A]">
-      <div class="flex items-center gap-2 min-w-0">${directorStatusChip(workflow.status)}<strong class="text-xs text-white truncate min-w-0" title="${escapeHtml(workflow.project_id)}">${escapeHtml(displayName)}</strong></div>
-      <div class="mt-1 text-[10px] text-slate-500" title="${escapeHtml(createdAbs)}">Tạo ${escapeHtml(directorRelativeTime(workflow.created_at))}</div>
-      <div class="mt-2 h-1 bg-[#3F3A46] rounded"><div class="h-1 bg-purple-500 rounded" style="width:${progress}%"></div></div>
-      <div class="mt-1 flex justify-between text-[10px] text-slate-500"><span>${escapeHtml(workflow.policy.provider)} / ${escapeHtml(workflow.policy.model || 'mặc định')}</span><span>${doneSteps}/${steps.length} bước · ${progress}%</span></div>
-    </button><button onclick="deleteDirectorProduction('${escapeHtml(workflow.workflow_id)}','${escapeHtml(workflow.project_id)}')" class="absolute right-2 top-2 px-2 py-1 rounded bg-red-950 text-red-300 hover:bg-red-900 text-[10px] font-bold" title="Xóa bản sản xuất và tất cả file liên quan" aria-label="Xóa bản sản xuất ${escapeHtml(displayName)}">Xóa</button></div>`;
-  }).join('') : `<p class="text-xs text-slate-500 py-6 text-center">${directorWorkflows.length ? 'Không có bản sản xuất nào khớp bộ lọc.' : 'Chưa có bản sản xuất nào.'}</p>`;
+    return `<div class="relative group"><button onclick="openDirectorWorkflow('${escapeHtml(workflow.workflow_id)}')" class="w-full text-left p-3 pr-10 rounded-md border ${directorActive?.workflow_id === workflow.workflow_id ? 'border-ring' : 'border-border'} bg-background hover:bg-muted">
+      <div class="flex items-center gap-2 min-w-0">${directorStatusChip(workflow.status)}<strong class="text-xs text-foreground truncate min-w-0" title="${escapeHtml(workflow.project_id)}">${escapeHtml(displayName)}</strong></div>
+      <div class="mt-1 text-xs text-muted-foreground" title="${escapeHtml(createdAbs)}">Tạo ${escapeHtml(directorRelativeTime(workflow.created_at))}</div>
+      <div class="mt-2 h-1 bg-accent rounded"><div class="h-1 bg-primary rounded" style="width:${progress}%"></div></div>
+      <div class="mt-1 flex justify-between text-xs text-muted-foreground"><span>${escapeHtml(workflow.policy.provider)} / ${escapeHtml(workflow.policy.model || 'mặc định')}</span><span>${doneSteps}/${steps.length} bước · ${progress}%</span></div>
+    </button><button onclick="deleteDirectorProduction('${escapeHtml(workflow.workflow_id)}','${escapeHtml(workflow.project_id)}')" class="absolute right-2 top-2 p-1 rounded-md text-muted-foreground hover:text-red-400 hover:bg-accent [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 transition-opacity" title="Xóa bản sản xuất và tất cả file liên quan" aria-label="Xóa bản sản xuất ${escapeHtml(displayName)}"><span aria-hidden="true" class="material-symbols-outlined text-[16px]">delete</span></button></div>`;
+  }).join('') : `<p class="text-xs text-muted-foreground py-6 text-center">${directorWorkflows.length ? 'Không có bản sản xuất nào khớp bộ lọc.' : 'Chưa có bản sản xuất nào.'}</p>`;
   list.scrollTop = prevScroll;
 }
 
 function directorStatusChip(status) {
   const color = status === 'completed' ? 'emerald' : status === 'waiting_for_human' ? 'amber' : ['failed', 'cancelled'].includes(status) ? 'red' : 'purple';
-  return `<span class="px-2 py-0.5 rounded bg-${color}-950/60 text-${color}-300 text-[10px]">${escapeHtml(directorStatusLabel(status))}</span>`;
+  return `<span class="px-2 py-0.5 rounded bg-${color}-950/60 text-${color}-300 text-xs">${escapeHtml(directorStatusLabel(status))}</span>`;
 }
 
 async function openDirectorWorkflow(workflowId) {
@@ -481,27 +481,29 @@ function renderDirectorShell(force = false) {
   if (force || shellFp !== directorShellFp) {
     directorShellFp = shellFp;
     document.getElementById('directorActiveTitle').textContent = directorReview?.title || workflow.project_id;
-    document.getElementById('directorActiveMeta').textContent = `${workflow.workflow_id} · ${directorStatusLabel(workflow.status)} · cập nhật ${workflow.updated_at}`;
+    const metaEl = document.getElementById('directorActiveMeta');
+    if (workflow.updated_at) metaEl.title = new Date(workflow.updated_at).toLocaleString('vi-VN');
+    metaEl.textContent = `${workflow.workflow_id} · ${directorStatusLabel(workflow.status)} · cập nhật ${directorRelativeTime(workflow.updated_at)}`;
     document.getElementById('directorFlowGuide').innerHTML = renderDirectorFlowGuide(workflow);
-    document.getElementById('directorProgress').innerHTML = workflow.steps.map(step => `<div class="rounded p-2 border border-[#3F3A46] text-center"><div class="text-[10px] ${step.status === 'completed' ? 'text-emerald-400' : step.status === 'running' ? 'text-purple-300' : 'text-slate-500'}">${escapeHtml(directorStepLabel(step.name))}</div><div class="text-[9px] text-slate-500">${escapeHtml(directorStatusLabel(step.status))}</div></div>`).join('');
+    document.getElementById('directorProgress').innerHTML = workflow.steps.map(step => `<div class="rounded p-2 border border-border text-center"><div class="text-xs ${step.status === 'completed' ? 'text-emerald-400' : step.status === 'running' ? 'text-foreground' : 'text-muted-foreground'}">${escapeHtml(directorStepLabel(step.name))}</div><div class="text-xs text-muted-foreground">${escapeHtml(directorStatusLabel(step.status))}</div></div>`).join('');
     
     const actions = document.getElementById('directorGateActions');
     if (workflow.status === 'waiting_for_human' && gate) {
       if (gate === 'audio_quality_review') {
-        actions.innerHTML = '<button onclick="showDirectorView(\'review\', true)" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">Mở đánh giá chất lượng</button><button onclick="resumeDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">Đã xử lý xong, tiếp tục</button><button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Hủy</button>';
+        actions.innerHTML = '<button onclick="showDirectorView(\'review\', true)" class="px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-bold">Mở đánh giá chất lượng</button><button onclick="resumeDirectorWorkflow()" class="px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90">Đã xử lý xong, tiếp tục</button><button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-md bg-red-950 text-red-300 text-xs">Hủy</button>';
       } else if (gate === 'narration_acceptance' || gate === 'final_audio_approval') {
         const label = gate === 'narration_acceptance' ? 'Duyệt toàn bộ giọng đọc & tiếp tục' : 'Duyệt bản master này & xuất file';
-        actions.innerHTML = `<button data-director-gate onclick="approveDirectorGate(true)" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">${label}</button><button data-director-gate onclick="approveDirectorGate(false)" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Từ chối</button>`;
+        actions.innerHTML = `<button data-director-gate onclick="approveDirectorGate(true)" class="px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90">${label}</button><button data-director-gate onclick="approveDirectorGate(false)" class="px-3 py-2 rounded-md bg-red-950 text-red-300 text-xs">Từ chối</button>`;
       } else {
         // resource_required and any other "fix it, then continue" gate: the
         // backend explicitly resumes these via /resume, not /approve — only
         // narration_acceptance and final_audio_approval need an approve call.
-        actions.innerHTML = '<button onclick="resumeDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">Tiếp tục</button><button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Hủy</button>';
+        actions.innerHTML = '<button onclick="resumeDirectorWorkflow()" class="px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90">Tiếp tục</button><button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-md bg-red-950 text-red-300 text-xs">Hủy</button>';
       }
     } else if (['queued', 'running', 'cancelling'].includes(workflow.status)) {
-      actions.innerHTML = '<button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-red-950 text-red-300 text-xs">Hủy</button>';
+      actions.innerHTML = '<button onclick="cancelDirectorWorkflow()" class="px-3 py-2 rounded-md bg-red-950 text-red-300 text-xs">Hủy</button>';
     } else if (workflow.status === 'interrupted') {
-      actions.innerHTML = '<button onclick="resumeDirectorWorkflow()" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs">Tiếp tục từ trạng thái đã lưu</button>';
+      actions.innerHTML = '<button onclick="resumeDirectorWorkflow()" class="px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs">Tiếp tục từ trạng thái đã lưu</button>';
     } else actions.innerHTML = '';
   }
 
@@ -528,7 +530,7 @@ function renderDirectorFlowGuide(workflow) {
   else if (gate === 'narration_acceptance') { title = 'Bước 1/2 cần bạn duyệt: giọng đọc'; detail = 'Nghe các attempt đã chọn bên dưới. Nút xanh duyệt TOÀN BỘ narration một lần, sau đó hệ thống tự phối âm và tạo master.'; }
   else if (gate === 'final_audio_approval') { title = 'Bước 2/2 cần bạn duyệt: bản master'; detail = 'Nghe bản master và kiểm tra SHA-256. Nút xanh chỉ duyệt đúng file hiện tại, rồi hệ thống mới xuất WAV/MP3.'; }
   else if (workflow.status === 'completed') { title = 'Sản xuất đã hoàn tất'; detail = 'Chỉ tải file có nhãn ĐÃ XÁC MINH. Khi sửa giọng hoặc timing, approval cũ sẽ mất hiệu lực và cần duyệt master mới.'; }
-  return `<div class="p-3 rounded-lg bg-purple-950/20 border border-purple-500/30"><b class="text-xs text-purple-200">${title}</b><p class="text-[11px] text-slate-300 mt-1">${detail}</p><p class="text-[10px] text-slate-500 mt-1">Luồng: Kế hoạch → Tài nguyên → Tạo giọng → QC → Duyệt giọng → Phối/Master → Duyệt master → Xuất file.</p></div>`;
+  return `<div class="p-3 rounded-lg bg-muted border border-border"><b class="text-xs text-foreground">${title}</b><p class="text-[11px] text-foreground mt-1">${detail}</p><p class="text-xs text-muted-foreground mt-1">Luồng: Kế hoạch → Tài nguyên → Tạo giọng → QC → Duyệt giọng → Phối/Master → Duyệt master → Xuất file.</p></div>`;
 }
 
 function renderDirectorOperations(force = false) {
@@ -539,7 +541,7 @@ function renderDirectorOperations(force = false) {
   const fp = visible.map(op => `${op.id}:${op.status}:${op.progress_percent}:${op.stage}:${op.beat_id}:${op.message}`).join(';');
   if (!force && fp === directorOperationsFp) return;
   directorOperationsFp = fp;
-  panel.innerHTML = visible.length ? `<h4 class="text-xs font-bold text-white mb-3">Tác vụ đang xử lý</h4>${visible.map(op => `<div class="mb-3 last:mb-0"><div class="flex justify-between text-[11px]"><b>${escapeHtml(directorStepLabel(op.operation))}${op.beat_id ? ` · ${escapeHtml(op.beat_id)}` : ''}</b><span>${escapeHtml(directorStatusLabel(op.status))}</span></div><div class="h-1.5 bg-[#3F3A46] rounded mt-1"><div class="h-1.5 bg-purple-500 rounded" style="width:${Math.max(0, Math.min(100, op.progress_percent || 0))}%"></div></div>${op.message ? `<div class="mt-1 text-[10px] text-purple-300">${escapeHtml(op.message)}</div>` : ''}<div class="flex justify-between items-center mt-1 text-[9px] text-slate-500 font-mono"><span>${escapeHtml(op.id)} · ${escapeHtml(op.stage || 'đang chờ')} · ${Math.round(op.progress_percent || 0)}%</span>${['queued','running'].includes(op.status) ? `<button onclick="cancelDirectorOperation('${escapeHtml(op.id)}')" class="text-red-400">Hủy</button>` : ''}</div></div>`).join('')}` : '';
+  panel.innerHTML = visible.length ? `<h4 class="text-xs font-bold text-foreground mb-3">Tác vụ đang xử lý</h4>${visible.map(op => `<div class="mb-3 last:mb-0"><div class="flex justify-between text-[11px]"><b>${escapeHtml(directorStepLabel(op.operation))}${op.beat_id ? ` · ${escapeHtml(op.beat_id)}` : ''}</b><span>${escapeHtml(directorStatusLabel(op.status))}</span></div><div class="h-1.5 bg-accent rounded mt-1"><div class="h-1.5 bg-primary rounded" style="width:${Math.max(0, Math.min(100, op.progress_percent || 0))}%"></div></div>${op.message ? `<div class="mt-1 text-xs text-foreground">${escapeHtml(op.message)}</div>` : ''}<div class="flex justify-between items-center mt-1 text-xs text-muted-foreground font-mono"><span>${escapeHtml(op.id)} · ${escapeHtml(op.stage || 'đang chờ')} · ${Math.round(op.progress_percent || 0)}%</span>${['queued','running'].includes(op.status) ? `<button onclick="cancelDirectorOperation('${escapeHtml(op.id)}')" class="text-red-400">Hủy</button>` : ''}</div></div>`).join('')}` : '';
 }
 
 function renderDirectorPendingRevisions(force = false) {
@@ -551,7 +553,7 @@ function renderDirectorPendingRevisions(force = false) {
   const fp = events.map(e => `${e.revision_id}:${e.revision_type}:${e.beat_id || ''}`).join(';');
   if (!force && fp === directorRevisionsFp) return;
   directorRevisionsFp = fp;
-  panel.innerHTML = events.length ? `<div class="flex flex-wrap justify-between gap-3"><div><h4 class="text-xs font-bold text-amber-300">Chỉnh sửa chưa tái tạo</h4>${events.map(event => `<p class="text-[11px] text-slate-300 mt-1"><b>${escapeHtml(event.beat_id || event.affected_beats?.join(', ') || 'Dự án')}</b> · ${escapeHtml(event.revision_type.replaceAll('_',' '))}</p>`).join('')}</div><button onclick="reproduceDirectorProject()" class="self-end px-3 py-2 rounded bg-amber-600 text-white text-xs font-bold">Tái tạo các thay đổi</button></div>` : '';
+  panel.innerHTML = events.length ? `<div class="flex flex-wrap justify-between gap-3"><div><h4 class="text-xs font-bold text-amber-300">Chỉnh sửa chưa tái tạo</h4>${events.map(event => `<p class="text-[11px] text-foreground mt-1"><b>${escapeHtml(event.beat_id || event.affected_beats?.join(', ') || 'Dự án')}</b> · ${escapeHtml(event.revision_type.replaceAll('_',' '))}</p>`).join('')}</div><button onclick="reproduceDirectorProject()" class="self-end px-3 py-2 rounded bg-amber-600 text-white text-xs font-bold">Tái tạo các thay đổi</button></div>` : '';
 }
 
 function showDirectorView(view, userInitiated = false, force = false) {
@@ -560,7 +562,7 @@ function showDirectorView(view, userInitiated = false, force = false) {
   }
   directorView = view;
   document.querySelectorAll('#directorViews button').forEach(button => {
-    button.className = `px-3 py-2 rounded-lg text-xs whitespace-nowrap ${button.dataset.view === view ? 'bg-purple-600 text-white font-bold' : 'bg-[#231F2A] text-slate-300'}`;
+    button.className = `px-3 py-2 rounded-lg text-xs whitespace-nowrap ${button.dataset.view === view ? 'bg-primary text-primary-foreground font-bold' : 'bg-muted text-foreground'}`;
   });
   const content = document.getElementById('directorViewContent');
   if (!directorActive || !content) return;
@@ -609,11 +611,11 @@ function showDirectorView(view, userInitiated = false, force = false) {
 
 function renderDirectorNoteBox() {
   const note = directorReview?.director_note || '';
-  return `<div class="mb-4 p-3 rounded-lg bg-[#1B1720] border border-amber-700/40">
-    <h4 class="text-xs font-bold text-amber-300 mb-1">📝 Ghi chú của đạo diễn</h4>
-    <p class="text-[9px] text-slate-500 mb-2">Vd: tài nguyên SFX/ambience cần tự tìm kiếm và bổ sung thủ công.</p>
+  return `<div class="mb-4 p-3 rounded-lg bg-card border border-amber-700/40">
+    <h4 class="text-xs font-bold text-amber-300 mb-1">Ghi chú của đạo diễn</h4>
+    <p class="text-xs text-muted-foreground mb-2">Vd: tài nguyên SFX/ambience cần tự tìm kiếm và bổ sung thủ công.</p>
     <textarea id="directorNoteInput" aria-label="Ghi chú của đạo diễn" rows="3" placeholder="Ghi chú tài nguyên cần tìm, lưu ý sản xuất..." class="director-input w-full resize-y">${escapeHtml(note)}</textarea>
-    <div class="flex justify-end mt-2"><button onclick="saveDirectorNote()" class="px-2.5 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white text-[10px]">Lưu ghi chú</button></div>
+    <div class="flex justify-end mt-2"><button onclick="saveDirectorNote()" class="px-2.5 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white text-xs">Lưu ghi chú</button></div>
   </div>`;
 }
 
@@ -632,10 +634,10 @@ async function saveDirectorNote() {
 }
 
 function renderDirectorWorkspace() {
-  if (!directorReview) return '<p class="text-xs text-slate-500">Nội dung duyệt sẽ xuất hiện sau khi tạo dự án.</p>';
+  if (!directorReview) return '<p class="text-xs text-muted-foreground">Nội dung duyệt sẽ xuất hiện sau khi tạo dự án.</p>';
   const gaps = [...directorReview.required_resource_gaps, ...directorReview.recommended_resource_gaps];
-  return `${renderDirectorNoteBox()}<h4 class="text-xs font-bold text-white mb-1">Kịch bản gốc (không thể sửa)</h4><p class="text-[9px] text-slate-500 font-mono mb-3">SHA-256 ${escapeHtml(directorSource?.sha256 || directorReview.source_script_sha256)}</p><div class="p-3 rounded bg-[#0E0C12] text-xs text-slate-300 whitespace-pre-wrap">${escapeHtml(directorSource?.script_text || directorReview.script_excerpt)}</div>
-    <div class="grid md:grid-cols-2 gap-3 mt-4"><div><h4 class="text-xs font-bold text-white mb-2">Các đoạn giọng đọc</h4>${sortDirectorBeatsByAttention(directorReview.beats).map(b => `<button onclick="openDirectorBeat('${escapeHtml(b.beat_id)}')" class="block w-full text-left p-2 mb-1 rounded bg-[#0E0C12] text-xs ${directorBeatNeedsAttention(b) ? 'border border-amber-700/50' : ''}"><b class="text-white">${escapeHtml(b.beat_id)}</b> <span class="text-slate-400">${escapeHtml(b.emotion)} · năng lượng ${b.energy} · ${escapeHtml(directorStatusLabel(b.render_status))}</span>${directorBeatNeedsAttention(b) ? ' <span class="text-amber-400 text-[10px]">● cần chú ý</span>' : ''}</button>`).join('')}</div><div>${renderDirectorResourceReadiness(directorReview.resource_readiness, gaps)}</div></div>`;
+  return `${renderDirectorNoteBox()}<h4 class="text-xs font-bold text-foreground mb-1">Kịch bản gốc (không thể sửa)</h4><p class="text-xs text-muted-foreground font-mono mb-3">SHA-256 ${escapeHtml(directorSource?.sha256 || directorReview.source_script_sha256)}</p><div class="p-3 rounded bg-background text-xs text-foreground whitespace-pre-wrap">${escapeHtml(directorSource?.script_text || directorReview.script_excerpt)}</div>
+    <div class="grid md:grid-cols-2 gap-3 mt-4"><div><h4 class="text-xs font-bold text-foreground mb-2">Các đoạn giọng đọc</h4>${sortDirectorBeatsByAttention(directorReview.beats).map(b => `<button onclick="openDirectorBeat('${escapeHtml(b.beat_id)}')" class="block w-full text-left p-2 mb-1 rounded bg-background text-xs ${directorBeatNeedsAttention(b) ? 'border border-amber-700/50' : ''}"><b class="text-foreground">${escapeHtml(b.beat_id)}</b> <span class="text-muted-foreground">${escapeHtml(b.emotion)} · năng lượng ${b.energy} · ${escapeHtml(directorStatusLabel(b.render_status))}</span>${directorBeatNeedsAttention(b) ? ' <span class="text-amber-400 text-xs">● cần chú ý</span>' : ''}</button>`).join('')}</div><div>${renderDirectorResourceReadiness(directorReview.resource_readiness, gaps)}</div></div>`;
 }
 
 function renderDirectorResourceReadiness(readiness, gaps) {
@@ -644,8 +646,8 @@ function renderDirectorResourceReadiness(readiness, gaps) {
   const pctColor = pct >= 80 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400';
   const requiredCount = gaps.filter(g => g.priority === 'required').length;
 
-  const header = `<div class="flex items-center justify-between mb-1"><h4 class="text-xs font-bold text-white">Mức sẵn sàng tài nguyên</h4><span class="text-xs font-mono font-bold ${pctColor}">${readiness ?? '—'}%</span></div>
-    <div class="h-1.5 rounded-full bg-[#231F2A] overflow-hidden mb-2"><div class="h-full ${barColor} rounded-full transition-all" style="width:${pct}%"></div></div>`;
+  const header = `<div class="flex items-center justify-between mb-1"><h4 class="text-xs font-bold text-foreground">Mức sẵn sàng tài nguyên</h4><span class="text-xs font-mono font-bold ${pctColor}">${readiness ?? '—'}%</span></div>
+    <div class="h-1.5 rounded-full bg-muted overflow-hidden mb-2"><div class="h-full ${barColor} rounded-full transition-all" style="width:${pct}%"></div></div>`;
 
   if (!gaps.length) {
     return `${header}<p class="text-xs text-emerald-400">✓ Không thiếu tài nguyên nào.</p>`;
@@ -653,24 +655,24 @@ function renderDirectorResourceReadiness(readiness, gaps) {
 
   const pronunciationGaps = gaps.filter(g => g.resource_type === 'knowledge');
   const assetGaps = gaps.filter(g => g.resource_type !== 'knowledge');
-  const summary = `<p class="text-[10px] text-slate-400 mb-2">${requiredCount ? `<span class="text-red-400 font-bold">${requiredCount} bắt buộc</span> · ` : ''}${gaps.length} mục cần xử lý</p>`;
+  const summary = `<p class="text-xs text-muted-foreground mb-2">${requiredCount ? `<span class="text-red-400 font-bold">${requiredCount} bắt buộc</span> · ` : ''}${gaps.length} mục cần xử lý</p>`;
 
-  const pronBulkBtn = pronunciationGaps.length > 1 ? `<button onclick="confirmAllDirectorPronunciations(this)" class="text-[10px] text-purple-300 hover:text-purple-200 underline shrink-0">Xác nhận tất cả theo chính tả gốc</button>` : '';
-  const pronSection = pronunciationGaps.length ? `<div class="mb-3"><div class="flex items-center justify-between gap-2 mb-1.5"><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Cần xác nhận phát âm (${pronunciationGaps.length})</h5>${pronBulkBtn}</div><div class="space-y-1.5 director-pron-list">${pronunciationGaps.map(renderDirectorPronunciationGap).join('')}</div></div>` : '';
+  const pronBulkBtn = pronunciationGaps.length > 1 ? `<button onclick="confirmAllDirectorPronunciations(this)" class="text-xs text-foreground hover:text-foreground underline shrink-0">Xác nhận tất cả theo chính tả gốc</button>` : '';
+  const pronSection = pronunciationGaps.length ? `<div class="mb-3"><div class="flex items-center justify-between gap-2 mb-1.5"><h5 class="text-xs font-bold text-foreground">Cần xác nhận phát âm (${pronunciationGaps.length})</h5>${pronBulkBtn}</div><div class="space-y-1.5 director-pron-list">${pronunciationGaps.map(renderDirectorPronunciationGap).join('')}</div></div>` : '';
   const skippableAssetCount = assetGaps.filter(g => g.priority !== 'required').length;
-  const assetBulkBtn = skippableAssetCount > 1 ? `<button onclick="omitAllDirectorAssetGaps(this)" class="text-[10px] text-purple-300 hover:text-purple-200 underline shrink-0">Bỏ qua tất cả không bắt buộc (${skippableAssetCount})</button>` : '';
-  const assetSection = assetGaps.length ? `<div><div class="flex items-center justify-between gap-2 mb-1.5"><h5 class="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Tài nguyên âm thanh còn thiếu (${assetGaps.length})</h5>${assetBulkBtn}</div><div class="space-y-2 director-asset-gap-list">${assetGaps.map(renderDirectorAssetGap).join('')}</div></div>` : '';
+  const assetBulkBtn = skippableAssetCount > 1 ? `<button onclick="omitAllDirectorAssetGaps(this)" class="text-xs text-foreground hover:text-foreground underline shrink-0">Bỏ qua tất cả không bắt buộc (${skippableAssetCount})</button>` : '';
+  const assetSection = assetGaps.length ? `<div><div class="flex items-center justify-between gap-2 mb-1.5"><h5 class="text-xs font-bold text-foreground">Tài nguyên âm thanh còn thiếu (${assetGaps.length})</h5>${assetBulkBtn}</div><div class="space-y-2 director-asset-gap-list">${assetGaps.map(renderDirectorAssetGap).join('')}</div></div>` : '';
 
   return `${header}${summary}${pronSection}${assetSection}`;
 }
 
 function renderDirectorPronunciationGap(gap) {
   const required = gap.priority === 'required';
-  if (!gap.term) return `<p class="text-[10px] text-slate-500">Chưa có từ cần xác nhận phát âm.</p>`;
+  if (!gap.term) return `<p class="text-xs text-muted-foreground">Chưa có từ cần xác nhận phát âm.</p>`;
   return `<div class="flex items-center gap-1.5 p-1.5 rounded border ${required ? 'bg-red-950/30 border-red-800/60' : 'bg-amber-950/30 border-amber-800/60'}" data-pron-term="${escapeHtml(gap.term)}">
-    <b class="text-white text-xs shrink-0" title="Thuật ngữ cần xác nhận phát âm">${escapeHtml(gap.term)}</b>
+    <b class="text-foreground text-xs shrink-0" title="Thuật ngữ cần xác nhận phát âm">${escapeHtml(gap.term)}</b>
     <input class="director-input flex-1 min-w-0" aria-label="Cách phát âm cho ${escapeHtml(gap.term)}" value="${escapeHtml(gap.term)}" placeholder="Cách phát âm đã xác nhận..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.nextElementSibling.click();}">
-    <button onclick="resolveDirectorPronunciation('${escapeHtml(gap.term)}',this)" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Xác nhận</button>
+    <button onclick="resolveDirectorPronunciation('${escapeHtml(gap.term)}',this)" class="px-2 py-1 rounded bg-primary hover:bg-primary/90 text-xs text-primary-foreground shrink-0">Xác nhận</button>
   </div>`;
 }
 
@@ -739,13 +741,13 @@ function renderDirectorAssetGap(gap) {
   const required = gap.priority === 'required';
   const wanted = gap.wanted || {};
   const label = gap.intent || gap.description || 'hiệu ứng âm thanh phù hợp';
-  const details = `<div class="mt-1.5 text-[10px] text-slate-300 flex flex-wrap gap-x-3">${wanted.duration ? `<span><b>Thời lượng:</b> ${escapeHtml(String(wanted.duration))}</span>` : ''}${wanted.intensity ? `<span><b>Cường độ:</b> ${escapeHtml(String(wanted.intensity))}/5</span>` : ''}</div>${gap.narrative_context?.text ? `<p class="mt-1 text-[10px] text-slate-300"><b>Ngữ cảnh:</b> ${escapeHtml(gap.narrative_context.text)}</p>` : ''}${gap.suggested_search?.length ? `<p class="mt-1 text-[10px] text-slate-300"><b>Từ khóa:</b> ${escapeHtml(gap.suggested_search.slice(0, 3).join(' · '))}</p>` : ''}`;
+  const details = `<div class="mt-1.5 text-xs text-foreground flex flex-wrap gap-x-3">${wanted.duration ? `<span><b>Thời lượng:</b> ${escapeHtml(String(wanted.duration))}</span>` : ''}${wanted.intensity ? `<span><b>Cường độ:</b> ${escapeHtml(String(wanted.intensity))}/5</span>` : ''}</div>${gap.narrative_context?.text ? `<p class="mt-1 text-xs text-foreground"><b>Ngữ cảnh:</b> ${escapeHtml(gap.narrative_context.text)}</p>` : ''}${gap.suggested_search?.length ? `<p class="mt-1 text-xs text-foreground"><b>Từ khóa:</b> ${escapeHtml(gap.suggested_search.slice(0, 3).join(' · '))}</p>` : ''}`;
   const canSuggest = ['sfx', 'ambience'].includes(gap.resource_type);
-  const suggestBtn = canSuggest ? `<button type="button" onclick="directorFindAssetSuggestions('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-[#231F2A] hover:bg-purple-900/40 text-[10px] text-purple-300 border border-purple-700/40">🔍 Tìm gợi ý</button>` : '';
+  const suggestBtn = canSuggest ? `<button type="button" onclick="directorFindAssetSuggestions('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-muted hover:bg-accent text-xs text-foreground border border-border">Tìm gợi ý</button>` : '';
   return `<div class="director-asset-gap p-2 rounded border ${required ? 'bg-red-950/30 border-red-800' : 'bg-amber-950/30 border-amber-800'} text-xs text-amber-200" data-resource-id="${escapeHtml(gap.resource_id)}" data-required="${required}">
-    <div class="flex justify-between items-start gap-2"><b class="text-white">${escapeHtml(label)}</b><b class="text-[9px] uppercase shrink-0">${escapeHtml(gap.priority)}</b></div>
+    <div class="flex justify-between items-start gap-2"><b class="text-foreground">${escapeHtml(label)}</b><b class="text-xs shrink-0">${escapeHtml(gap.priority)}</b></div>
     ${details}
-    <div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" aria-label="Mã tài nguyên hiện có cho ${escapeHtml(label)}" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-purple-700 text-[10px]">Liên kết</button>${suggestBtn}${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-[#231F2A] text-[10px]">Bỏ qua</button>`}</div>
+    <div class="flex flex-wrap gap-1 mt-2"><input class="director-input flex-1 min-w-40" aria-label="Mã tài nguyên hiện có cho ${escapeHtml(label)}" placeholder="Mã tài nguyên hiện có"><button onclick="bindDirectorResource('${escapeHtml(gap.resource_id)}',this)" class="px-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 text-xs">Liên kết</button>${suggestBtn}${required ? '' : `<button onclick="omitDirectorResource('${escapeHtml(gap.resource_id)}')" class="px-2 rounded bg-muted text-xs">Bỏ qua</button>`}</div>
     <div class="director-asset-suggestions mt-2 space-y-1"></div>
   </div>`;
 }
@@ -776,13 +778,13 @@ async function directorFindAssetSuggestions(resourceId, button) {
       }),
     });
     container.innerHTML = results.length ? results.map(r => `
-      <div class="flex items-center gap-1.5 p-1.5 rounded bg-[#18151E] border border-[#3F3A46]">
+      <div class="flex items-center gap-1.5 p-1.5 rounded bg-card border border-border">
         <audio controls preload="none" class="h-7 w-32 shrink-0" src="/api/v1/voice-assets/${encodeURIComponent(r.asset_id)}/preview"></audio>
-        <span class="text-[10px] text-slate-300 flex-1 truncate" title="${escapeHtml((r.match_reasons || []).join(', '))}">${escapeHtml(r.asset_id)} <b class="${r.match_score >= 0.7 ? 'text-emerald-400' : 'text-amber-400'}">${Math.round(r.match_score * 100)}%</b>${r.exact_or_substitute === 'substitute' ? ' <span class="text-slate-500">(thay thế)</span>' : ''}</span>
-        <button onclick="bindDirectorResource('${escapeHtml(resourceId)}',this,'${escapeHtml(r.asset_id)}')" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Dùng cái này</button>
-      </div>`).join('') : '<p class="text-[10px] text-slate-500">Không tìm thấy tài nguyên phù hợp trong thư viện.</p>';
+        <span class="text-xs text-foreground flex-1 truncate" title="${escapeHtml((r.match_reasons || []).join(', '))}">${escapeHtml(r.asset_id)} <b class="${r.match_score >= 0.7 ? 'text-emerald-400' : 'text-amber-400'}">${Math.round(r.match_score * 100)}%</b>${r.exact_or_substitute === 'substitute' ? ' <span class="text-muted-foreground">(thay thế)</span>' : ''}</span>
+        <button onclick="bindDirectorResource('${escapeHtml(resourceId)}',this,'${escapeHtml(r.asset_id)}')" class="px-2 py-1 rounded bg-primary hover:bg-primary/90 text-xs text-primary-foreground shrink-0">Dùng cái này</button>
+      </div>`).join('') : '<p class="text-xs text-muted-foreground">Không tìm thấy tài nguyên phù hợp trong thư viện.</p>';
   } catch (error) {
-    container.innerHTML = `<p class="text-[10px] text-red-400">${escapeHtml(error.message)}</p>`;
+    container.innerHTML = `<p class="text-xs text-red-400">${escapeHtml(error.message)}</p>`;
   } finally {
     button.disabled = false;
     button.innerHTML = originalLabel;
@@ -790,9 +792,9 @@ async function directorFindAssetSuggestions(resourceId, button) {
 }
 
 function renderDirectorReview() {
-  if (!directorReview?.beats?.length) return '<p class="text-xs text-slate-500">Chưa có đoạn giọng đọc nào.</p>';
+  if (!directorReview?.beats?.length) return '<p class="text-xs text-muted-foreground">Chưa có đoạn giọng đọc nào.</p>';
   const gated = directorActive.status === 'waiting_for_human' && directorActive.human_action?.action_type === 'narration_acceptance';
-  return `${gated ? '<div class="mb-3 p-3 rounded-lg border border-amber-500/50 bg-amber-950/30 text-xs text-amber-200"><b>Cần duyệt giọng đọc:</b> nghe các bản đã chọn. Nút xanh phía trên duyệt toàn bộ một lần.</div>' : ''}<div class="space-y-3">${sortDirectorBeatsByAttention(directorReview.beats).map(beat => `<article class="p-3 rounded-lg bg-[#0E0C12] border ${directorBeatNeedsAttention(beat) ? 'border-amber-600/60' : 'border-emerald-700/50'}"><div class="flex flex-wrap justify-between gap-2"><div><b class="text-white text-xs">${escapeHtml(beat.beat_id)} · ${escapeHtml(beat.emotion)}</b><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(beat.source_text)}</p></div><span class="text-[10px] text-slate-400">bản đã chọn ${beat.selected_attempt ?? 'chưa có'} · QC ${beat.qc_summary?.qc_score ?? beat.qc_summary?.score ?? beat.qc_summary?.overall_score ?? '—'}</span></div>
+  return `${gated ? '<div class="mb-3 p-3 rounded-lg border border-amber-500/50 bg-amber-950/30 text-xs text-amber-200"><b>Cần duyệt giọng đọc:</b> nghe các bản đã chọn. Nút xanh phía trên duyệt toàn bộ một lần.</div>' : ''}<div class="space-y-3">${sortDirectorBeatsByAttention(directorReview.beats).map(beat => `<article class="p-3 rounded-lg bg-background border ${directorBeatNeedsAttention(beat) ? 'border-amber-600/60' : 'border-emerald-700/50'}"><div class="flex flex-wrap justify-between gap-2"><div><b class="text-foreground text-xs">${escapeHtml(beat.beat_id)} · ${escapeHtml(beat.emotion)}</b><p class="text-[11px] text-muted-foreground mt-1">${escapeHtml(beat.source_text)}</p></div><span class="text-xs text-muted-foreground">bản đã chọn ${beat.selected_attempt ?? 'chưa có'} · QC ${beat.qc_summary?.qc_score ?? beat.qc_summary?.score ?? beat.qc_summary?.overall_score ?? '—'}</span></div>
     <div class="flex flex-wrap gap-2 mt-3">${beat.available_attempts.map(a => {
       // "selected" only means this is the currently-pointed-to candidate --
       // it does NOT mean a human explicitly approved it (status stays
@@ -802,19 +804,19 @@ function renderDirectorReview() {
       // while still silently waiting on a real approval click.
       const isApproved = a.selected && a.status === 'passed';
       const needsApproval = a.selected && a.status !== 'passed';
-      const btnClass = isApproved ? 'bg-emerald-700' : needsApproval ? 'bg-amber-600 hover:bg-amber-500' : 'bg-[#231F2A] hover:bg-[#2d2838]';
+      const btnClass = isApproved ? 'bg-emerald-700 text-white' : needsApproval ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-muted hover:bg-accent';
       const btnLabel = isApproved ? `✓ Bản ${a.attempt_id} · đã duyệt` : needsApproval ? `Bản ${a.attempt_id} · cần duyệt` : `Bản ${a.attempt_id}`;
       const btnTitle = isApproved ? 'Đã được duyệt tường minh, sẵn sàng dùng cho bản phối cuối' : needsApproval ? 'Đang là bản được chọn nhưng CHƯA được duyệt tường minh -- bấm để duyệt' : 'Bấm để chọn và duyệt tường minh bản ghi âm này';
-      return `<div class="flex items-center gap-1"><audio controls preload="none" class="h-8 w-44" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.artifact_id)}"></audio><button aria-label="${btnTitle}" onclick="selectDirectorAttempt('${escapeHtml(beat.beat_id)}',${a.attempt_id})" title="${btnTitle}" class="px-2 py-1 rounded ${btnClass} text-[10px] text-white">${btnLabel}</button></div>`;
+      return `<div class="flex items-center gap-1"><audio controls preload="none" class="h-8 w-44" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.artifact_id)}"></audio><button aria-label="${btnTitle}" onclick="selectDirectorAttempt('${escapeHtml(beat.beat_id)}',${a.attempt_id})" title="${btnTitle}" class="px-2 py-1 rounded ${btnClass} text-xs text-foreground">${btnLabel}</button></div>`;
     }).join('')}</div>
-    <div class="flex flex-wrap items-center gap-1.5 mt-3"><label class="text-[10px] text-slate-400 shrink-0">Giọng nhân vật:</label><select id="directorVoiceSelect_${escapeHtml(beat.beat_id)}" class="director-input flex-1 min-w-32">${directorVoiceOptionsHtml(beat.character_id)}</select><button onclick="saveDirectorBeatVoice('${escapeHtml(beat.beat_id)}',document.getElementById('directorVoiceSelect_${escapeHtml(beat.beat_id)}').value)" class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-[10px] text-white shrink-0">Lưu giọng</button></div>
-    <div class="flex gap-2 mt-3"><button onclick="openDirectorBeat('${escapeHtml(beat.beat_id)}')" class="px-3 py-1 rounded bg-purple-600 text-white text-[10px]">Mở chi tiết đoạn</button></div></article>`).join('')}</div>`;
+    <div class="flex flex-wrap items-center gap-1.5 mt-3"><label class="text-xs text-muted-foreground shrink-0">Giọng nhân vật:</label><select id="directorVoiceSelect_${escapeHtml(beat.beat_id)}" class="director-input flex-1 min-w-32">${directorVoiceOptionsHtml(beat.character_id)}</select><button onclick="saveDirectorBeatVoice('${escapeHtml(beat.beat_id)}',document.getElementById('directorVoiceSelect_${escapeHtml(beat.beat_id)}').value)" class="px-2 py-1 rounded bg-primary hover:bg-primary/90 text-xs text-primary-foreground shrink-0">Lưu giọng</button></div>
+    <div class="flex gap-2 mt-3"><button onclick="openDirectorBeat('${escapeHtml(beat.beat_id)}')" class="px-3 py-1 rounded bg-primary text-primary-foreground text-xs">Mở chi tiết đoạn</button></div></article>`).join('')}</div>`;
 }
 
 function directorVoiceOptionsHtml(selectedCharacterId) {
   const chars = (typeof allCharactersCache !== 'undefined' ? allCharactersCache : []) || [];
-  const defaultOption = `<option value="" ${!selectedCharacterId ? 'selected' : ''}>🎙️ Mặc định (giọng chung dự án)</option>`;
-  const charOptions = chars.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === selectedCharacterId ? 'selected' : ''}>${c.is_default ? '⭐ ' : ''}${escapeHtml(c.name)}${c.language ? ` (${escapeHtml(c.language)})` : ''}</option>`).join('');
+  const defaultOption = `<option value="" ${!selectedCharacterId ? 'selected' : ''}>Mặc định (giọng chung dự án)</option>`;
+  const charOptions = chars.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === selectedCharacterId ? 'selected' : ''}>${c.is_default ? '★ ' : ''}${escapeHtml(c.name)}${c.language ? ` (${escapeHtml(c.language)})` : ''}</option>`).join('');
   return defaultOption + charOptions;
 }
 
@@ -831,12 +833,12 @@ async function saveDirectorBeatVoice(beatId, characterId) {
 
 function renderDirectorMix() {
   const done = name => directorActive.steps.find(s => s.name === name);
-  return `<div class="grid md:grid-cols-3 gap-3">${['prepare_mix','mix','master'].map(name => { const step = done(name); return `<div class="p-4 rounded bg-[#0E0C12]"><b class="text-white text-xs">${escapeHtml(directorStepLabel(name))}</b><p class="text-[11px] text-slate-400 mt-2">${escapeHtml(directorStatusLabel(step?.status || 'pending'))}</p><p class="text-[10px] text-slate-500">${escapeHtml(JSON.stringify(step?.result_summary || {}))}</p></div>`; }).join('')}</div>`;
+  return `<div class="grid md:grid-cols-3 gap-3">${['prepare_mix','mix','master'].map(name => { const step = done(name); return `<div class="p-4 rounded bg-background"><b class="text-foreground text-xs">${escapeHtml(directorStepLabel(name))}</b><p class="text-[11px] text-muted-foreground mt-2">${escapeHtml(directorStatusLabel(step?.status || 'pending'))}</p><p class="text-xs text-muted-foreground">${escapeHtml(JSON.stringify(step?.result_summary || {}))}</p></div>`; }).join('')}</div>`;
 }
 
 async function renderDirectorDelivery(content, force = false, userInitiated = false) {
   if (!content.innerHTML.trim()) {
-    content.innerHTML = '<p class="text-xs text-slate-500">Đang tải danh sách file…</p>';
+    content.innerHTML = '<p class="text-xs text-muted-foreground">Đang tải danh sách file…</p>';
   }
   try {
     const [data, mixPlan] = await Promise.all([
@@ -857,26 +859,26 @@ async function renderDirectorDelivery(content, force = false, userInitiated = fa
     directorContentFp.delivery = fp;
 
     const masterLabel = masterVerified ? 'ĐÃ XÁC MINH' : masterStatus?.exists && !masterStatus?.fresh ? 'ĐÃ CŨ' : 'CHƯA XÁC MINH';
-    const masterApproval = masterVerified ? '<button data-director-gate onclick="approveDirectorGate(true)" class="px-3 py-2 rounded bg-emerald-600 text-white text-xs font-bold">Duyệt bản master này & xuất file</button>' : '<span class="px-3 py-2 rounded bg-[#231F2A] text-slate-500 text-xs">Chưa thể duyệt</span>';
-    const masterCard = gate ? `<div class="mb-4 p-4 rounded-lg border border-amber-500/50 bg-amber-950/20"><div class="flex flex-wrap justify-between gap-3"><div><h4 class="font-bold text-white">master.wav</h4><p class="text-[10px] text-slate-400 font-mono break-all">SHA-256 ${escapeHtml(gate.sha256)}</p><p class="text-[10px] text-slate-400">Thời lượng ${mixPlan?.duration_ms ? `${Math.round(mixPlan.duration_ms)} ms` : 'chưa có'} · Âm lượng ${metrics.output_lufs ?? 'chưa có'} LUFS · Dòng dữ liệu <span class="${masterVerified ? 'text-emerald-400' : 'text-amber-400'}">${masterLabel}</span></p></div>${masterApproval}</div><p class="text-[11px] text-amber-200 mt-2">Hãy nghe toàn bộ file này. Khi duyệt, SHA-256 hiện tại sẽ được khóa vào phê duyệt.</p><audio controls preload="metadata" class="w-full h-9 mt-3" src="${escapeHtml(gate.download_url)}"></audio></div>` : '';
+    const masterApproval = masterVerified ? '<button data-director-gate onclick="approveDirectorGate(true)" class="px-3 py-2 rounded bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90">Duyệt bản master này & xuất file</button>' : '<span class="px-3 py-2 rounded bg-muted text-muted-foreground text-xs">Chưa thể duyệt</span>';
+    const masterCard = gate ? `<div class="mb-4 p-4 rounded-lg border border-amber-500/50 bg-amber-950/20"><div class="flex flex-wrap justify-between gap-3"><div><h4 class="font-bold text-foreground">master.wav</h4><p class="text-xs text-muted-foreground font-mono break-all">SHA-256 ${escapeHtml(gate.sha256)}</p><p class="text-xs text-muted-foreground">Thời lượng ${mixPlan?.duration_ms ? `${Math.round(mixPlan.duration_ms)} ms` : 'chưa có'} · Âm lượng ${metrics.output_lufs ?? 'chưa có'} LUFS · Dòng dữ liệu <span class="${masterVerified ? 'text-emerald-400' : 'text-amber-400'}">${masterLabel}</span></p></div>${masterApproval}</div><p class="text-[11px] text-amber-200 mt-2">Hãy nghe toàn bộ file này. Khi duyệt, SHA-256 hiện tại sẽ được khóa vào phê duyệt.</p><audio controls preload="metadata" class="w-full h-9 mt-3" src="${escapeHtml(gate.download_url)}"></audio></div>` : '';
     
     const artifactsHtml = data.artifacts.map(a => {
       const lineage = directorReview?.artifact_status?.find(item => item.artifact_id === a.id);
       const valid = lineage?.exists && lineage?.fresh && lineage?.sha256 === a.sha256;
       const label = valid ? 'ĐÃ XÁC MINH' : lineage?.exists && !lineage?.fresh ? 'ĐÃ CŨ' : 'CHƯA XÁC MINH';
       const downloadUrl = escapeHtml(lineage?.download_url || a.download_url || `/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(a.id)}`);
-      const download = valid ? `<a class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold inline-flex items-center gap-1" href="${downloadUrl}" download><span aria-hidden="true" class="material-symbols-outlined text-[14px]">download</span> Tải xuống</a>` : '<span class="px-3 py-1 rounded bg-[#231F2A] text-slate-500 text-xs">Chưa thể tải</span>';
+      const download = valid ? `<a class="px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold inline-flex items-center gap-1" href="${downloadUrl}" download><span aria-hidden="true" class="material-symbols-outlined text-[14px]">download</span> Tải xuống</a>` : '<span class="px-3 py-1 rounded bg-muted text-muted-foreground text-xs">Chưa thể tải</span>';
       const isAudio = a.type === 'final_wav' || a.type === 'final_mp3' || a.id.endsWith('_wav') || a.id.endsWith('_mp3') || /\.(wav|mp3)$/i.test(a.filename || '');
-      const audioPlayer = isAudio ? `<div class="mt-2 w-full pt-2 border-t border-[#231F2A]"><div class="flex items-center justify-between text-[10px] text-slate-400 mb-1"><span>Nghe trực tiếp ${escapeHtml(a.filename || a.id)}</span><span>${formatDirectorBytes(a.size_bytes)}</span></div><audio controls preload="metadata" class="w-full h-8" src="${downloadUrl}"></audio></div>` : '';
+      const audioPlayer = isAudio ? `<div class="mt-2 w-full pt-2 border-t border-border"><div class="flex items-center justify-between text-xs text-muted-foreground mb-1"><span>Nghe trực tiếp ${escapeHtml(a.filename || a.id)}</span><span>${formatDirectorBytes(a.size_bytes)}</span></div><audio controls preload="metadata" class="w-full h-8" src="${downloadUrl}"></audio></div>` : '';
 
-      return `<div class="p-3 mb-2 rounded bg-[#0E0C12] border border-[#231F2A]"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-xs text-white">${escapeHtml(a.id)}</b> <span class="text-[10px] text-slate-400">(${formatDirectorBytes(a.size_bytes)})</span><p class="text-[10px] text-slate-500 font-mono">SHA-256 ${escapeHtml(a.sha256 || 'not reported')}</p><p class="text-[10px] ${valid ? 'text-emerald-400' : 'text-amber-400'} font-semibold mt-0.5">${label}</p></div>${download}</div>${audioPlayer}</div>`;
-    }).join('') || '<p class="text-xs text-slate-500">Chưa có file bàn giao.</p>';
+      return `<div class="p-3 mb-2 rounded bg-background border border-border"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-xs text-foreground">${escapeHtml(a.id)}</b> <span class="text-xs text-muted-foreground">(${formatDirectorBytes(a.size_bytes)})</span><p class="text-xs text-muted-foreground font-mono">SHA-256 ${escapeHtml(a.sha256 || 'not reported')}</p><p class="text-xs ${valid ? 'text-emerald-400' : 'text-amber-400'} font-semibold mt-0.5">${label}</p></div>${download}</div>${audioPlayer}</div>`;
+    }).join('') || '<p class="text-xs text-muted-foreground">Chưa có file bàn giao.</p>';
 
     const scriptText = directorSource?.script_text || directorReview?.script_excerpt || '';
-    const scriptBox = scriptText ? `<details class="mt-4 p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46] text-xs"><summary class="font-bold text-white cursor-pointer select-none flex items-center justify-between"><span>Kịch bản gốc đối chiếu (SHA-256 ${escapeHtml((directorSource?.sha256 || directorReview?.source_script_sha256 || '').slice(0, 16))}...)</span><span class="text-[10px] text-purple-300 font-normal">Bấm để mở/đóng</span></summary><div class="mt-3 p-3 rounded bg-[#18151E] text-slate-300 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">${escapeHtml(scriptText)}</div><div class="mt-2 flex justify-end"><button onclick="copyDirectorScript()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-800 text-slate-300 text-[10px]">Sao chép kịch bản</button></div></details>` : '';
+    const scriptBox = scriptText ? `<details class="mt-4 p-3 rounded-lg bg-background border border-border text-xs"><summary class="font-bold text-foreground cursor-pointer select-none flex items-center justify-between"><span>Kịch bản gốc đối chiếu (SHA-256 ${escapeHtml((directorSource?.sha256 || directorReview?.source_script_sha256 || '').slice(0, 16))}...)</span><span class="text-xs text-foreground font-normal">Bấm để mở/đóng</span></summary><div class="mt-3 p-3 rounded bg-card text-foreground whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">${escapeHtml(scriptText)}</div><div class="mt-2 flex justify-end"><button onclick="copyDirectorScript()" class="px-2.5 py-1 rounded bg-muted hover:bg-primary/90 text-foreground text-xs">Sao chép kịch bản</button></div></details>` : '';
 
     const prevScroll = content.scrollTop;
-    content.innerHTML = `${masterCard}<div class="mb-3 flex items-center justify-between">${directorStatusChip(directorActive.status)} <span class="text-xs text-slate-400">Chỉ file mới nhất và đã xác minh mới được tải.</span></div>${artifactsHtml}${scriptBox}`;
+    content.innerHTML = `${masterCard}<div class="mb-3 flex items-center justify-between">${directorStatusChip(directorActive.status)} <span class="text-xs text-muted-foreground">Chỉ file mới nhất và đã xác minh mới được tải.</span></div>${artifactsHtml}${scriptBox}`;
     if (!userInitiated) content.scrollTop = prevScroll;
   } catch (error) {
     if (!content.innerHTML.trim() || content.innerHTML.includes('Đang tải danh sách file…')) {
@@ -887,7 +889,7 @@ async function renderDirectorDelivery(content, force = false, userInitiated = fa
 
 async function renderDirectorFinal(content, force = false, userInitiated = false) {
   if (!content.innerHTML.trim()) {
-    content.innerHTML = '<p class="text-xs text-slate-500">Đang tải bảng tổng kết và tra soát…</p>';
+    content.innerHTML = '<p class="text-xs text-muted-foreground">Đang tải bảng tổng kết và tra soát…</p>';
   }
   try {
     const [data, mixPlan] = await Promise.all([
@@ -916,19 +918,19 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
       const lineage = directorReview?.artifact_status?.find(item => item.artifact_id === art.id);
       const isVerified = lineage?.exists && lineage?.fresh && lineage?.sha256 === art.sha256;
       const downloadUrl = escapeHtml(lineage?.download_url || art.download_url || `/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(art.id)}`);
-      return `<div class="p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-2">
+      return `<div class="p-3 rounded-lg bg-background border border-border space-y-2">
         <div class="flex flex-wrap justify-between items-center gap-2">
           <div>
-            <b class="text-xs text-white uppercase">${art.id === 'final_wav' ? 'Bản xuất Lossless WAV' : art.id === 'final_mp3' ? 'Bản xuất nén MP3 (192kbps)' : 'Bản Master WAV'}</b>
-            <span class="text-[10px] text-slate-400 ml-2">(${formatDirectorBytes(art.size_bytes)})</span>
-            <span class="ml-2 text-[10px] ${isVerified ? 'text-emerald-400' : 'text-amber-400'} font-semibold">${isVerified ? '✓ ĐÃ XÁC MINH' : 'CHƯA XÁC MINH'}</span>
+            <b class="text-xs text-foreground">${art.id === 'final_wav' ? 'Bản xuất Lossless WAV' : art.id === 'final_mp3' ? 'Bản xuất nén MP3 (192kbps)' : 'Bản Master WAV'}</b>
+            <span class="text-xs text-muted-foreground ml-2">(${formatDirectorBytes(art.size_bytes)})</span>
+            <span class="ml-2 text-xs ${isVerified ? 'text-emerald-400' : 'text-amber-400'} font-semibold">${isVerified ? '✓ ĐÃ XÁC MINH' : 'CHƯA XÁC MINH'}</span>
           </div>
-          <a href="${downloadUrl}" download class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold inline-flex items-center gap-1">
+          <a href="${downloadUrl}" download class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-bold inline-flex items-center gap-1">
             <span aria-hidden="true" class="material-symbols-outlined text-[13px]">download</span> Tải file
           </a>
         </div>
         <audio controls preload="metadata" class="w-full h-8" src="${downloadUrl}"></audio>
-        <p class="text-[9px] text-slate-500 font-mono break-all">SHA-256: ${escapeHtml(art.sha256)}</p>
+        <p class="text-xs text-muted-foreground font-mono break-all">SHA-256: ${escapeHtml(art.sha256)}</p>
       </div>`;
     }).join('');
 
@@ -938,28 +940,28 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
       const qcScore = b.qc_summary?.qc_score ?? b.qc_summary?.score ?? attempt?.qc_score ?? '—';
       const qcPass = (b.qc_summary?.qc_verdict || attempt?.qc_verdict || b.render_status) === 'pass' || (typeof qcScore === 'number' && qcScore >= 80);
 
-      return `<tr class="border-b border-[#231F2A] hover:bg-[#1C1824] text-[11px]">
-        <td class="p-2.5 align-top font-bold text-white whitespace-nowrap">
+      return `<tr class="border-b border-border hover:bg-card text-[11px]">
+        <td class="p-2.5 align-top font-bold text-foreground whitespace-nowrap">
           <div>${escapeHtml(b.beat_id)}</div>
-          <div class="text-[9px] text-slate-500 uppercase">${escapeHtml(b.role || 'beat')}</div>
+          <div class="text-xs text-muted-foreground">${escapeHtml(b.role || 'beat')}</div>
         </td>
-        <td class="p-2.5 align-top text-slate-300 leading-relaxed min-w-[240px]">
+        <td class="p-2.5 align-top text-foreground leading-relaxed min-w-[240px]">
           ${escapeHtml(b.source_text)}
-          <div class="mt-1 flex flex-wrap gap-2 text-[9px] text-slate-500 font-mono">
-            <span>Cảm xúc: <b class="text-purple-300">${escapeHtml(b.emotion || 'neutral')}</b></span>
-            <span>Năng lượng: <b class="text-purple-300">${b.energy ?? 1}</b></span>
-            <span>Nghỉ sau: <b class="text-purple-300">${b.pause_after_ms ?? 0} ms</b></span>
+          <div class="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground font-mono">
+            <span>Cảm xúc: <b class="text-foreground">${escapeHtml(b.emotion || 'neutral')}</b></span>
+            <span>Năng lượng: <b class="text-foreground">${b.energy ?? 1}</b></span>
+            <span>Nghỉ sau: <b class="text-foreground">${b.pause_after_ms ?? 0} ms</b></span>
           </div>
         </td>
         <td class="p-2.5 align-top whitespace-nowrap min-w-[180px]">
-          ${audioUrl ? `<audio controls preload="none" class="h-7 w-40" src="${escapeHtml(audioUrl)}"></audio><div class="text-[9px] text-slate-500 mt-0.5">Bản thu #${attempt.attempt_id} (${Math.round((attempt.duration_ms || 0) / 1000)}s)</div>` : '<span class="text-slate-500 text-[10px]">Chưa có audio</span>'}
+          ${audioUrl ? `<audio controls preload="none" class="h-7 w-40" src="${escapeHtml(audioUrl)}"></audio><div class="text-xs text-muted-foreground mt-0.5">Bản thu #${attempt.attempt_id} (${Math.round((attempt.duration_ms || 0) / 1000)}s)</div>` : '<span class="text-muted-foreground text-xs">Chưa có audio</span>'}
         </td>
         <td class="p-2.5 align-top whitespace-nowrap">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${qcPass ? 'bg-emerald-950/60 text-emerald-300' : 'bg-amber-950/60 text-amber-300'}">${qcScore} đ</span>
-          <div class="text-[9px] text-slate-500 uppercase mt-0.5">${escapeHtml(b.render_status || 'ok')}</div>
+          <span class="px-2 py-0.5 rounded text-xs font-bold ${qcPass ? 'bg-emerald-950/60 text-emerald-300' : 'bg-amber-950/60 text-amber-300'}">${qcScore} đ</span>
+          <div class="text-xs text-muted-foreground mt-0.5">${escapeHtml(b.render_status || 'ok')}</div>
         </td>
       </tr>`;
-    }).join('') || '<tr><td colspan="4" class="p-4 text-center text-slate-500">Không có dữ liệu đoạn thoại.</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="p-4 text-center text-muted-foreground">Không có dữ liệu đoạn thoại.</td></tr>';
 
     const pronunciations = [];
     beats.forEach(b => {
@@ -968,73 +970,73 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
         if (!pronunciations.some(p => p.k === k)) pronunciations.push({k, v});
       }
     });
-    const pronHtml = pronunciations.length ? pronunciations.map(p => `<span class="px-2 py-1 rounded bg-[#231F2A] text-slate-300 text-[10px] font-mono"><b class="text-white">${escapeHtml(p.k)}</b>: "${escapeHtml(p.v)}"</span>`).join(' ') : '<span class="text-slate-500 text-[11px]">Không có từ phát âm đặc biệt.</span>';
+    const pronHtml = pronunciations.length ? pronunciations.map(p => `<span class="px-2 py-1 rounded bg-muted text-foreground text-xs font-mono"><b class="text-foreground">${escapeHtml(p.k)}</b>: "${escapeHtml(p.v)}"</span>`).join(' ') : '<span class="text-muted-foreground text-[11px]">Không có từ phát âm đặc biệt.</span>';
 
     const prevScroll = content.scrollTop;
     content.innerHTML = `
       <div class="space-y-4">
         <!-- Metric Cards -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-          <div class="p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46]">
-            <div class="text-[10px] uppercase text-slate-400">Trạng thái</div>
+          <div class="p-3 rounded-lg bg-background border border-border">
+            <div class="text-xs text-muted-foreground">Trạng thái</div>
             <div class="mt-1">${directorStatusChip(directorActive.status)}</div>
-            <div class="text-[9px] text-slate-500 font-mono mt-1 truncate">${escapeHtml(directorActive.workflow_id)}</div>
+            <div class="text-xs text-muted-foreground font-mono mt-1 truncate">${escapeHtml(directorActive.workflow_id)}</div>
           </div>
-          <div class="p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46]">
-            <div class="text-[10px] uppercase text-slate-400">Thời lượng hoàn chỉnh</div>
-            <div class="text-sm font-bold text-white mt-1">${formatDirectorDuration(totalDuration)}</div>
-            <div class="text-[9px] text-slate-500 mt-1">${beats.length} đoạn thoại · ${wordCount} từ</div>
+          <div class="p-3 rounded-lg bg-background border border-border">
+            <div class="text-xs text-muted-foreground">Thời lượng hoàn chỉnh</div>
+            <div class="text-sm font-bold text-foreground mt-1">${formatDirectorDuration(totalDuration)}</div>
+            <div class="text-xs text-muted-foreground mt-1">${beats.length} đoạn thoại · ${wordCount} từ</div>
           </div>
-          <div class="p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46]">
-            <div class="text-[10px] uppercase text-slate-400">Điểm QC trung bình</div>
+          <div class="p-3 rounded-lg bg-background border border-border">
+            <div class="text-xs text-muted-foreground">Điểm QC trung bình</div>
             <div class="text-sm font-bold text-emerald-400 mt-1">${avgScore} / 100</div>
-            <div class="text-[9px] text-slate-500 mt-1">Hồ sơ: ${escapeHtml(directorActive.policy?.mixing_profile || 'storytelling')}</div>
+            <div class="text-xs text-muted-foreground mt-1">Hồ sơ: ${escapeHtml(directorActive.policy?.mixing_profile || 'storytelling')}</div>
           </div>
-          <div class="p-3 rounded-lg bg-[#0E0C12] border border-[#3F3A46]">
-            <div class="text-[10px] uppercase text-slate-400">Mức sẵn sàng tài nguyên</div>
-            <div class="text-sm font-bold text-purple-300 mt-1">${directorReview?.resource_readiness ?? 100}%</div>
-            <div class="text-[9px] text-slate-500 mt-1">${pronunciations.length} từ đã xác nhận</div>
+          <div class="p-3 rounded-lg bg-background border border-border">
+            <div class="text-xs text-muted-foreground">Mức sẵn sàng tài nguyên</div>
+            <div class="text-sm font-bold text-foreground mt-1">${directorReview?.resource_readiness ?? 100}%</div>
+            <div class="text-xs text-muted-foreground mt-1">${pronunciations.length} từ đã xác nhận</div>
           </div>
         </div>
 
         <!-- Audio Deliverables Players -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
-              <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">play_circle</span>
+            <h4 class="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <span aria-hidden="true" class="material-symbols-outlined text-foreground text-[16px]">play_circle</span>
               Thẻ nghe bản phát hành hoàn chỉnh (Master / Export)
             </h4>
-            <span class="text-[10px] text-slate-400">Nghe trực tiếp trước khi phân phối</span>
+            <span class="text-xs text-muted-foreground">Nghe trực tiếp trước khi phân phối</span>
           </div>
           <div class="grid md:grid-cols-2 gap-3">
-            ${audioDeliverables || '<p class="text-xs text-slate-500 p-4 rounded bg-[#0E0C12]">Chưa có file âm thanh xuất xưởng.</p>'}
+            ${audioDeliverables || '<p class="text-xs text-muted-foreground p-4 rounded bg-background">Chưa có file âm thanh xuất xưởng.</p>'}
           </div>
         </div>
 
         <!-- Original Script Full Inspection Box -->
-        <div class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46]">
+        <div class="p-3.5 rounded-lg bg-background border border-border">
           <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div>
-              <h4 class="text-xs font-bold text-white">Kịch bản ban đầu (Toàn văn đối chiếu)</h4>
-              <p class="text-[9px] text-slate-400 font-mono mt-0.5">SHA-256: ${escapeHtml(scriptSha)} · ${wordCount} từ · ${scriptText.length} ký tự</p>
+              <h4 class="text-xs font-bold text-foreground">Kịch bản ban đầu (Toàn văn đối chiếu)</h4>
+              <p class="text-xs text-muted-foreground font-mono mt-0.5">SHA-256: ${escapeHtml(scriptSha)} · ${wordCount} từ · ${scriptText.length} ký tự</p>
             </div>
-            <button onclick="copyDirectorScript()" class="px-2.5 py-1 rounded bg-[#231F2A] hover:bg-purple-800 text-white text-[10px] font-medium inline-flex items-center gap-1">
+            <button onclick="copyDirectorScript()" class="px-2.5 py-1 rounded bg-muted hover:bg-primary/90 text-foreground text-xs font-medium inline-flex items-center gap-1">
               <span aria-hidden="true" class="material-symbols-outlined text-[13px]">content_copy</span> Sao chép kịch bản
             </button>
           </div>
-          <div class="p-3 rounded bg-[#18151E] text-slate-200 text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto border border-[#231F2A]">${escapeHtml(scriptText)}</div>
+          <div class="p-3 rounded bg-card text-foreground text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto border border-border">${escapeHtml(scriptText)}</div>
         </div>
 
         <!-- Beat by Beat Table -->
         <div>
-          <h4 class="text-xs font-bold text-white mb-2 flex items-center gap-1.5">
-            <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[16px]">list_alt</span>
+          <h4 class="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
+            <span aria-hidden="true" class="material-symbols-outlined text-foreground text-[16px]">list_alt</span>
             Bảng tra soát chi tiết từng câu thoại (Beat Audit Matrix)
           </h4>
-          <div class="overflow-x-auto rounded-lg border border-[#3F3A46] bg-[#0E0C12]">
+          <div class="overflow-x-auto rounded-lg border border-border bg-background">
             <table class="w-full text-left border-collapse">
               <thead>
-                <tr class="border-b border-[#3F3A46] bg-[#18151E] text-[10px] uppercase text-slate-400">
+                <tr class="border-b border-border bg-card text-xs text-muted-foreground">
                   <th class="p-2.5">Mã</th>
                   <th class="p-2.5">Lời thoại & Hướng diễn</th>
                   <th class="p-2.5">Nghe giọng đọc</th>
@@ -1049,14 +1051,14 @@ async function renderDirectorFinal(content, force = false, userInitiated = false
         </div>
 
         <!-- Technical Verification & Pronunciations -->
-        <div class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-2">
-          <h4 class="text-xs font-bold text-white">Tài nguyên & Tính toàn vẹn dữ liệu (Lineage & Integrity)</h4>
-          <div class="text-[11px] text-slate-300">
-            <span class="text-slate-400 font-semibold">Phát âm đã khóa:</span>
+        <div class="p-3.5 rounded-lg bg-background border border-border space-y-2">
+          <h4 class="text-xs font-bold text-foreground">Tài nguyên & Tính toàn vẹn dữ liệu (Lineage & Integrity)</h4>
+          <div class="text-[11px] text-foreground">
+            <span class="text-muted-foreground font-semibold">Phát âm đã khóa:</span>
             <div class="mt-1 flex flex-wrap gap-1.5">${pronHtml}</div>
           </div>
-          <div class="pt-2 border-t border-[#231F2A] text-[10px] text-slate-400 flex flex-wrap justify-between gap-2">
-            <span>Provider: <b class="text-slate-200">${escapeHtml(directorActive.policy?.provider || 'local')}</b> / Model: <b class="text-slate-200">${escapeHtml(directorActive.policy?.model || 'mặc định')}</b></span>
+          <div class="pt-2 border-t border-border text-xs text-muted-foreground flex flex-wrap justify-between gap-2">
+            <span>Provider: <b class="text-foreground">${escapeHtml(directorActive.policy?.provider || 'local')}</b> / Model: <b class="text-foreground">${escapeHtml(directorActive.policy?.model || 'mặc định')}</b></span>
             <span>Khóa duyệt SHA-256: <b class="text-emerald-400 font-mono">${escapeHtml((directorActive.result?.manifest?.source_master_sha256 || '').slice(0, 16) || 'N/A')}</b></span>
           </div>
         </div>
@@ -1180,12 +1182,12 @@ function openDirectorBeat(beatId) {
   directorBeat = directorReview?.beats.find(beat => beat.beat_id === beatId);
   if (!directorBeat) return;
   document.getElementById('directorBeatTitle').textContent = `${directorBeat.beat_id} · ${directorStatusLabel(directorBeat.render_status)}`;
-  document.getElementById('directorBeatBody').innerHTML = `<section><label class="text-[10px] uppercase text-slate-500">Nội dung gốc không thể sửa</label><p class="mt-1 p-3 rounded bg-[#0E0C12] text-xs text-slate-300">${escapeHtml(directorBeat.source_text)}</p></section>
-    <section class="grid grid-cols-2 md:grid-cols-4 gap-3"><label class="text-[10px] text-slate-400">Cảm xúc<input id="directorBeatEmotion" value="${escapeHtml(directorBeat.emotion)}" class="director-input w-full mt-1"></label><label class="text-[10px] text-slate-400">Năng lượng<input id="directorBeatEnergy" type="number" min="0" max="5" step="0.1" value="${directorBeat.energy}" class="director-input w-full mt-1"></label><label class="text-[10px] text-slate-400">Nhịp đọc<input id="directorBeatPace" type="number" min="0.1" step="0.1" value="${directorBeat.pace ?? ''}" class="director-input w-full mt-1"></label><label class="text-[10px] text-slate-400">Nghỉ sau đoạn (ms)<input id="directorBeatPause" type="number" min="0" step="10" value="${directorBeat.pause_after_ms}" class="director-input w-full mt-1"></label></section>
-    <section><label class="text-[10px] text-slate-400">Giọng nhân vật<select id="directorBeatVoice" class="director-input w-full mt-1">${directorVoiceOptionsHtml(directorBeat.character_id)}</select></label></section>
-    <section><div class="flex justify-between"><h4 class="text-xs font-bold">Các bản thu</h4><span class="text-[10px] text-slate-400">Đã chọn: ${directorBeat.selected_attempt ?? 'chưa có'} · QC ${directorBeat.qc_summary?.qc_score ?? directorBeat.qc_summary?.score ?? directorBeat.qc_summary?.overall_score ?? '—'}</span></div>${directorBeat.available_attempts.map(attempt => `<div class="mt-2 p-2 rounded bg-[#0E0C12] flex flex-wrap items-center gap-2"><audio controls preload="none" class="h-8 flex-1" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(attempt.artifact_id)}"></audio><span class="text-[10px]">#${attempt.attempt_id} · ${escapeHtml(attempt.qc_verdict || attempt.status)} · ${attempt.qc_score ?? '—'}</span><button onclick="selectDirectorAttempt('${escapeHtml(directorBeat.beat_id)}',${attempt.attempt_id}).then(()=>openDirectorBeat('${escapeHtml(directorBeat.beat_id)}'))" class="px-2 py-1 rounded ${attempt.selected ? 'bg-emerald-700' : 'bg-purple-700'} text-[10px]">${attempt.selected ? 'Đang chọn' : 'Chọn bản này'}</button></div>`).join('') || '<p class="text-xs text-slate-500 mt-2">Chưa có bản thu.</p>'}</section>
-    <section><h4 class="text-xs font-bold mb-1">Tóm tắt kiểm tra chất lượng (QC)</h4><pre class="p-3 rounded bg-[#0E0C12] text-[10px] text-slate-400 overflow-x-auto">${escapeHtml(JSON.stringify(directorBeat.qc_summary || {}, null, 2))}</pre></section>
-    <div id="directorImpactPreview"></div><div class="flex flex-wrap justify-end gap-2"><button onclick="saveDirectorTiming()" class="px-3 py-2 rounded bg-[#231F2A] text-xs">Lưu thời gian nghỉ</button><button onclick="saveDirectorBeatVoice('${escapeHtml(directorBeat.beat_id)}',document.getElementById('directorBeatVoice').value)" class="px-3 py-2 rounded bg-[#231F2A] text-xs">Lưu giọng nhân vật</button><button onclick="saveDirectorDirection()" class="px-3 py-2 rounded bg-purple-600 text-xs font-bold">Lưu hướng diễn</button><button onclick="rerenderDirectorBeat('${escapeHtml(directorBeat.beat_id)}')" class="px-3 py-2 rounded bg-emerald-700 text-xs font-bold">Tạo lại đoạn này</button></div>`;
+  document.getElementById('directorBeatBody').innerHTML = `<section><label class="text-xs text-muted-foreground">Nội dung gốc không thể sửa</label><p class="mt-1 p-3 rounded bg-background text-xs text-foreground">${escapeHtml(directorBeat.source_text)}</p></section>
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3"><label class="text-xs text-muted-foreground">Cảm xúc<input id="directorBeatEmotion" value="${escapeHtml(directorBeat.emotion)}" class="director-input w-full mt-1"></label><label class="text-xs text-muted-foreground">Năng lượng<input id="directorBeatEnergy" type="number" min="0" max="5" step="0.1" value="${directorBeat.energy}" class="director-input w-full mt-1"></label><label class="text-xs text-muted-foreground">Nhịp đọc<input id="directorBeatPace" type="number" min="0.1" step="0.1" value="${directorBeat.pace ?? ''}" class="director-input w-full mt-1"></label><label class="text-xs text-muted-foreground">Nghỉ sau đoạn (ms)<input id="directorBeatPause" type="number" min="0" step="10" value="${directorBeat.pause_after_ms}" class="director-input w-full mt-1"></label></section>
+    <section><label class="text-xs text-muted-foreground">Giọng nhân vật<select id="directorBeatVoice" class="director-input w-full mt-1">${directorVoiceOptionsHtml(directorBeat.character_id)}</select></label></section>
+    <section><div class="flex justify-between"><h4 class="text-xs font-bold">Các bản thu</h4><span class="text-xs text-muted-foreground">Đã chọn: ${directorBeat.selected_attempt ?? 'chưa có'} · QC ${directorBeat.qc_summary?.qc_score ?? directorBeat.qc_summary?.score ?? directorBeat.qc_summary?.overall_score ?? '—'}</span></div>${directorBeat.available_attempts.map(attempt => `<div class="mt-2 p-2 rounded bg-background flex flex-wrap items-center gap-2"><audio controls preload="none" class="h-8 flex-1" src="/api/v1/voice-projects/${encodeURIComponent(directorActive.project_id)}/artifacts/${encodeURIComponent(attempt.artifact_id)}"></audio><span class="text-xs">#${attempt.attempt_id} · ${escapeHtml(attempt.qc_verdict || attempt.status)} · ${attempt.qc_score ?? '—'}</span><button onclick="selectDirectorAttempt('${escapeHtml(directorBeat.beat_id)}',${attempt.attempt_id}).then(()=>openDirectorBeat('${escapeHtml(directorBeat.beat_id)}'))" class="px-2 py-1 rounded ${attempt.selected ? 'bg-emerald-700 text-white' : 'bg-primary text-primary-foreground'} text-xs">${attempt.selected ? 'Đang chọn' : 'Chọn bản này'}</button></div>`).join('') || '<p class="text-xs text-muted-foreground mt-2">Chưa có bản thu.</p>'}</section>
+    <section><h4 class="text-xs font-bold mb-1">Tóm tắt kiểm tra chất lượng (QC)</h4><pre class="p-3 rounded bg-background text-xs text-muted-foreground overflow-x-auto">${escapeHtml(JSON.stringify(directorBeat.qc_summary || {}, null, 2))}</pre></section>
+    <div id="directorImpactPreview"></div><div class="flex flex-wrap justify-end gap-2"><button onclick="saveDirectorTiming()" class="px-3 py-2 rounded bg-muted text-xs">Lưu thời gian nghỉ</button><button onclick="saveDirectorBeatVoice('${escapeHtml(directorBeat.beat_id)}',document.getElementById('directorBeatVoice').value)" class="px-3 py-2 rounded bg-muted text-xs">Lưu giọng nhân vật</button><button onclick="saveDirectorDirection()" class="px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold">Lưu hướng diễn</button><button onclick="rerenderDirectorBeat('${escapeHtml(directorBeat.beat_id)}')" class="px-3 py-2 rounded bg-emerald-700 text-white text-xs font-bold">Tạo lại đoạn này</button></div>`;
   document.querySelectorAll('#directorBeatDialog .director-input').forEach(el => el.className += ` ${directorInputClass}`);
   document.getElementById('directorBeatDialog').showModal();
 }
@@ -1194,7 +1196,7 @@ function closeDirectorBeat() { document.getElementById('directorBeatDialog').clo
 
 function showDirectorImpact(result) {
   const steps = result?.required_reproduction_steps || [];
-  document.getElementById('directorImpactPreview').innerHTML = `<div class="p-3 rounded border border-amber-500/40 bg-amber-950/20"><h4 class="text-xs font-bold text-amber-300">Ảnh hưởng do máy chủ xác định</h4><p class="text-[11px] text-slate-300 mt-1">${steps.length ? steps.map(directorStepLabel).map(escapeHtml).join(' → ') : 'Không cần tái tạo'}</p><p class="text-[10px] mt-1 ${steps.includes('render_beat') ? 'text-amber-300' : 'text-emerald-400'}">Tạo lại giọng đọc: ${steps.includes('render_beat') ? 'CÓ' : 'KHÔNG'}</p></div>`;
+  document.getElementById('directorImpactPreview').innerHTML = `<div class="p-3 rounded border border-amber-500/40 bg-amber-950/20"><h4 class="text-xs font-bold text-amber-300">Ảnh hưởng do máy chủ xác định</h4><p class="text-[11px] text-foreground mt-1">${steps.length ? steps.map(directorStepLabel).map(escapeHtml).join(' → ') : 'Không cần tái tạo'}</p><p class="text-xs mt-1 ${steps.includes('render_beat') ? 'text-amber-300' : 'text-emerald-400'}">Tạo lại giọng đọc: ${steps.includes('render_beat') ? 'CÓ' : 'KHÔNG'}</p></div>`;
 }
 
 async function saveDirectorDirection() {

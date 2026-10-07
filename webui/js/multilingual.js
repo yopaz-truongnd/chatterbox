@@ -31,10 +31,10 @@ const MTL_SAMPLE_TEXTS = {
 function selectMtlLang(code, btnEl, updateSample = false) {
   selectedMtlLanguage = code;
   document.querySelectorAll('.mtl-lang-btn').forEach(b => {
-    b.className = 'mtl-lang-btn p-2 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-1.5 cursor-pointer';
+    b.className = 'mtl-lang-btn p-2 rounded-lg bg-muted hover:bg-accent text-foreground border border-border text-xs font-medium flex items-center gap-1.5 cursor-pointer';
   });
   if (btnEl) {
-    btnEl.className = 'mtl-lang-btn active p-2 rounded-lg bg-purple-600 text-white border border-purple-500 text-xs font-medium flex items-center gap-1.5 cursor-pointer';
+    btnEl.className = 'mtl-lang-btn active p-2 rounded-lg bg-primary text-primary-foreground border border-ring text-xs font-medium flex items-center gap-1.5 cursor-pointer';
   }
   if (updateSample) {
     loadMtlSampleText();

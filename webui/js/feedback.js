@@ -12,50 +12,50 @@ const FEEDBACK_STATUS_STYLE = {
 const FEEDBACK_SEVERITY_STYLE = {
   high: 'text-red-300',
   medium: 'text-amber-300',
-  low: 'text-slate-400',
+  low: 'text-muted-foreground',
 };
 
 function renderFeedbackIssue(issue) {
   const statusInfo = FEEDBACK_STATUS_STYLE[issue.status] || FEEDBACK_STATUS_STYLE.open;
-  const severityCls = FEEDBACK_SEVERITY_STYLE[issue.severity] || 'text-slate-400';
+  const severityCls = FEEDBACK_SEVERITY_STYLE[issue.severity] || 'text-muted-foreground';
 
   const filesHtml = (issue.files || [])
-    .map((f) => `<code class="bg-[#1C1A22] px-1.5 py-0.5 rounded text-purple-300 text-[10px]">${escapeHtml(f)}</code>`)
+    .map((f) => `<code class="bg-card px-1.5 py-0.5 rounded text-foreground text-xs">${escapeHtml(f)}</code>`)
     .join(' ');
 
   const updatesHtml = (issue.updates || [])
     .map((u) => `
-      <li class="text-[10px] text-slate-400">
-        <span class="text-slate-500">${escapeHtml(u.date || '')}</span>
-        ${u.by ? `· <span class="text-slate-300">${escapeHtml(u.by)}</span>` : ''}
+      <li class="text-xs text-muted-foreground">
+        <span class="text-muted-foreground">${escapeHtml(u.date || '')}</span>
+        ${u.by ? `· <span class="text-foreground">${escapeHtml(u.by)}</span>` : ''}
         — ${escapeHtml(u.note || '')}
       </li>`)
     .join('');
 
   return `
-    <div class="p-3.5 rounded-lg bg-[#0E0C12] border border-[#3F3A46] space-y-2">
+    <div class="p-3.5 rounded-lg bg-background border border-border space-y-2">
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="font-mono text-[10px] text-slate-500">${escapeHtml(issue.id || '')}</span>
-          <span class="px-2 py-0.5 rounded-full border text-[9px] font-bold ${statusInfo.cls}">${statusInfo.label}</span>
-          ${issue.severity ? `<span class="text-[9px] font-bold uppercase ${severityCls}">${escapeHtml(issue.severity)}</span>` : ''}
-          ${issue.area ? `<span class="text-[9px] text-slate-500">${escapeHtml(issue.area)}</span>` : ''}
+          <span class="font-mono text-xs text-muted-foreground">${escapeHtml(issue.id || '')}</span>
+          <span class="px-2 py-0.5 rounded-full border text-xs font-bold ${statusInfo.cls}">${statusInfo.label}</span>
+          ${issue.severity ? `<span class="text-xs font-bold ${severityCls}">${escapeHtml(issue.severity)}</span>` : ''}
+          ${issue.area ? `<span class="text-xs text-muted-foreground">${escapeHtml(issue.area)}</span>` : ''}
         </div>
-        <span class="text-[9px] text-slate-500">${escapeHtml(issue.reported_by || '')} · ${escapeHtml(issue.reported_at || '')}</span>
+        <span class="text-xs text-muted-foreground">${escapeHtml(issue.reported_by || '')} · ${escapeHtml(issue.reported_at || '')}</span>
       </div>
 
-      <h3 class="text-xs font-bold text-white">${escapeHtml(issue.title || '')}</h3>
-      <p class="text-[11px] text-slate-300 leading-relaxed">${escapeHtml(issue.summary || '')}</p>
+      <h3 class="text-xs font-bold text-foreground">${escapeHtml(issue.title || '')}</h3>
+      <p class="text-[11px] text-foreground leading-relaxed">${escapeHtml(issue.summary || '')}</p>
 
       ${issue.workaround ? `
-        <p class="text-[11px] text-slate-400"><span class="font-bold text-slate-300">Workaround:</span> ${escapeHtml(issue.workaround)}</p>
+        <p class="text-[11px] text-muted-foreground"><span class="font-bold text-foreground">Workaround:</span> ${escapeHtml(issue.workaround)}</p>
       ` : ''}
 
       ${filesHtml ? `<div class="flex flex-wrap gap-1.5 pt-1">${filesHtml}</div>` : ''}
 
       ${updatesHtml ? `
-        <div class="pt-1.5 mt-1.5 border-t border-[#3F3A46]/60">
-          <p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tiến trình xử lý</p>
+        <div class="pt-1.5 mt-1.5 border-t border-border/60">
+          <p class="text-xs font-bold text-muted-foreground mb-1">Tiến trình xử lý</p>
           <ul class="space-y-0.5">${updatesHtml}</ul>
         </div>
       ` : ''}
@@ -65,7 +65,7 @@ function renderFeedbackIssue(issue) {
 async function loadFeedback() {
   const container = document.getElementById('feedbackList');
   if (!container) return;
-  container.innerHTML = '<p class="text-xs text-slate-500">Đang tải danh sách lỗi...</p>';
+  container.innerHTML = '<p class="text-xs text-muted-foreground">Đang tải danh sách lỗi...</p>';
 
   try {
     const res = await fetch('/api/v1/feedback');
@@ -74,7 +74,7 @@ async function loadFeedback() {
     const issues = data.issues || [];
 
     if (issues.length === 0) {
-      container.innerHTML = '<p class="text-xs text-slate-500">Chưa có lỗi nào được ghi nhận. 🎉</p>';
+      container.innerHTML = '<p class="text-xs text-muted-foreground">Chưa có lỗi nào được ghi nhận. </p>';
       return;
     }
 

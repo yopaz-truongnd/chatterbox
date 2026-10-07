@@ -329,17 +329,17 @@ function parseBatchLines() {
 
 function getVoiceOptionsHtml(selectedVal = '', rowIdx = null) {
   let html = '<option value="">-- Mặc định --</option>';
-  html += '<optgroup label="🎭 Style Presets (Bộ chỉnh phong cách)">';
+  html += '<optgroup label="Style Presets (Bộ chỉnh phong cách)">';
   for (const [k, v] of Object.entries(BUILTIN_VOICES)) {
-    html += `<option value="builtin:${k}" ${selectedVal === 'builtin:' + k ? 'selected' : ''}>🎙️ ${v.name}</option>`;
+    html += `<option value="builtin:${k}" ${selectedVal === 'builtin:' + k ? 'selected' : ''}>${v.name}</option>`;
   }
   html += '</optgroup>';
   if (allCharactersCache.length > 0) {
-    html += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
+    html += '<optgroup label="Nhân vật đã lưu (Characters)">';
     allCharactersCache.forEach(c => {
       const val = `char:${c.id}`;
-      const star = c.is_default ? '⭐ ' : '';
-      const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
+      const star = c.is_default ? '★ ' : '';
+      const hasAudio = c.has_reference_audio ? '' : '';
       html += `<option value="${val}" ${selectedVal === val ? 'selected' : ''}>${hasAudio}${star}${c.name} (${c.language || 'vi'})</option>`;
     });
     html += '</optgroup>';
@@ -466,13 +466,13 @@ function showToastWithUndo(message, undoFn) {
   const container = document.getElementById('toastContainer');
   if (!container) return;
   const toast = document.createElement('div');
-  toast.className = 'pointer-events-auto flex items-center justify-between gap-2 p-3 rounded-xl bg-[#18151E] border border-purple-500/50 shadow-m3-2 text-xs text-white toast-enter';
+  toast.className = 'pointer-events-auto flex items-center justify-between gap-2 p-3 rounded-xl bg-card border border-border shadow-m3-2 text-xs text-foreground toast-enter';
   toast.innerHTML = `
     <div class="flex items-center gap-2">
-      <span aria-hidden="true" class="material-symbols-outlined text-purple-400 text-[18px]">info</span>
+      <span aria-hidden="true" class="material-symbols-outlined text-foreground text-[18px]">info</span>
       <span>${escapeHtml(message)}</span>
     </div>
-    <button type="button" id="undoBtnToast" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 font-bold text-white text-xs cursor-pointer shadow-m3-1">Hoàn tác</button>
+    <button type="button" id="undoBtnToast" class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 font-bold text-primary-foreground text-xs cursor-pointer shadow-m3-1">Hoàn tác</button>
   `;
   const undoBtn = toast.querySelector('#undoBtnToast');
   if (undoBtn) {
@@ -532,11 +532,11 @@ function handleBgmUpload(input) {
 function filterBatchStatus(status) {
   batchCurrentFilter = status;
   document.querySelectorAll('.batch-filter-btn').forEach(b => {
-    b.className = 'batch-filter-btn px-2.5 py-0.5 rounded-full bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 text-xs cursor-pointer';
+    b.className = 'batch-filter-btn px-2.5 py-0.5 rounded-full bg-muted hover:bg-accent text-foreground text-xs cursor-pointer';
   });
   const activeBtn = document.getElementById(`batchFilter-${status}`);
   if (activeBtn) {
-    activeBtn.className = 'batch-filter-btn active px-2.5 py-0.5 rounded-full bg-purple-600 text-white font-medium text-xs cursor-pointer';
+    activeBtn.className = 'batch-filter-btn active px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground font-medium text-xs cursor-pointer';
   }
 
   parsedBatchLines.forEach((_, idx) => {
@@ -633,10 +633,10 @@ function renderBatchTable() {
       const linePause = parsedBatchPauseOverrides[idx] !== undefined ? parsedBatchPauseOverrides[idx] : defaultGlobalPause;
       const tr = document.createElement('tr');
       tr.id = `batchRow-${idx}`;
-      tr.className = 'hover:bg-[#18151E] transition-colors border-b border-[#3F3A46]/30';
+      tr.className = 'hover:bg-card transition-colors border-b border-border/30';
 
       const rowInfo = batchRowData[idx];
-      let statusHtml = '<span class="px-2 py-0.5 rounded bg-[#231F2A] text-slate-400 text-[11px]">Sẵn sàng</span>';
+      let statusHtml = '<span class="px-2 py-0.5 rounded bg-muted text-muted-foreground text-[11px]">Sẵn sàng</span>';
       let playBtnStyle = 'hidden';
       let dlBtnStyle = 'hidden';
       let durText = '--';
@@ -647,47 +647,47 @@ function renderBatchTable() {
         dlBtnStyle = '';
         durText = rowInfo.duration ? `${rowInfo.duration.toFixed(1)}s` : '--';
       } else if (rowInfo && rowInfo.status === 'processing') {
-        statusHtml = '<span class="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800 text-[11px] animate-pulse">⏳ Đang sinh...</span>';
+        statusHtml = '<span class="px-2 py-0.5 rounded bg-accent text-foreground border border-ring text-[11px] animate-pulse">Đang sinh...</span>';
       } else if (rowInfo && rowInfo.status === 'failed') {
-        statusHtml = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Lỗi</span>';
+        statusHtml = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">Lỗi</span>';
       }
 
       tr.innerHTML = `
-        <td class="p-2.5 w-8 text-center"><input type="checkbox" aria-label="Chọn dòng ${idx + 1}" class="batch-row-chk w-4 h-4 rounded text-purple-600 cursor-pointer" data-idx="${idx}" checked></td>
-        <td class="p-2.5 w-10 font-mono text-purple-400 font-bold text-center">${idx + 1}</td>
-        <td class="p-2.5 font-medium text-white max-w-sm">
-          <input type="text" id="batchLineText-${idx}" aria-label="Lời thoại dòng ${idx + 1}" value="${line.replace(/"/g, '&quot;')}" onchange="updateBatchLineText(${idx}, this.value)" class="w-full bg-[#14101A] border border-[#3F3A46]/70 focus:border-purple-500 rounded p-1.5 text-xs text-white focus:outline-none transition-colors">
+        <td class="p-2.5 w-8 text-center"><input type="checkbox" aria-label="Chọn dòng ${idx + 1}" class="batch-row-chk w-4 h-4 rounded text-foreground cursor-pointer" data-idx="${idx}" checked></td>
+        <td class="p-2.5 w-10 font-mono text-foreground font-bold text-center">${idx + 1}</td>
+        <td class="p-2.5 font-medium text-foreground max-w-sm">
+          <input type="text" id="batchLineText-${idx}" aria-label="Lời thoại dòng ${idx + 1}" value="${line.replace(/"/g, '&quot;')}" onchange="updateBatchLineText(${idx}, this.value)" class="w-full bg-background border border-border focus:border-ring rounded p-1.5 text-xs text-white focus:outline-none transition-colors">
         </td>
         <td class="p-2.5 w-52">
           <div class="flex items-center gap-1">
-            <select id="batchLineVoice-${idx}" aria-label="Giọng dòng ${idx + 1}" onchange="updateBatchLineVoice(${idx}, this.value)" class="bg-[#231F2A] border border-[#3F3A46] rounded-lg px-2 py-1.5 text-xs text-white cursor-pointer w-full focus:border-purple-500">
+            <select id="batchLineVoice-${idx}" aria-label="Giọng dòng ${idx + 1}" onchange="updateBatchLineVoice(${idx}, this.value)" class="bg-muted border border-border rounded-lg px-2 py-1.5 text-xs text-foreground cursor-pointer w-full focus:border-ring">
               ${getVoiceOptionsHtml(selectedVoice, idx)}
             </select>
-            <button aria-label="Nghe thử giọng dòng này" type="button" onclick="playLineVoicePreview(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 border border-[#3F3A46] text-purple-300 hover:text-white cursor-pointer" title="Nghe thử giọng dòng này">
+            <button aria-label="Nghe thử giọng dòng này" type="button" onclick="playLineVoicePreview(${idx})" class="p-1 rounded bg-muted hover:bg-primary/90 border border-border text-foreground hover:text-primary-foreground cursor-pointer" title="Nghe thử giọng dòng này">
               <span aria-hidden="true" class="material-symbols-outlined text-[13px]">volume_up</span>
             </button>
           </div>
         </td>
         <td class="p-2.5 w-24 text-center">
           <div class="flex items-center justify-center gap-1">
-            <input type="number" aria-label="Khoảng lặng sau dòng ${idx + 1} (giây)" step="0.1" min="0" max="5" value="${linePause.toFixed(1)}" onchange="updateBatchLinePause(${idx}, this.value)" class="w-14 bg-[#14101A] border border-[#3F3A46] rounded px-1.5 py-1 text-xs text-purple-300 text-center font-mono focus:outline-none focus:border-purple-500">
-            <span class="text-slate-500 text-[10px]">s</span>
+            <input type="number" aria-label="Khoảng lặng sau dòng ${idx + 1} (giây)" step="0.1" min="0" max="5" value="${linePause.toFixed(1)}" onchange="updateBatchLinePause(${idx}, this.value)" class="w-14 bg-card border border-border rounded px-1.5 py-1 text-xs text-foreground text-center font-mono focus:outline-none focus:border-ring">
+            <span class="text-muted-foreground text-xs">s</span>
           </div>
         </td>
-        <td class="p-2.5 w-20 text-center font-mono text-slate-300 text-[11px]" id="batchDur-${idx}">${durText}</td>
+        <td class="p-2.5 w-20 text-center font-mono text-foreground text-[11px]" id="batchDur-${idx}">${durText}</td>
         <td class="p-2.5 w-28 text-center" id="batchStatus-${idx}">${statusHtml}</td>
         <td class="p-2.5 w-28 text-right">
           <div class="flex items-center justify-end gap-1">
-            <button aria-label="Sinh audio dòng này" type="button" onclick="runSingleBatchLine(${idx})" class="p-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white cursor-pointer transition-colors" title="Sinh audio dòng này">
+            <button aria-label="Sinh audio dòng này" type="button" onclick="runSingleBatchLine(${idx})" class="p-1 rounded bg-muted hover:bg-primary/90 text-foreground hover:text-primary-foreground cursor-pointer transition-colors" title="Sinh audio dòng này">
               <span aria-hidden="true" class="material-symbols-outlined text-[16px]">play_arrow</span>
             </button>
-            <button aria-label="Phát audio" type="button" id="batchPlayBtn-${idx}" onclick="playBatchLineAudio(${idx})" class="${playBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-emerald-600 text-emerald-300 hover:text-white cursor-pointer transition-colors" title="Phát audio">
+            <button aria-label="Phát audio" type="button" id="batchPlayBtn-${idx}" onclick="playBatchLineAudio(${idx})" class="${playBtnStyle} p-1 rounded bg-muted hover:bg-emerald-600 text-emerald-300 hover:text-white cursor-pointer transition-colors" title="Phát audio">
               <span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span>
             </button>
-            <button aria-label="Tải audio dòng này" type="button" id="batchDownloadBtn-${idx}" onclick="downloadBatchLineAudio(${idx})" class="${dlBtnStyle} p-1 rounded bg-[#231F2A] hover:bg-blue-600 text-blue-300 hover:text-white cursor-pointer transition-colors" title="Tải audio dòng này">
+            <button aria-label="Tải audio dòng này" type="button" id="batchDownloadBtn-${idx}" onclick="downloadBatchLineAudio(${idx})" class="${dlBtnStyle} p-1 rounded bg-muted hover:bg-blue-600 text-blue-300 hover:text-white cursor-pointer transition-colors" title="Tải audio dòng này">
               <span aria-hidden="true" class="material-symbols-outlined text-[16px]">download</span>
             </button>
-            <button aria-label="Xóa dòng" type="button" onclick="deleteBatchLine(${idx})" class="p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer transition-colors" title="Xóa dòng">
+            <button aria-label="Xóa dòng" type="button" onclick="deleteBatchLine(${idx})" class="p-1 rounded hover:bg-red-900/50 text-muted-foreground hover:text-red-400 cursor-pointer transition-colors" title="Xóa dòng">
               <span aria-hidden="true" class="material-symbols-outlined text-[16px]">delete</span>
             </button>
           </div>
@@ -729,7 +729,7 @@ async function runSingleBatchLine(idx) {
   const playBtn = document.getElementById(`batchPlayBtn-${idx}`);
   const dlBtn = document.getElementById(`batchDownloadBtn-${idx}`);
   const durEl = document.getElementById(`batchDur-${idx}`);
-  if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800 text-[11px] animate-pulse">⏳ Đang sinh...</span>';
+  if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-accent text-foreground border border-ring text-[11px] animate-pulse">Đang sinh...</span>';
 
   const voice = parsedBatchVoiceOverrides[idx] !== undefined ? parsedBatchVoiceOverrides[idx] : (document.getElementById('batchGlobalVoiceSelect')?.value || '');
   const selectedModelRaw = document.getElementById('batchModelSelect')?.value || 'auto';
@@ -783,18 +783,18 @@ async function runSingleBatchLine(idx) {
         return jobId;
       } else {
         batchRowData[idx] = { status: 'failed', error: resultJob?.error || 'Lỗi sinh audio' };
-        if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Thất bại</span>';
+        if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">Thất bại</span>';
         updateBatchFilterCounts();
         return null;
       }
     } else {
       batchRowData[idx] = { status: 'failed' };
-      if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Lỗi API</span>';
+      if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">Lỗi API</span>';
       updateBatchFilterCounts();
     }
   } catch (e) {
     batchRowData[idx] = { status: 'failed', error: e.message };
-    if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">❌ Lỗi mạng</span>';
+    if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800 text-[11px]">Lỗi mạng</span>';
     updateBatchFilterCounts();
   }
   return null;
@@ -937,7 +937,7 @@ async function runBatchAll(retryContext = {}) {
     linesPayload.push(item);
     batchRowData[idx] = { status: 'processing' };
     const statusEl = document.getElementById(`batchStatus-${idx}`);
-    if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800 text-[11px] animate-pulse">⏳ Đang sinh...</span>';
+    if (statusEl) statusEl.innerHTML = '<span class="px-2 py-0.5 rounded bg-accent text-foreground border border-ring text-[11px] animate-pulse">Đang sinh...</span>';
   });
 
   if (missingAudioChars.length > 0) {
@@ -1304,22 +1304,22 @@ function renderBatchSavedProjects() {
   const projects = getSavedBatchProjects();
   container.innerHTML = '';
   if (projects.length === 0) {
-    container.innerHTML = '<div class="p-3 text-center text-slate-500 text-xs">Chưa có dự án nào được lưu.</div>';
+    container.innerHTML = '<div class="p-3 text-center text-muted-foreground text-xs">Chưa có dự án nào được lưu.</div>';
     return;
   }
 
   projects.forEach(p => {
     const itemDiv = document.createElement('div');
-    itemDiv.className = 'p-2 flex items-center justify-between hover:bg-[#18151E] transition-colors border-b border-[#2D2836] last:border-b-0';
+    itemDiv.className = 'p-2 flex items-center justify-between hover:bg-card transition-colors border-b border-border last:border-b-0';
 
     const infoDiv = document.createElement('div');
     infoDiv.className = 'min-w-0 pr-2';
     const nameDiv = document.createElement('div');
-    nameDiv.className = 'font-bold text-white text-xs truncate max-w-[200px]';
+    nameDiv.className = 'font-bold text-foreground text-xs truncate max-w-[200px]';
     nameDiv.textContent = p.name || 'Dự án không tên';
 
     const metaDiv = document.createElement('div');
-    metaDiv.className = 'text-[10px] text-slate-400 font-mono';
+    metaDiv.className = 'text-xs text-muted-foreground font-mono';
     const lineCount = (p.lines || []).length;
     const dateStr = p.created_at ? new Date(p.created_at).toLocaleString('vi-VN') : '';
     metaDiv.textContent = `${lineCount} dòng • ${dateStr}`;
@@ -1332,13 +1332,13 @@ function renderBatchSavedProjects() {
 
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
-    openBtn.className = 'px-2 py-1 rounded bg-[#231F2A] hover:bg-purple-600 text-purple-300 hover:text-white text-xs font-medium cursor-pointer';
+    openBtn.className = 'px-2 py-1 rounded bg-muted hover:bg-primary/90 text-foreground hover:text-primary-foreground text-xs font-medium cursor-pointer';
     openBtn.textContent = 'Mở';
     openBtn.addEventListener('click', () => loadBatchProject(p.id));
 
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
-    delBtn.className = 'p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 cursor-pointer';
+    delBtn.className = 'p-1 rounded hover:bg-red-900/50 text-muted-foreground hover:text-red-400 cursor-pointer';
     delBtn.title = 'Xóa';
     delBtn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[15px]">delete</span>';
     delBtn.addEventListener('click', () => deleteBatchProject(p.id));
