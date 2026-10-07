@@ -31,10 +31,10 @@ const MTL_SAMPLE_TEXTS = {
 function selectMtlLang(code, btnEl, updateSample = false) {
   selectedMtlLanguage = code;
   document.querySelectorAll('.mtl-lang-btn').forEach(b => {
-    b.className = 'mtl-lang-btn p-2 rounded-lg bg-[#231F2A] hover:bg-[#2D2836] text-slate-300 border border-[#3F3A46] text-xs font-medium flex items-center gap-1.5 cursor-pointer';
+    b.className = 'mtl-lang-btn p-2 rounded-lg bg-muted hover:bg-accent text-foreground border border-border text-xs font-medium flex items-center gap-1.5 cursor-pointer';
   });
   if (btnEl) {
-    btnEl.className = 'mtl-lang-btn active p-2 rounded-lg bg-purple-600 text-white border border-purple-500 text-xs font-medium flex items-center gap-1.5 cursor-pointer';
+    btnEl.className = 'mtl-lang-btn active p-2 rounded-lg bg-primary text-primary-foreground border border-ring text-xs font-medium flex items-center gap-1.5 cursor-pointer';
   }
   if (updateSample) {
     loadMtlSampleText();
@@ -80,7 +80,7 @@ async function triggerMtlSynthesis() {
   if (!text) return showToast('warning', 'Vui lòng nhập văn bản.');
 
   if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang sinh âm thanh...</span>';
     btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
     btn.disabled = true;
   }
@@ -120,7 +120,7 @@ async function triggerMtlSynthesis() {
       const job = await res.json();
       showToast('info', 'Đã gửi tác vụ đa ngôn ngữ vào hàng đợi!');
       if (typeof pollJob === 'function') {
-        await pollJob(job.id, btn, 'Sinh giọng nói Đa ngôn ngữ', '<span class="material-symbols-outlined text-[22px]">record_voice_over</span>');
+        await pollJob(job.id, btn, 'Sinh giọng nói Đa ngôn ngữ', '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">record_voice_over</span>');
       }
     } else {
       let errDetail = 'Lỗi khi gửi tác vụ đa ngôn ngữ.';
@@ -138,7 +138,7 @@ async function triggerMtlSynthesis() {
       } catch (_) {}
       showToast('error', errDetail);
       if (btn) {
-        btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
+        btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
         btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
         btn.disabled = false;
       }
@@ -146,7 +146,7 @@ async function triggerMtlSynthesis() {
   } catch (e) {
     showToast('error', 'Lỗi kết nối: ' + e.message);
     if (btn) {
-      btn.innerHTML = '<span class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
+      btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">record_voice_over</span><span>Sinh giọng nói Đa ngôn ngữ</span>';
       btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
       btn.disabled = false;
     }

@@ -37,20 +37,20 @@ async function loadCharacters() {
         const currentVal = ttsSelect.value;
         let optionsHtml = `
           <option value="">-- Mặc định (Default Speaker) --</option>
-          <optgroup label="🎭 Style Presets (Bộ chỉnh phong cách)">
-            <option value="builtin:mc_male">🎙️ MC Nam Thời Sự (Trầm ấm)</option>
-            <option value="builtin:editor_female">🎙️ Nữ Biên Tập Viên (Truyền cảm)</option>
-            <option value="builtin:story_night">🎙️ Kể Chuyện Đêm (Trầm lắng)</option>
-            <option value="builtin:review_fast">🎙️ Review & Recap (Nhanh)</option>
-            <option value="builtin:anime_fun">🎙️ Hoạt Hình / Anime (Biểu cảm)</option>
-            <option value="builtin:ai_assistant">🎙️ Trợ Lý Ảo AI (Tự nhiên)</option>
+          <optgroup label="Style Presets (Bộ chỉnh phong cách)">
+            <option value="builtin:mc_male">MC Nam Thời Sự (Trầm ấm)</option>
+            <option value="builtin:editor_female">Nữ Biên Tập Viên (Truyền cảm)</option>
+            <option value="builtin:story_night">Kể Chuyện Đêm (Trầm lắng)</option>
+            <option value="builtin:review_fast">Review & Recap (Nhanh)</option>
+            <option value="builtin:anime_fun">Hoạt Hình / Anime (Biểu cảm)</option>
+            <option value="builtin:ai_assistant">Trợ Lý Ảo AI (Tự nhiên)</option>
           </optgroup>
         `;
         if (allCharactersCache.length > 0) {
-          optionsHtml += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
+          optionsHtml += '<optgroup label="Nhân vật đã lưu (Characters)">';
           allCharactersCache.forEach(c => {
-            const star = c.is_default ? '⭐ ' : '';
-            const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
+            const star = c.is_default ? '★ ' : '';
+            const hasAudio = c.has_reference_audio ? '' : '';
             optionsHtml += `<option value="char:${c.id}">${hasAudio}${star}${c.name} (${c.language || 'vi'})</option>`;
           });
           optionsHtml += '</optgroup>';
@@ -65,20 +65,20 @@ async function loadCharacters() {
         const currentGlobal = batchGlobalSelect.value;
         let batchOpts = `
           <option value="">-- Mặc định --</option>
-          <optgroup label="🎭 Style Presets (Bộ chỉnh phong cách)">
-            <option value="builtin:mc_male">🎙️ MC Nam Thời Sự</option>
-            <option value="builtin:editor_female">🎙️ Nữ Biên Tập Viên</option>
-            <option value="builtin:story_night">🎙️ Kể Chuyện Đêm</option>
-            <option value="builtin:review_fast">🎙️ Review & Recap</option>
-            <option value="builtin:anime_fun">🎙️ Hoạt Hình / Anime</option>
-            <option value="builtin:ai_assistant">🎙️ Trợ Lý Ảo AI</option>
+          <optgroup label="Style Presets (Bộ chỉnh phong cách)">
+            <option value="builtin:mc_male">MC Nam Thời Sự</option>
+            <option value="builtin:editor_female">Nữ Biên Tập Viên</option>
+            <option value="builtin:story_night">Kể Chuyện Đêm</option>
+            <option value="builtin:review_fast">Review & Recap</option>
+            <option value="builtin:anime_fun">Hoạt Hình / Anime</option>
+            <option value="builtin:ai_assistant">Trợ Lý Ảo AI</option>
           </optgroup>
         `;
         if (allCharactersCache.length > 0) {
-          batchOpts += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
+          batchOpts += '<optgroup label="Nhân vật đã lưu (Characters)">';
           allCharactersCache.forEach(c => {
-            const star = c.is_default ? '⭐ ' : '';
-            const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
+            const star = c.is_default ? '★ ' : '';
+            const hasAudio = c.has_reference_audio ? '' : '';
             batchOpts += `<option value="char:${c.id}">${hasAudio}${star}${c.name} (${c.language || 'vi'})</option>`;
           });
           batchOpts += '</optgroup>';
@@ -93,10 +93,10 @@ async function loadCharacters() {
         const currentMtlChar = mtlCharSelect.value;
         let mtlCharOpts = '<option value="">-- Mặc định (Default Speaker) --</option>';
         if (allCharactersCache.length > 0) {
-          mtlCharOpts += '<optgroup label="👤 Nhân vật đã lưu (Characters)">';
+          mtlCharOpts += '<optgroup label="Nhân vật đã lưu (Characters)">';
           allCharactersCache.forEach(c => {
-            const star = c.is_default ? '⭐ ' : '';
-            const hasAudio = c.has_reference_audio ? '🎵 ' : '⚠️ ';
+            const star = c.is_default ? '★ ' : '';
+            const hasAudio = c.has_reference_audio ? '' : '';
             mtlCharOpts += `<option value="char:${c.id}">${hasAudio}${star}${c.name} (${c.language || 'en'})</option>`;
           });
           mtlCharOpts += '</optgroup>';
@@ -112,52 +112,52 @@ async function loadCharacters() {
       // Check default character
       const defChar = allCharactersCache.find(c => c.is_default);
       if (defaultLabel) {
-        defaultLabel.textContent = defChar ? `⭐ Sử dụng Character mặc định (${defChar.name})` : `⭐ Sử dụng Character mặc định (Chưa đặt)`;
+        defaultLabel.textContent = defChar ? `★ Sử dụng Character mặc định (${defChar.name})` : `★ Sử dụng Character mặc định (Chưa đặt)`;
       }
 
       // Populate Character Management Grid
       if (grid) {
         if (allCharactersCache.length === 0) {
-          grid.innerHTML = '<div class="text-xs text-slate-500 py-8 text-center col-span-full">Chưa có nhân vật nào. Nhấn "Tạo Nhân vật mới" để thêm!</div>';
+          grid.innerHTML = '<div class="text-xs text-muted-foreground py-8 text-center col-span-full">Chưa có nhân vật nào. Nhấn "Tạo Nhân vật mới" để thêm!</div>';
           return;
         }
         grid.innerHTML = allCharactersCache.map(c => `
-          <div class="p-4 rounded-xl bg-[#0E0C12] border ${c.is_default ? 'border-amber-500/50 bg-[#14101A]' : 'border-[#3F3A46]'} hover:border-purple-500 transition-colors space-y-3 flex flex-col justify-between">
+          <div class="p-4 rounded-xl bg-background border ${c.is_default ? 'border-amber-500/50 bg-card' : 'border-border'} hover:border-ring transition-colors space-y-3 flex flex-col justify-between">
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-9 h-9 rounded-full ${c.is_default ? 'bg-amber-600/30 text-amber-300' : 'bg-purple-600/30 text-purple-300'} flex items-center justify-center font-bold text-xs">
+                  <div class="w-9 h-9 rounded-full ${c.is_default ? 'bg-amber-600/30 text-amber-300' : 'bg-accent text-foreground'} flex items-center justify-center font-bold text-xs">
                     ${c.name.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <div class="font-bold text-sm text-white flex items-center gap-1.5">
+                    <div class="font-bold text-sm text-foreground flex items-center gap-1.5">
                       <span>${c.name}</span>
-                      ${c.is_default ? '<span class="material-symbols-outlined text-amber-400 text-[16px]" title="Nhân vật mặc định">star</span>' : ''}
+                      ${c.is_default ? '<span aria-hidden="true" class="material-symbols-outlined text-amber-400 text-[16px]" title="Nhân vật mặc định">star</span>' : ''}
                     </div>
-                    <div class="text-[10px] text-slate-400 uppercase font-mono">${c.language || 'vi'} • ${c.has_reference_audio ? '🎙️ Giọng mẫu độc quyền' : '⚡ Mặc định'}</div>
+                    <div class="text-xs text-muted-foreground font-mono">${c.language || 'vi'} • ${c.has_reference_audio ? 'Giọng mẫu độc quyền' : 'Mặc định'}</div>
                   </div>
                 </div>
-                ${c.is_default ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">Mặc định</span>' : ''}
+                ${c.is_default ? '<span class="text-xs font-mono px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">Mặc định</span>' : ''}
               </div>
-              <div class="text-xs text-slate-300 line-clamp-2">${c.description || 'Không có mô tả chi tiết'}</div>
-              <div class="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-lg bg-[#18151E] border border-[#3F3A46]/60 text-[10px] font-mono text-slate-300">
-                <div>Exag: <span class="text-purple-300">${c.voice?.expressiveness ?? 0.5}</span></div>
-                <div>Pace: <span class="text-purple-300">${c.voice?.pace ?? 0.5}</span></div>
-                <div>Seed: <span class="text-purple-300">${c.voice?.seed ?? 0}</span></div>
+              <div class="text-xs text-foreground line-clamp-2">${c.description || 'Không có mô tả chi tiết'}</div>
+              <div class="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-lg bg-card border border-border/60 text-xs font-mono text-foreground">
+                <div>Exag: <span class="text-foreground">${c.voice?.expressiveness ?? 0.5}</span></div>
+                <div>Pace: <span class="text-foreground">${c.voice?.pace ?? 0.5}</span></div>
+                <div>Seed: <span class="text-foreground">${c.voice?.seed ?? 0}</span></div>
               </div>
             </div>
 
-            <div class="flex justify-between items-center pt-2.5 border-t border-[#3F3A46]/50 gap-2">
-              <button onclick="useCharacterInTts('${c.id}')" class="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer">
-                <span class="material-symbols-outlined text-[14px]">record_voice_over</span>
+            <div class="flex justify-between items-center pt-2.5 border-t border-border/50 gap-2">
+              <button onclick="useCharacterInTts('${c.id}')" class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[11px] flex items-center gap-1 cursor-pointer">
+                <span aria-hidden="true" class="material-symbols-outlined text-[14px]">record_voice_over</span>
                 <span>Dùng trong TTS</span>
               </button>
               <div class="flex items-center gap-1">
-                <button onclick="toggleDefaultCharacter('${c.id}', ${!c.is_default})" class="p-1 rounded text-slate-300 hover:text-amber-400 hover:bg-[#231F2A] cursor-pointer" title="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}">
-                  <span class="material-symbols-outlined text-[16px]">${c.is_default ? 'star' : 'star_border'}</span>
+                <button aria-label="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}" onclick="toggleDefaultCharacter('${c.id}', ${!c.is_default})" class="p-1 rounded text-foreground hover:text-amber-400 hover:bg-muted cursor-pointer" title="${c.is_default ? 'Bỏ làm mặc định' : 'Đặt làm mặc định'}">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">${c.is_default ? 'star' : 'star_border'}</span>
                 </button>
-                <button onclick="deleteCharacter('${c.id}')" class="p-1 rounded text-red-400 hover:bg-red-900/30 cursor-pointer" title="Xóa nhân vật">
-                  <span class="material-symbols-outlined text-[16px]">delete</span>
+                <button aria-label="Xóa nhân vật" onclick="deleteCharacter('${c.id}')" class="p-1 rounded text-red-400 hover:bg-red-900/30 cursor-pointer" title="Xóa nhân vật">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[16px]">delete</span>
                 </button>
               </div>
             </div>
@@ -166,7 +166,7 @@ async function loadCharacters() {
       }
     }
   } catch (e) {
-    if (grid) grid.innerHTML = '<div class="text-xs text-slate-500 py-8 text-center col-span-full">Không tải được danh sách nhân vật.</div>';
+    if (grid) grid.innerHTML = '<div class="text-xs text-muted-foreground py-8 text-center col-span-full">Không tải được danh sách nhân vật.</div>';
   }
 }
 
@@ -234,7 +234,7 @@ async function testCharacterVoice() {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang tạo...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang tạo...</span>';
   }
 
   try {
@@ -253,20 +253,20 @@ async function testCharacterVoice() {
     if (res.ok) {
       const job = await res.json();
       if (typeof pollJob === 'function') {
-        await pollJob(job.id, btn, 'Nghe thử', '<span class="material-symbols-outlined text-[16px]">volume_up</span>');
+        await pollJob(job.id, btn, 'Nghe thử', '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span>');
       }
     } else {
       showToast('error', 'Lỗi khi sinh giọng thử nghiệm.');
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
+        btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
       }
     }
   } catch (err) {
     showToast('error', 'Lỗi đọc thử: ' + err.message);
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
+      btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[16px]">volume_up</span><span>Nghe thử</span>';
     }
   }
 }
@@ -286,7 +286,7 @@ async function saveNewCharacter() {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang lưu...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span><span>Đang lưu...</span>';
   }
 
   try {

@@ -273,7 +273,7 @@ async function toggleMicRecording() {
       mediaRecorder.stop();
     }
     isRecordingMic = false;
-    if (btn) btn.className = 'px-3 py-1 rounded-full bg-[#231F2A] hover:bg-red-600 text-xs text-white border border-[#3F3A46] flex items-center gap-1 cursor-pointer transition-colors';
+    if (btn) btn.className = 'px-3 py-1 rounded-full bg-muted hover:bg-red-600 text-xs text-foreground border border-border flex items-center gap-1 cursor-pointer transition-colors';
     if (icon) icon.textContent = 'mic';
     if (label) label.textContent = 'Ghi âm Mic';
   }
@@ -303,6 +303,11 @@ function drawWaveform(progressPct = 0) {
   const h = canvas.height = canvas.offsetHeight;
   ctx.clearRect(0, 0, w, h);
 
+  const css = getComputedStyle(document.documentElement);
+  const tokenColor = (name) => `rgb(${css.getPropertyValue(name).trim().split(/\s+/).join(', ')})`;
+  const playedColor = tokenColor('--primary');
+  const restColor = tokenColor('--accent');
+
   const numBars = 55;
   const barWidth = Math.max(2, (w - numBars * 3) / numBars);
 
@@ -313,14 +318,14 @@ function drawWaveform(progressPct = 0) {
     const y = (h - barHeight) / 2;
 
     const isPast = (x / w) <= progressPct;
-    ctx.fillStyle = isPast ? '#A855F7' : '#3F3A46';
+    ctx.fillStyle = isPast ? playedColor : restColor;
     ctx.beginPath();
     ctx.roundRect(x, y, barWidth, barHeight, 3);
     ctx.fill();
   }
 
   if (progressPct > 0) {
-    ctx.strokeStyle = '#D0BCFF';
+    ctx.strokeStyle = tokenColor('--ring');
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(progressPct * w, 0);
@@ -344,11 +349,11 @@ function togglePlayPause() {
   if (audioElement.src && !audioElement.paused) {
     audioElement.pause();
     isPlaying = false;
-    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
+    if (btn) btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">play_arrow</span>';
   } else if (audioElement.src) {
     audioElement.play().catch(() => {});
     isPlaying = true;
-    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
+    if (btn) btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">pause</span>';
   }
 }
 
@@ -359,7 +364,7 @@ function stopAudio() {
     audioElement.currentTime = 0;
   }
   const btn = document.getElementById('btnPlayPause');
-  if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[24px]">play_arrow</span>';
+  if (btn) btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">play_arrow</span>';
   const timer = document.getElementById('playbackTimer');
   if (timer) timer.textContent = '00:00 / 00:00';
   drawWaveform(0);
@@ -380,7 +385,7 @@ function playAudioUrl(url, title = "Generated Audio") {
 
   audioElement.play().catch(() => {});
   isPlaying = true;
-  if (btnPlay) btnPlay.innerHTML = '<span class="material-symbols-outlined text-[24px]">pause</span>';
+  if (btnPlay) btnPlay.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined text-[24px]">pause</span>';
 }
 
 function downloadCurrentWav() {
@@ -403,7 +408,7 @@ function saveSlotA() {
   const btn = document.getElementById('btnPlayA');
   if (btn) {
     btn.disabled = false;
-    btn.className = 'px-2.5 py-1 rounded bg-purple-600 text-white border border-purple-500 cursor-pointer font-bold';
+    btn.className = 'px-2.5 py-1 rounded bg-primary text-primary-foreground border border-ring cursor-pointer font-bold';
   }
   showToast('success', 'Đã lưu audio hiện tại vào Bản A!');
 }
@@ -491,7 +496,7 @@ async function triggerSynthesis() {
   const stageMsg = document.getElementById('ttsStageMessage');
 
   if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang xử lý...</span>';
+    btn.innerHTML = '<span aria-hidden="true" class="material-symbols-outlined animate-spin text-[22px]">progress_activity</span><span>Đang xử lý...</span>';
     btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
     btn.disabled = true;
   }
@@ -500,7 +505,7 @@ async function triggerSynthesis() {
     progressBox.classList.remove('hidden');
     if (progressFill) progressFill.style.width = '5%';
     if (progressPercent) progressPercent.textContent = '5%';
-    if (stageMsg) stageMsg.textContent = isLongText ? '📖 Đang phân đoạn & chuẩn bị render...' : '⏳ Đang khởi chạy tiến trình...';
+    if (stageMsg) stageMsg.textContent = isLongText ? 'Đang phân đoạn & chuẩn bị render...' : 'Đang khởi chạy tiến trình...';
   }
 
   try {
@@ -527,19 +532,19 @@ async function triggerSynthesis() {
     if (response.ok) {
       const job = await response.json();
       currentActiveJobId = job.id;
-      await pollJob(job.id, btn, 'SINH GIỌNG NÓI (Ctrl + Enter)', '<span class="material-symbols-outlined text-[22px]">play_circle</span>');
+      await pollJob(job.id, btn, 'Sinh giọng nói <kbd class="hidden sm:inline font-sans font-normal opacity-60">Ctrl + Enter</kbd>', '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>');
     } else {
       const errData = await response.json().catch(() => ({}));
       showToast('error', 'Lỗi khi gửi yêu cầu tới server API: ' + (errData.detail || response.statusText));
-      resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
+      resetTtsUi(btn, '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>', 'Sinh giọng nói <kbd class="hidden sm:inline font-sans font-normal opacity-60">Ctrl + Enter</kbd>');
     }
   } catch (err) {
     showToast('error', 'Không thể kết nối tới server API: ' + err.message);
-    resetTtsUi(btn, '<span class="material-symbols-outlined text-[22px]">play_circle</span>', 'SINH GIỌNG NÓI (Ctrl + Enter)');
+    resetTtsUi(btn, '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>', 'Sinh giọng nói <kbd class="hidden sm:inline font-sans font-normal opacity-60">Ctrl + Enter</kbd>');
   }
 }
 
-async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + Enter)', origIcon = '<span class="material-symbols-outlined text-[22px]">play_circle</span>') {
+async function pollJob(jobId, btn = null, origText = 'Sinh giọng nói <kbd class="hidden sm:inline font-sans font-normal opacity-60">Ctrl + Enter</kbd>', origIcon = '<span aria-hidden="true" class="material-symbols-outlined text-[22px]">play_circle</span>') {
   const generateBtn = btn || document.getElementById('generateBtn');
   const progressFill = document.getElementById('ttsProgressFill');
   const progressPercent = document.getElementById('ttsProgressPercent');
@@ -547,14 +552,14 @@ async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + 
   currentActiveJobId = jobId;
 
   const phaseLabels = {
-    'queued': '⏳ Đang chờ trong hàng đợi...',
-    'loading_model': '🧠 Đang nạp mô hình vào bộ nhớ...',
-    'generating_tokens': '⚡ Đang sinh ngữ điệu & mã âm thanh...',
-    'generating_audio': '🔊 Đang giải mã sóng âm thanh (WAV)...',
-    'merging_audio': '✂️ Đang nối ghép các đoạn hoàn chỉnh...',
-    'completed': '✅ Hoàn tất thành công!',
-    'failed': '❌ Thất bại',
-    'cancelled': '⚠️ Đã hủy tác vụ'
+    'queued': 'Đang chờ trong hàng đợi...',
+    'loading_model': 'Đang nạp mô hình vào bộ nhớ...',
+    'generating_tokens': 'Đang sinh ngữ điệu & mã âm thanh...',
+    'generating_audio': 'Đang giải mã sóng âm thanh (WAV)...',
+    'merging_audio': 'Đang nối ghép các đoạn hoàn chỉnh...',
+    'completed': 'Hoàn tất thành công!',
+    'failed': 'Thất bại',
+    'cancelled': 'Đã hủy tác vụ'
   };
 
   const interval = setInterval(async () => {
@@ -567,7 +572,7 @@ async function pollJob(jobId, btn = null, origText = 'SINH GIỌNG NÓI (Ctrl + 
           const pct = Math.max(5, data.progress_percent || 0);
           progressFill.style.width = `${pct}%`;
           progressPercent.textContent = `${pct}%`;
-          stageMsg.textContent = phaseLabels[data.phase] || (data.phase ? `⏳ Đang xử lý (${data.phase})...` : '⏳ Đang xử lý...');
+          stageMsg.textContent = phaseLabels[data.phase] || (data.phase ? `Đang xử lý (${data.phase})...` : 'Đang xử lý...');
         }
 
         if (data.status === 'completed' && data.audio_url) {
